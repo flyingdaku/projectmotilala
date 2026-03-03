@@ -219,8 +219,8 @@ def print_report():
 def main():
     parser = argparse.ArgumentParser(description="Rebuild the Artha SQLite database from scratch.")
     parser.add_argument("--from", dest="start_date", default="2000-01-01", help="Start date for NSE backfill")
-    parser.add_argument("--bse-from", dest="bse_start_date", default="2010-01-01",
-                        help="Start date for BSE backfill (BSE archive starts ~2010, default: 2010-01-01)")
+    parser.add_argument("--bse-from", dest="bse_start_date", default=None,
+                        help="Start date for BSE backfill (Default: matches --from)")
     parser.add_argument("--to", dest="end_date", default=None, help="End date (defaults to yesterday)")
     parser.add_argument("--no-reinit", action="store_true",
                         help="Skip DB drop+reinit (resume an existing DB — preserves already-ingested data)")
