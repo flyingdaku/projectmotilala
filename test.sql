@@ -1,0 +1,2 @@
+CREATE TABLE test_table (id INTEGER PRIMARY KEY);
+INSERT INTO test_table VALUES (1);

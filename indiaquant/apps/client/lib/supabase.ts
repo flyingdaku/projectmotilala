@@ -1,0 +1,28 @@
+import { createClient } from "@supabase/supabase-js";
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
+
+/**
+ * Supabase client configured with expo-secure-store for token persistence.
+ * On web, falls back to localStorage (SecureStore is not available).
+ * JWTs are stored in iOS Keychain / Android Keystore — never plain AsyncStorage.
+ */
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+
+/** SecureStore adapter for Supabase Auth token persistence on native. */
+const ExpoSecureStoreAdapter = {
+  getItem: (key: string) => SecureStore.getItemAsync(key),
+  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+};
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storage: Platform.OS === "web" ? undefined : ExpoSecureStoreAdapter,
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: Platform.OS === "web",
+  },
+});

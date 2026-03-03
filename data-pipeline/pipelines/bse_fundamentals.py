@@ -1,0 +1,87 @@
+"""
+BSE Fundamentals Pipeline.
+Fetches financial results via unofficial BSE WebAPI (XBRL data).
+"""
+import json
+import logging
+import time
+from datetime import date, datetime
+from typing import Optional, List, Dict
+
+import requests
+
+from utils.db import get_db, generate_id
+from utils.storage import save_raw_file
+
+logger = logging.getLogger(__name__)
+
+BSE_FINANCIAL_API = "https://api.bseindia.com/BseWebAPI/api/FinancialResult/w"
+
+BSE_HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Referer": "https://www.bseindia.com/",
+}
+
+def _safe_float(val) -> Optional[float]:
+    if val is None: return None
+    try:
+        return float(str(val).replace(",", "").strip())
+    except (ValueError, TypeError):
+        return None
+
+def fetch_bse_financial_results(scrip_code: str) -> List[Dict]:
+    # ScripCode is the BSE numeric id
+    url = f"{BSE_FINANCIAL_API}?scripcode={scrip_code}"
+    
+    try:
+        resp = requests.get(url, headers=BSE_HEADERS, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.warning(f"BSE fetch failed for {scrip_code}: {e}")
+        return []
+
+def process_bse_fundamentals(asset_id: str, results: List[Dict]):
+    with get_db() as conn:
+        for row in results:
+            period_end = row.get("PeriodEnd")
+            if not period_end: continue
+            
+            # Usually '2023-12-31T00:00:00'
+            try:
+                period_date = period_end.split("T")[0]
+            except:
+                continue
+
+            is_cons = 1 if "CONSOLIDATED" in str(row.get("ConsStand", "")).upper() else 0
+            
+            # Map BSE fields
+            conn.execute("""
+                INSERT OR REPLACE INTO bse_fundamentals (
+                    id, asset_id, period_end_date, is_consolidated,
+                    revenue, operating_profit, interest, pbt, tax, pat, eps, raw_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                generate_id(), asset_id, period_date, is_cons,
+                _safe_float(row.get("NetSales")),
+                _safe_float(row.get("OperatingProfit")),
+                _safe_float(row.get("Interest")),
+                _safe_float(row.get("ProfitBeforeTax")),
+                _safe_float(row.get("Tax")),
+                _safe_float(row.get("NetProfit")),
+                _safe_float(row.get("EPS")),
+                json.dumps(row)
+            ))
+
+def run_bse_fundamentals(trade_date: date):
+    logger.info(f"[BSE_FUNDAMENTALS] Starting fetch for {trade_date}")
+    with get_db() as conn:
+        assets = conn.execute("SELECT id, bse_code FROM assets WHERE bse_listed = 1 AND bse_code IS NOT NULL").fetchall()
+        
+    for asset in assets:
+        results = fetch_bse_financial_results(asset["bse_code"])
+        if results:
+            process_bse_fundamentals(asset["id"], results)
+            logger.info(f"[BSE_FUNDAMENTALS] Processed {len(results)} rows for BSE:{asset['bse_code']}")
+        time.sleep(0.5) # Polite delay

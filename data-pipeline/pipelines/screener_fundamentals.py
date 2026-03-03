@@ -1,0 +1,148 @@
+"""
+Screener.in Fundamentals Fetcher.
+Parses HTML tables for Quarterly Results, Balance Sheet, Cash Flows, and Ratios.
+"""
+import logging
+import requests
+import time
+import calendar
+from datetime import date, datetime
+from typing import Dict, Any, List, Optional
+from bs4 import BeautifulSoup
+from utils.db import get_db, generate_id
+
+logger = logging.getLogger(__name__)
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+}
+
+def _parse_screener_table(soup: BeautifulSoup, table_id: str) -> List[Dict]:
+    section = soup.select_one(f"section{table_id}")
+    if not section: return []
+    
+    table = section.find("table", class_="data-table")
+    if not table: return []
+    
+    thead = table.find("thead")
+    if not thead: return []
+    headers = [th.text.strip() for th in thead.find_all("th")][1:] # Skip first 'Row'
+    
+    # Store rows: {period: {label: value}}
+    period_rows = {}
+    
+    tbody = table.find("tbody")
+    if not tbody: return []
+    
+    for tr in tbody.find_all("tr", class_=None):
+        cols = tr.find_all("td")
+        if not cols: continue
+        row_label = cols[0].text.strip().lower()
+        values = [c.text.strip().replace(",", "") for c in cols[1:]]
+        
+        for i, val in enumerate(values):
+            if i >= len(headers): break
+            period = headers[i]
+            if period not in period_rows: period_rows[period] = {"period": period}
+            try:
+                # Remove extra chars for items like "OPM %"
+                clean_val = val.replace("%", "").strip()
+                if clean_val and clean_val != "0.00" and clean_val != "":
+                    period_rows[period][row_label] = float(clean_val)
+                else:
+                    period_rows[period][row_label] = 0.0
+            except:
+                period_rows[period][row_label] = None
+                
+    return list(period_rows.values())
+
+def fetch_screener_data(identifier: str) -> Dict[str, List[Dict]]:
+    url = f"https://www.screener.in/company/{identifier}/consolidated/"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=20)
+        if resp.status_code == 404:
+            url = f"https://www.screener.in/company/{identifier}/"
+            resp = requests.get(url, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+        
+        soup = BeautifulSoup(resp.text, "html.parser")
+        return {
+            "quarters": _parse_screener_table(soup, "#quarters"),
+            "annual": _parse_screener_table(soup, "#profit-loss"),
+            "balance_sheet": _parse_screener_table(soup, "#balance-sheet"),
+            "cash_flow": _parse_screener_table(soup, "#cash-flow"),
+            "ratios": _parse_screener_table(soup, "#ratios"),
+            "shareholding": _parse_screener_table(soup, "#shareholding")
+        }
+    except Exception as e:
+        logger.warning(f"Screener fetch failed for {identifier}: {e}")
+        return {}
+
+def _period_to_iso(period_str: str) -> Optional[str]:
+     try:
+        dt = datetime.strptime(period_str, "%b %Y")
+        last_day = calendar.monthrange(dt.year, dt.month)[1]
+        return dt.replace(day=last_day).strftime("%Y-%m-%d")
+     except:
+        return None
+
+def run_screener_fundamentals(trade_date: date):
+    logger.info("[SCREENER] Starting fundamentals scrape...")
+    with get_db() as conn:
+        assets = conn.execute("SELECT id, nse_symbol, bse_code FROM assets WHERE is_active = 1").fetchall()
+        
+    for asset in assets:
+        identifier = asset["nse_symbol"] or asset["bse_code"]
+        if not identifier: continue
+        
+        logger.info(f"[SCREENER] Fetching {identifier}...")
+        data = fetch_screener_data(identifier)
+        if not data: continue
+        
+        with get_db() as conn:
+            # 1. Quarterly Results
+            for row in data.get("quarters", []):
+                period_date = _period_to_iso(row["period"])
+                if not period_date: continue
+                conn.execute("""
+                    INSERT OR REPLACE INTO screener_quarterly (
+                        id, asset_id, period_end_date, sales, expenses, operating_profit, opm_pct, pbt, tax_pct, net_profit, eps
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    generate_id(), asset["id"], period_date,
+                    row.get("sales"), row.get("expenses"), row.get("operating profit"),
+                    row.get("opm %"), row.get("profit before tax"), row.get("tax %"),
+                    row.get("net profit"), row.get("eps in rs")
+                ))
+
+            # 2. Balance Sheet
+            for row in data.get("balance_sheet", []):
+                period_date = _period_to_iso(row["period"])
+                if not period_date: continue
+                conn.execute("""
+                    INSERT OR REPLACE INTO screener_balance_sheet (
+                        id, asset_id, period_end_date, share_capital, reserves, borrowings, other_liabilities, fixed_assets, cwip, investments, other_assets, total_assets
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    generate_id(), asset["id"], period_date,
+                    row.get("share capital"), row.get("reserves"), row.get("borrowings"),
+                    row.get("other liabilities"), row.get("fixed assets"), row.get("cwip"),
+                    row.get("investments"), row.get("other assets"), row.get("total assets")
+                ))
+
+            # 3. Cash Flow
+            for row in data.get("cash_flow", []):
+                period_date = _period_to_iso(row["period"])
+                if not period_date: continue
+                conn.execute("""
+                    INSERT OR REPLACE INTO screener_cashflow (
+                        id, asset_id, period_end_date, cash_from_operating, cash_from_investing, cash_from_financing, net_cash_flow
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    generate_id(), asset["id"], period_date,
+                    row.get("cash from operating activity"), row.get("cash from investing activity"),
+                    row.get("cash from financing activity"), row.get("net cash flow")
+                ))
+
+        logger.info(f"[SCREENER] Updated {identifier}")
+        time.sleep(1) 

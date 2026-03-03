@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Navy background (squircle shape) -->
+  <rect width="64" height="64" rx="14" fill="#050C18"/>
+  <!-- Outer ring -->
+  <circle cx="32" cy="32" r="25" stroke="#F59E0B" stroke-width="2.5" fill="none"/>
+  <!-- Inner hub -->
+  <circle cx="32" cy="32" r="5" stroke="#F59E0B" stroke-width="2" fill="none"/>
+  <!-- Center dot -->
+  <circle cx="32" cy="32" r="2" fill="#F59E0B"/>
+  <!-- 24 spokes of the Ashok Chakra -->
+  <line x1="32" y1="27.2" x2="32" y2="7.2" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="33.63" y1="27.28" x2="39.13" y2="7.78" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="35.13" y1="27.5" x2="45.63" y2="9.0" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="36.41" y1="27.87" x2="51.41" y2="11.37" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="37.37" y1="28.37" x2="56.37" y2="14.37" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="37.97" y1="29.0" x2="57.47" y2="18.5" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="38.13" y1="29.7" x2="58.13" y2="23.2" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="37.87" y1="30.5" x2="57.87" y2="28.0" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="37.2" y1="31.3" x2="57.2" y2="32.8" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="36.2" y1="32.0" x2="55.7" y2="37.5" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="34.9" y1="32.6" x2="53.4" y2="42.1" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="33.5" y1="33.0" x2="50.5" y2="46.0" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="32" y1="33.2" x2="32" y2="56.8" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="30.5" y1="33.0" x2="13.5" y2="46.0" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="29.1" y1="32.6" x2="10.6" y2="42.1" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="27.8" y1="32.0" x2="8.3" y2="37.5" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="26.8" y1="31.3" x2="6.8" y2="32.8" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="26.13" y1="30.5" x2="6.13" y2="28.0" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="25.87" y1="29.7" x2="5.87" y2="23.2" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="26.03" y1="29.0" x2="6.53" y2="18.5" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="26.63" y1="28.37" x2="7.63" y2="14.37" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="27.59" y1="27.87" x2="12.59" y2="11.37" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="28.87" y1="27.5" x2="18.37" y2="9.0" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="30.37" y1="27.28" x2="24.87" y2="7.78" stroke="#F59E0B" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

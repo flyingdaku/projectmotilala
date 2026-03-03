@@ -1,0 +1,51 @@
+import { Metadata } from 'next';
+
+export const metadata: Metadata = {
+    title: 'Smart SIP Calculator: Nifty P/E Based Dynamic SIP | Artha',
+    description: 'Backtest a valuation-based Smart SIP strategy using historical Nifty 50 P/E ratios. Double your SIP during crashes and protect capital during bubbles.',
+    keywords: ['smart sip calculator india', 'pe based sip calculator', 'dynamic sip calculator', 'valuation based sip', 'nifty pe sip calculator'],
+    openGraph: {
+        title: 'Smart SIP Calculator: Dynamic Nifty P/E Strategy | Artha',
+        description: 'Stop investing blindly. Backtest how scaling your SIP based on Market Valuation (Nifty P/E) affects your final corpus.',
+        type: 'website',
+    },
+};
+
+export default function SmartSIPLayout({
+    children,
+}: {
+    children: React.ReactNode;
+}) {
+    const jsonLd = {
+        '@context': 'https://schema.org',
+        '@type': 'FAQPage',
+        mainEntity: [
+            {
+                '@type': 'Question',
+                name: 'What is a Smart SIP or Valuation-Based SIP?',
+                acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'A Smart SIP dynamically adjusts your monthly investment amount based on market valuations, typically the Nifty 50 P/E ratio. When the market is cheap (low P/E), you invest more (e.g., 2x). When the market is expensive (high P/E), you invest less (e.g., 0.5x).',
+                },
+            },
+            {
+                '@type': 'Question',
+                name: 'Does a Smart SIP give higher returns than a Normal SIP?',
+                acceptedAnswer: {
+                    '@type': 'Answer',
+                    text: 'Historically, yes. By investing heavily during market crashes (like 2008 or 2020) when the P/E ratio drops below 18, you accumulate significantly more units at cheaper prices, which magnifies your corpus during the subsequent recovery.',
+                },
+            }
+        ],
+    };
+
+    return (
+        <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+            />
+            {children}
+        </>
+    );
+}
