@@ -5,16 +5,30 @@ CREATE TABLE IF NOT EXISTS assets (
   nse_symbol     TEXT,
   bse_code       TEXT,
   amfi_code      TEXT,
+  screener_id    TEXT,           -- e.g. 'IOC' or 'RELIANCE'
   name           TEXT NOT NULL,
   asset_class    TEXT NOT NULL CHECK(asset_class IN ('EQUITY', 'MF', 'ETF', 'INDEX')),
   series         TEXT,
-  sector         TEXT,
-  industry       TEXT,
+  -- ── 4-level industry classification (from Screener.in peers section) ──────
+  sector         TEXT,           -- Level 1: e.g. 'Energy'
+  industry_group TEXT,           -- Level 2: e.g. 'Oil, Gas & Consumable Fuels'
+  industry       TEXT,           -- Level 3: e.g. 'Petroleum Products'
+  sub_industry   TEXT,           -- Level 4: e.g. 'Refineries & Marketing'
+  screener_sector_code       TEXT, -- e.g. 'IN03'
+  screener_industry_group_code TEXT, -- e.g. 'IN0301'
+  screener_industry_code     TEXT, -- e.g. 'IN030103'
+  screener_sub_industry_code TEXT, -- e.g. 'IN030103001'
+  -- ── MSI classification (from MarketSmith India) ─────────────────────────
+  msi_sector     TEXT,           -- MSI's own sector label
+  msi_industry_group TEXT,       -- MSI's industry group label
+  msi_group_rank INTEGER,        -- MSI's industry group rank (1-197)
+  -- ── ───────────────────────────────────────────────────────────────────
   listing_date   TEXT,
   delisting_date TEXT,
   is_active      INTEGER DEFAULT 1,
   nse_listed     INTEGER DEFAULT 0,
   bse_listed     INTEGER DEFAULT 0,
+  classification_updated_at TEXT, -- when sector/industry was last synced
   created_at     TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_assets_nse_symbol  ON assets(nse_symbol);

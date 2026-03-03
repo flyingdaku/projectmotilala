@@ -4,6 +4,7 @@ Parses HTML tables for Quarterly Results, Balance Sheet, Cash Flows, and Ratios.
 """
 import logging
 import requests
+from pathlib import Path
 import time
 import calendar
 from datetime import date, datetime
@@ -13,6 +14,7 @@ from utils.db import get_db, generate_id
 
 logger = logging.getLogger(__name__)
 
+SCREENER_BASE = "https://www.screener.in"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 }
@@ -56,26 +58,62 @@ def _parse_screener_table(soup: BeautifulSoup, table_id: str) -> List[Dict]:
                 
     return list(period_rows.values())
 
+SCREENER_CACHE_DIR = Path(__file__).resolve().parent.parent / "raw_data" / "SCREENER"
+
+
+def _screener_cache_path(identifier: str) -> Path:
+    return SCREENER_CACHE_DIR / f"{identifier}.html"
+
+
 def fetch_screener_data(identifier: str) -> Dict[str, List[Dict]]:
-    url = f"https://www.screener.in/company/{identifier}/consolidated/"
+    """
+    Parse Screener.in HTML for a company.
+    Reads from raw_data/SCREENER/{identifier}.html if available (pre-fetched),
+    otherwise falls back to a live HTTP request and caches the result.
+    """
+    SCREENER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    cache_path = _screener_cache_path(identifier)
+
+    html = None
+
+    # 1. Try cache first
+    if cache_path.exists() and cache_path.stat().st_size > 5000:
+        logger.debug(f"[SCREENER] Loading {identifier} from cache")
+        html = cache_path.read_text(encoding="utf-8")
+
+    # 2. Fallback: live fetch
+    if not html:
+        for url in [
+            f"https://www.screener.in/company/{identifier}/consolidated/",
+            f"https://www.screener.in/company/{identifier}/",
+        ]:
+            try:
+                resp = requests.get(url, headers=HEADERS, timeout=20)
+                if resp.status_code == 404:
+                    continue
+                resp.raise_for_status()
+                html = resp.text
+                # Save for future runs
+                cache_path.write_text(html, encoding="utf-8")
+                break
+            except Exception as e:
+                logger.warning(f"[SCREENER] fetch failed for {identifier}: {e}")
+
+    if not html:
+        return {}
+
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=20)
-        if resp.status_code == 404:
-            url = f"https://www.screener.in/company/{identifier}/"
-            resp = requests.get(url, headers=HEADERS, timeout=20)
-        resp.raise_for_status()
-        
-        soup = BeautifulSoup(resp.text, "html.parser")
+        soup = BeautifulSoup(html, "html.parser")
         return {
-            "quarters": _parse_screener_table(soup, "#quarters"),
-            "annual": _parse_screener_table(soup, "#profit-loss"),
-            "balance_sheet": _parse_screener_table(soup, "#balance-sheet"),
-            "cash_flow": _parse_screener_table(soup, "#cash-flow"),
-            "ratios": _parse_screener_table(soup, "#ratios"),
-            "shareholding": _parse_screener_table(soup, "#shareholding")
+            "quarters":     _parse_screener_table(soup, "#quarters"),
+            "annual":       _parse_screener_table(soup, "#profit-loss"),
+            "balance_sheet":_parse_screener_table(soup, "#balance-sheet"),
+            "cash_flow":    _parse_screener_table(soup, "#cash-flow"),
+            "ratios":       _parse_screener_table(soup, "#ratios"),
+            "shareholding": _parse_screener_table(soup, "#shareholding"),
         }
     except Exception as e:
-        logger.warning(f"Screener fetch failed for {identifier}: {e}")
+        logger.warning(f"[SCREENER] parse failed for {identifier}: {e}")
         return {}
 
 def _period_to_iso(period_str: str) -> Optional[str]:
@@ -88,6 +126,13 @@ def _period_to_iso(period_str: str) -> Optional[str]:
 
 def run_screener_fundamentals(trade_date: date):
     logger.info("[SCREENER] Starting fundamentals scrape...")
+    # Import classification scraper for inline enrichment
+    try:
+        from scripts.scrape_screener_classification import fetch_classification, update_asset_classification
+        do_classification = True
+    except ImportError:
+        do_classification = False
+
     with get_db() as conn:
         assets = conn.execute("SELECT id, nse_symbol, bse_code FROM assets WHERE is_active = 1").fetchall()
         
@@ -98,8 +143,12 @@ def run_screener_fundamentals(trade_date: date):
         logger.info(f"[SCREENER] Fetching {identifier}...")
         data = fetch_screener_data(identifier)
         if not data: continue
-        
-        with get_db() as conn:
+
+        # Opportunistically update 4-level classification while we have the page
+        if do_classification:
+            cls = fetch_classification(identifier)
+            if cls:
+                update_asset_classification(asset["id"], cls)
             # 1. Quarterly Results
             for row in data.get("quarters", []):
                 period_date = _period_to_iso(row["period"])

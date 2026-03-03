@@ -82,37 +82,46 @@ def parse_bse_bhavcopy(content: bytes, filename: str) -> pd.DataFrame:
 
     df.columns = df.columns.str.strip()
 
-    # BSE column mapping
+    # BSE column mapping — handle both old and new naming conventions
     rename_map = {
-        "CODE": "bse_code",
-        "SC_CODE": "bse_code",
-        "NAME": "name",
-        "SC_NAME": "name",
-        "OPEN": "open",
-        "HIGH": "high",
-        "LOW": "low",
-        "CLOSE": "close",
-        "TOTTRDQTY": "volume",
+        "CODE": "bse_code", "SC_CODE": "bse_code",
+        "NAME": "name", "SC_NAME": "name",
+        "OPEN": "open", "PREVCLOSE": "prev_close",
+        "HIGH": "high", "LOW": "low", "CLOSE": "close",
+        "TOTTRDQTY": "volume",    # old format
+        "NO_OF_SHRS": "volume",   # new format (shares traded)
+        "NET_TURNOV": "turnover",
         "NO_TRADES": "trades",
-        "ISIN": "isin",
-        "ISIN_CODE": "isin",
+        "ISIN": "isin", "ISIN_CODE": "isin",
     }
     df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
 
-    for col in ["bse_code", "name", "isin"]:
+    for col in ["bse_code", "name"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
 
+    # ISIN may be absent in older formats — add empty column so downstream code works
+    if "isin" not in df.columns:
+        df["isin"] = None
+    else:
+        df["isin"] = df["isin"].astype(str).str.strip()
+
     for col in ["open", "high", "low", "close", "volume"]:
         if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
 
     if "trades" not in df.columns:
         df["trades"] = 0
+    df["trades"] = pd.to_numeric(df["trades"], errors="coerce").fillna(0)
+    if "volume" not in df.columns:
+        df["volume"] = 0
 
-    # Filter out rows without ISIN or close price
-    df = df.dropna(subset=["close", "isin"])
-    df = df[df["isin"] != "nan"]
+    # Require close price; isin can be null (will be matched by bse_code instead)
+    df = df.dropna(subset=["close"])
+    df = df[df["close"] > 0]
+
+    # Clean null-ish isin strings
+    df.loc[df["isin"].isin(["nan", "None", "", "0"]), "isin"] = None
 
     return df[["bse_code", "name", "isin", "open", "high", "low", "close", "volume", "trades"]]
 
@@ -121,19 +130,33 @@ def upsert_bse_assets(df: pd.DataFrame):
     """Create or update assets with BSE data. Links BSE code to existing ISIN if present."""
     with get_db() as conn:
         for _, row in df.iterrows():
-            isin = row["isin"]
-            bse_code = str(row.get("bse_code", ""))
-            name = row.get("name", bse_code)
+            isin = row["isin"] if row["isin"] not in (None, "nan", "") else None
+            bse_code = str(row.get("bse_code", "")).strip()
+            name = str(row.get("name", bse_code)).strip()
 
-            existing = conn.execute(
-                "SELECT id FROM assets WHERE isin = ?", (isin,)
-            ).fetchone()
+            # Try ISIN lookup first, then bse_code
+            existing = None
+            if isin:
+                existing = conn.execute(
+                    "SELECT id FROM assets WHERE isin = ?", (isin,)
+                ).fetchone()
+            if not existing and bse_code:
+                existing = conn.execute(
+                    "SELECT id FROM assets WHERE bse_code = ?", (bse_code,)
+                ).fetchone()
 
             if existing:
-                conn.execute(
-                    "UPDATE assets SET bse_code = ?, bse_listed = 1 WHERE isin = ?",
-                    (bse_code, isin),
-                )
+                # Update bse_code, backfill ISIN if we now have it
+                if isin:
+                    conn.execute(
+                        "UPDATE assets SET bse_code = ?, bse_listed = 1, isin = COALESCE(isin, ?) WHERE id = ?",
+                        (bse_code, isin, existing["id"]),
+                    )
+                else:
+                    conn.execute(
+                        "UPDATE assets SET bse_code = ?, bse_listed = 1 WHERE id = ?",
+                        (bse_code, existing["id"]),
+                    )
             else:
                 asset_id = generate_id()
                 conn.execute(
@@ -153,23 +176,32 @@ def insert_bse_prices(df: pd.DataFrame, trade_date: date):
 
     with get_db() as conn:
         for _, row in df.iterrows():
-            asset = conn.execute(
-                "SELECT id FROM assets WHERE isin = ?", (row["isin"],)
-            ).fetchone()
+            isin = row["isin"] if row["isin"] not in (None, "nan", "") else None
+            bse_code = str(row.get("bse_code", "")).strip()
+
+            # Resolve asset_id — ISIN first, then bse_code
+            asset = None
+            if isin:
+                asset = conn.execute(
+                    "SELECT id FROM assets WHERE isin = ?", (isin,)
+                ).fetchone()
+            if not asset and bse_code:
+                asset = conn.execute(
+                    "SELECT id FROM assets WHERE bse_code = ?", (bse_code,)
+                ).fetchone()
             if not asset:
                 continue
 
             asset_id = asset["id"]
 
-            # Check if NSE price already exists for this date
+            # NSE takes priority for dual-listed stocks
             nse_price = conn.execute(
                 """SELECT 1 FROM daily_prices
                    WHERE asset_id = ? AND date = ? AND source_exchange = 'NSE'""",
                 (asset_id, date_str),
             ).fetchone()
-
             if nse_price:
-                continue  # NSE takes priority for dual-listed stocks
+                continue
 
             conn.execute(
                 """INSERT OR REPLACE INTO daily_prices

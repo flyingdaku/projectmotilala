@@ -289,6 +289,31 @@ def fetch_symboldetails(instrument_id, auth_token):
     return {}, data
 
 
+def fetch_chart_patterns(instrument_id, auth_token):
+    url = f"{BASE_URL}/instr/0/{instrument_id}/getChartPatterns.json?ms-auth={auth_token}"
+    data = _get(url)
+    if data and 'response' in data:
+        return data['response'].get('data', []), data
+    return [], data
+
+
+def fetch_institutional_activity(instrument_id, auth_token):
+    url = f"{BASE_URL}/instr/0/{instrument_id}/getInstitutionalActivity.json?ms-auth={auth_token}"
+    data = _get(url)
+    if data and 'response' in data:
+        return data['response'].get('data', []), data
+    return [], data
+
+
+def fetch_industry_group_rankings(auth_token):
+    """Fetch all 197 industry group RS rankings for today."""
+    url = f"{BASE_URL}/market/getIndustryGroupPerformance.json?ms-auth={auth_token}"
+    data = _get(url)
+    if data and 'response' in data:
+        return data['response'].get('data', []), data
+    return [], data
+
+
 # ---------------------------------------------------------------------------
 # Header -> column index mapping helpers
 # ---------------------------------------------------------------------------
@@ -330,20 +355,24 @@ def _parse_income(fin, asset_id, is_quarterly=False):
         return []
 
     hmap = _build_header_map(headers)
-
-    # Identify column ids by short name (MSI uses different keys per stock type)
     col_period    = 'c0'
     col_rev_ops   = _find_col(hmap, 'net sales', 'revenue from operations', 'revenue (ops)', 'revenue-ops', 'interest earned')
-    col_tot_rev   = _find_col(hmap, 'total revenue', 'total income', 'total income')
+    col_tot_rev   = _find_col(hmap, 'total revenue', 'total income')
+    col_other_inc = _find_col(hmap, 'other income', 'non-operating income')
     col_materials = _find_col(hmap, 'material cost', 'materials consumed', 'raw materials')
     col_emp       = _find_col(hmap, 'employee cost', 'employee benefits', 'payments to employees')
-    col_dep       = _find_col(hmap, 'depreciation', 'd&a', 'depreciation')
+    col_dep       = _find_col(hmap, 'depreciation', 'd&a')
+    col_ebitda    = _find_col(hmap, 'ebitda', 'operating profit')
     col_fin_cost  = _find_col(hmap, 'finance cost', 'interest', 'interest expended')
     col_pbt       = _find_col(hmap, 'pbt', 'profit before tax', 'p/l- before tax')
+    col_tax       = _find_col(hmap, 'tax', 'tax expense', 'provision for tax')
     col_pat       = _find_col(hmap, 'pat', 'net profit', 'net income', 'profit/loss', 'profit / loss')
     col_basic_eps = _find_col(hmap, 'eps', 'basic eps', 'basic eps(rs.)')
     col_dil_eps   = _find_col(hmap, 'diluted eps', 'diluted eps(rs.)')
     col_div       = _find_col(hmap, 'dividend', 'dividend rate', 'dividend rate (%)', 'equity share div') if not is_quarterly else None
+    col_sg        = _find_col(hmap, 'sales growth', 'revenue growth yoy')
+    col_pg        = _find_col(hmap, 'pat growth', 'net profit growth')
+    col_eg        = _find_col(hmap, 'eps growth', 'eps growth yoy')
 
     parsed = []
     for row in rows:
@@ -355,14 +384,20 @@ def _parse_income(fin, asset_id, is_quarterly=False):
             'period_end_date': period,
             'revenue_ops':        _val(row, col_rev_ops),
             'total_revenue':      _val(row, col_tot_rev),
+            'other_income':       _val(row, col_other_inc),
             'materials_consumed': _val(row, col_materials),
             'employee_benefits':  _val(row, col_emp),
             'depreciation':       _val(row, col_dep),
+            'ebitda':             _val(row, col_ebitda),
             'finance_costs':      _val(row, col_fin_cost),
             'profit_before_tax':  _val(row, col_pbt),
+            'tax_amount':         _val(row, col_tax),
             'net_profit':         _val(row, col_pat),
             'basic_eps':          _val(row, col_basic_eps),
             'diluted_eps':        _val(row, col_dil_eps),
+            'sales_growth_yoy':   _val(row, col_sg),
+            'pat_growth_yoy':     _val(row, col_pg),
+            'eps_growth_yoy':     _val(row, col_eg),
         }
         if not is_quarterly:
             record['dividend_rate'] = _val(row, col_div)
@@ -464,12 +499,20 @@ def _parse_ratios(fin, asset_id, is_quarterly=False):
     col_pt     = _find_col(hmap, 'pt margin', 'pre tax margin', 'pre tax margin (%)')
     col_pat    = _find_col(hmap, 'atm', 'after tax margin', 'net profit margin')
     col_roe    = _find_col(hmap, 'roe', 'return on equity')
+    col_roa    = _find_col(hmap, 'roa', 'return on assets')
     col_roce   = _find_col(hmap, 'roce', 'return on capital employed')
     col_de     = _find_col(hmap, 'lt debttoequity', 'd/e', 'debt/equity', 'debt equity ratio')
+    col_cr     = _find_col(hmap, 'current ratio')
+    col_ic     = _find_col(hmap, 'interest coverage', 'int coverage')
     col_at     = _find_col(hmap, 'asset turnover', 'asset turn')
     col_it     = _find_col(hmap, 'inventory turnover', 'inv turn')
     col_dd     = _find_col(hmap, 'debtor days', 'receivable days')
     col_cd     = _find_col(hmap, 'creditor days', 'payable days')
+    col_pe     = _find_col(hmap, 'p/e', 'pe ratio', 'price/earnings')
+    col_pb     = _find_col(hmap, 'p/bv', 'pb ratio', 'price/book')
+    col_ev     = _find_col(hmap, 'ev/ebitda', 'ev ebitda')
+    col_ps     = _find_col(hmap, 'p/s', 'price/sales', 'ps ratio')
+    col_dy     = _find_col(hmap, 'dividend yield', 'div yield')
 
     parsed = []
     for row in rows:
@@ -483,12 +526,20 @@ def _parse_ratios(fin, asset_id, is_quarterly=False):
             'pre_tax_margin':    _val(row, col_pt),
             'net_profit_margin': _val(row, col_pat),
             'roe':               _val(row, col_roe),
+            'roa':               _val(row, col_roa),
             'roce':              _val(row, col_roce),
             'debt_equity':       _val(row, col_de),
+            'current_ratio':     _val(row, col_cr),
+            'interest_coverage': _val(row, col_ic),
             'asset_turnover':    _val(row, col_at),
             'inventory_turnover':_val(row, col_it),
             'debtor_days':       _val(row, col_dd),
             'creditor_days':     _val(row, col_cd),
+            'pe_ratio':          _val(row, col_pe),
+            'pb_ratio':          _val(row, col_pb),
+            'ev_ebitda':         _val(row, col_ev),
+            'ps_ratio':          _val(row, col_ps),
+            'dividend_yield':    _val(row, col_dy),
         })
     return parsed
 
@@ -776,11 +827,18 @@ def process_company(conn, asset_id, nse_symbol, auth_token):
     elif r_raw and 'headerDetails' in r_raw:
         ratings_extracted = r_raw.get('headerDetails') or {}
 
-    master_score = ratings_extracted.get('masterScore')
-    eps_rating   = ratings_extracted.get('epsRating')
-    rs_rating    = ratings_extracted.get('rsRating')
-    buyer_demand = ratings_extracted.get('buyerDemand')
-    group_rank   = ratings_extracted.get('groupRank')
+    master_score     = ratings_extracted.get('masterScore')
+    eps_rating       = ratings_extracted.get('epsRating')
+    rs_rating        = ratings_extracted.get('rsRating')
+    buyer_demand     = ratings_extracted.get('buyerDemand')
+    group_rank       = ratings_extracted.get('groupRank')
+    composite_rating = ratings_extracted.get('compositeRating') or ratings_extracted.get('compositeScore')
+    smr_rating       = ratings_extracted.get('smrRating') or ratings_extracted.get('smr')
+    acc_dis_rating   = ratings_extracted.get('accDisRating') or ratings_extracted.get('accumDistRating')
+    price_strength   = _safe_float(ratings_extracted.get('priceStrength') or ratings_extracted.get('rs52WeekHigh'))
+    week_high_52     = _safe_float(ratings_extracted.get('weekHigh52') or ratings_extracted.get('high52Week'))
+    week_low_52      = _safe_float(ratings_extracted.get('weekLow52') or ratings_extracted.get('low52Week'))
+    pct_from_high    = _safe_float(ratings_extracted.get('percentFromHigh') or ratings_extracted.get('pctBelowHigh'))
 
     # CANSLIM extracted
     c_raw = mega_data.get('canslim') or {}
@@ -872,16 +930,25 @@ def process_company(conn, asset_id, nse_symbol, auth_token):
         conn.execute('''
             INSERT INTO msi_company_data (
                 asset_id, msi_instrument_id, master_score, eps_rating, rs_rating,
+                composite_rating, smr_rating, acc_dis_rating,
+                price_strength, week_high_52, week_low_52, pct_from_high,
                 buyer_demand, group_rank, industry_group, industry_group_rank, sector,
                 sub_group, industry_symbol,
                 canslim_checklist, red_flags,
                 ai_report_summary, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             ON CONFLICT(asset_id) DO UPDATE SET
                 msi_instrument_id=excluded.msi_instrument_id,
                 master_score=excluded.master_score,
                 eps_rating=excluded.eps_rating,
                 rs_rating=excluded.rs_rating,
+                composite_rating=excluded.composite_rating,
+                smr_rating=excluded.smr_rating,
+                acc_dis_rating=excluded.acc_dis_rating,
+                price_strength=excluded.price_strength,
+                week_high_52=excluded.week_high_52,
+                week_low_52=excluded.week_low_52,
+                pct_from_high=excluded.pct_from_high,
                 buyer_demand=excluded.buyer_demand,
                 group_rank=excluded.group_rank,
                 industry_group=excluded.industry_group,
@@ -893,10 +960,21 @@ def process_company(conn, asset_id, nse_symbol, auth_token):
                 red_flags=excluded.red_flags,
                 ai_report_summary=excluded.ai_report_summary,
                 updated_at=CURRENT_TIMESTAMP;
-        ''', (asset_id, inst_id, master_score, eps_rating, rs_rating, buyer_demand, group_rank,
+        ''', (asset_id, inst_id, master_score, eps_rating, rs_rating,
+              composite_rating, smr_rating, acc_dis_rating,
+              price_strength, week_high_52, week_low_52, pct_from_high,
+              buyer_demand, group_rank,
               industry_group, industry_group_rank_str, sector,
               sub_group, industry_symbol,
               canslim_str, red_flags_str, ai_text))
+
+        # Sync MSI classification back to assets table
+        if sector or industry_group:
+            conn.execute('''
+                UPDATE assets SET
+                    msi_sector = ?, msi_industry_group = ?, msi_group_rank = ?
+                WHERE id = ?
+            ''', (sector, industry_group, group_rank, asset_id))
 
         conn.commit()
     log.info(f"  -> Done: {nse_symbol} (inst={inst_id})")
