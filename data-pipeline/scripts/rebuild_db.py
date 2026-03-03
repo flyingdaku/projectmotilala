@@ -234,7 +234,7 @@ def main():
     args = parser.parse_args()
 
     start = date.fromisoformat(args.start_date)
-    bse_start = date.fromisoformat(args.bse_start_date)
+    bse_start = date.fromisoformat(args.bse_start_date) if args.bse_start_date else start
     end = date.fromisoformat(args.end_date) if args.end_date else date.today() - timedelta(days=1)
     trade_date = end
 
