@@ -22,7 +22,8 @@ from utils.db import execute_one
 logger = logging.getLogger(__name__)
 
 DEFAULT_START_DATE = date(2000, 1, 1)
-REQUEST_DELAY_SECONDS = 1.5  # Polite delay between requests to avoid rate limiting
+REQUEST_DELAY_SECONDS = 0.5  # Moderate delay: enough to avoid NSE rate-limiting
+BACKFILL_WORKERS = 3  # 3 parallel workers: 3x faster than serial, safe from 403s
 
 
 def get_last_ingested_date(source: str) -> date:
@@ -37,73 +38,115 @@ def get_last_ingested_date(source: str) -> date:
     return None
 
 
-def backfill_nse(start: date, end: date, skip_existing: bool = True):
-    """Backfill NSE Bhavcopy for all trading days in [start, end]."""
+def _run_single_nse(trade_date, skip_existing):
+    """Process a single NSE trading day. Returns (date, ok: bool, error_msg: str|None)."""
     from pipelines.nse_bhavcopy import run_nse_bhavcopy_pipeline
 
+    if skip_existing:
+        existing = execute_one(
+            """SELECT 1 FROM pipeline_runs
+               WHERE source = 'NSE_BHAVCOPY' AND run_date = ? AND status = 'SUCCESS'""",
+            (trade_date.isoformat(),),
+        )
+        if existing:
+            return trade_date, None, "skipped"
+
+    try:
+        run_nse_bhavcopy_pipeline(trade_date)
+        time.sleep(REQUEST_DELAY_SECONDS)
+        return trade_date, True, None
+    except Exception as e:
+        return trade_date, False, str(e)
+
+
+def backfill_nse(start: date, end: date, skip_existing: bool = True):
+    """Backfill NSE Bhavcopy for all trading days in [start, end].
+    Uses concurrent downloads for speed, sequential DB writes for safety.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     trading_dates = get_trading_dates_in_range(start, end)
-    logger.info(f"NSE backfill: {len(trading_dates)} trading days from {start} to {end}")
+    logger.info(f"NSE backfill: {len(trading_dates)} trading days from {start} to {end} ({BACKFILL_WORKERS} workers)")
 
     success = 0
     failed = 0
     skipped = 0
 
-    for i, trade_date in enumerate(trading_dates):
-        if skip_existing:
-            existing = execute_one(
-                """SELECT 1 FROM pipeline_runs
-                   WHERE source = 'NSE_BHAVCOPY' AND run_date = ? AND status = 'SUCCESS'""",
-                (trade_date.isoformat(),),
-            )
-            if existing:
+    with ThreadPoolExecutor(max_workers=BACKFILL_WORKERS) as pool:
+        futures = {
+            pool.submit(_run_single_nse, td, skip_existing): td
+            for td in trading_dates
+        }
+        done_count = 0
+        for future in as_completed(futures):
+            td, ok, err = future.result()
+            done_count += 1
+            if err == "skipped":
                 skipped += 1
-                continue
-
-        try:
-            run_nse_bhavcopy_pipeline(trade_date)
-            success += 1
-            logger.info(f"NSE backfill [{i+1}/{len(trading_dates)}]: {trade_date} ✅")
-        except Exception as e:
-            failed += 1
-            logger.warning(f"NSE backfill [{i+1}/{len(trading_dates)}]: {trade_date} ❌ — {e}")
-
-        time.sleep(REQUEST_DELAY_SECONDS)
+            elif ok:
+                success += 1
+                if done_count % 50 == 0:
+                    logger.info(f"NSE backfill [{done_count}/{len(trading_dates)}]: last={td} ✅")
+            else:
+                failed += 1
+                logger.warning(f"NSE backfill [{done_count}/{len(trading_dates)}]: {td} ❌ — {err}")
 
     logger.info(f"NSE backfill complete: {success} success, {failed} failed, {skipped} skipped")
     return success, failed, skipped
 
 
-def backfill_bse(start: date, end: date, skip_existing: bool = True):
-    """Backfill BSE Bhavcopy for all trading days in [start, end]."""
+def _run_single_bse(trade_date, skip_existing):
+    """Process a single BSE trading day. Returns (date, ok: bool, error_msg: str|None)."""
     from pipelines.bse_bhavcopy import run_bse_bhavcopy_pipeline
 
+    if skip_existing:
+        existing = execute_one(
+            """SELECT 1 FROM pipeline_runs
+               WHERE source = 'BSE_BHAVCOPY' AND run_date = ? AND status = 'SUCCESS'""",
+            (trade_date.isoformat(),),
+        )
+        if existing:
+            return trade_date, None, "skipped"
+
+    try:
+        run_bse_bhavcopy_pipeline(trade_date)
+        time.sleep(REQUEST_DELAY_SECONDS)
+        return trade_date, True, None
+    except Exception as e:
+        return trade_date, False, str(e)
+
+
+def backfill_bse(start: date, end: date, skip_existing: bool = True):
+    """Backfill BSE Bhavcopy for all trading days in [start, end].
+    Uses concurrent downloads for speed, sequential DB writes for safety.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     trading_dates = get_trading_dates_in_range(start, end)
-    logger.info(f"BSE backfill: {len(trading_dates)} trading days from {start} to {end}")
+    logger.info(f"BSE backfill: {len(trading_dates)} trading days from {start} to {end} ({BACKFILL_WORKERS} workers)")
 
     success = 0
     failed = 0
     skipped = 0
 
-    for i, trade_date in enumerate(trading_dates):
-        if skip_existing:
-            existing = execute_one(
-                """SELECT 1 FROM pipeline_runs
-                   WHERE source = 'BSE_BHAVCOPY' AND run_date = ? AND status = 'SUCCESS'""",
-                (trade_date.isoformat(),),
-            )
-            if existing:
+    with ThreadPoolExecutor(max_workers=BACKFILL_WORKERS) as pool:
+        futures = {
+            pool.submit(_run_single_bse, td, skip_existing): td
+            for td in trading_dates
+        }
+        done_count = 0
+        for future in as_completed(futures):
+            td, ok, err = future.result()
+            done_count += 1
+            if err == "skipped":
                 skipped += 1
-                continue
-
-        try:
-            run_bse_bhavcopy_pipeline(trade_date)
-            success += 1
-            logger.info(f"BSE backfill [{i+1}/{len(trading_dates)}]: {trade_date} ✅")
-        except Exception as e:
-            failed += 1
-            logger.warning(f"BSE backfill [{i+1}/{len(trading_dates)}]: {trade_date} ❌ — {e}")
-
-        time.sleep(REQUEST_DELAY_SECONDS)
+            elif ok:
+                success += 1
+                if done_count % 50 == 0:
+                    logger.info(f"BSE backfill [{done_count}/{len(trading_dates)}]: last={td} ✅")
+            else:
+                failed += 1
+                logger.warning(f"BSE backfill [{done_count}/{len(trading_dates)}]: {td} ❌ — {err}")
 
     logger.info(f"BSE backfill complete: {success} success, {failed} failed, {skipped} skipped")
     return success, failed, skipped

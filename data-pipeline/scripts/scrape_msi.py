@@ -49,6 +49,13 @@ def setup_db(db_path):
         master_score INTEGER,
         eps_rating INTEGER,
         rs_rating INTEGER,
+        composite_rating INTEGER,
+        smr_rating TEXT,
+        acc_dis_rating TEXT,
+        price_strength INTEGER,
+        week_high_52 REAL,
+        week_low_52 REAL,
+        pct_from_high REAL,
         buyer_demand TEXT,
         group_rank INTEGER,
         industry_group TEXT,
@@ -1002,7 +1009,7 @@ if __name__ == "__main__":
         cursor.execute("SELECT id, nse_symbol FROM assets WHERE nse_symbol = ? LIMIT 1", (args.symbol.upper(),))
     else:
         cursor.execute(
-            "SELECT id, nse_symbol FROM assets WHERE asset_class = 'EQUITY' AND is_active = 1 LIMIT ?",
+            "SELECT id, nse_symbol FROM assets WHERE asset_class = 'EQUITY' AND is_active = 1 AND nse_symbol IS NOT NULL ORDER BY nse_symbol ASC LIMIT ?",
             (args.limit,)
         )
     assets = cursor.fetchall()

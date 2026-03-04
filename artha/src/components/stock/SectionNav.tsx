@@ -17,7 +17,6 @@ const SECTIONS: NavSection[] = [
   { id: "documents", label: "Docs" },
   { id: "analytics", label: "Analytics" },
   { id: "peers", label: "Peers" },
-  { id: "ai", label: "AI" },
 ];
 
 export function SectionNav() {
@@ -61,20 +60,19 @@ export function SectionNav() {
 
   return (
     <nav
-      className="fixed top-14 left-0 right-0 z-[9999] border-b"
+      className="sticky top-0 z-30 w-[calc(100%+64px)] -mx-8 px-8"
       style={{ background: "var(--background)", borderColor: "var(--border)" }}
     >
       {/* Desktop nav */}
-      <div className="hidden md:flex items-center gap-0 px-4 overflow-x-auto">
+      <div className="hidden md:flex items-center gap-0 px-4 overflow-x-auto max-w-[1400px] mx-auto">
         {SECTIONS.map((s) => (
           <button
             key={s.id}
             onClick={() => scrollTo(s.id)}
-            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-all ${
-              active === s.id
-                ? "border-[var(--accent-brand)] text-[var(--accent-brand)]"
-                : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border)]"
-            }`}
+            className={`px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-all ${active === s.id
+              ? "border-[var(--accent-brand)] text-[var(--accent-brand)]"
+              : "border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border)]"
+              }`}
           >
             {s.label}
           </button>
@@ -100,11 +98,10 @@ export function SectionNav() {
               <button
                 key={s.id}
                 onClick={() => scrollTo(s.id)}
-                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                  active === s.id
-                    ? "font-semibold"
-                    : "hover:bg-[var(--surface-elevated)]"
-                }`}
+                className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${active === s.id
+                  ? "font-semibold"
+                  : "hover:bg-[var(--surface-elevated)]"
+                  }`}
                 style={{
                   color: active === s.id ? "var(--accent-brand)" : "var(--text-primary)",
                   background: active === s.id ? "var(--accent-subtle)" : undefined,

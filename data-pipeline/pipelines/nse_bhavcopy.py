@@ -76,7 +76,9 @@ def _download_with_retry(url: str, retries: int = MAX_RETRIES) -> bytes:
                 with _nse_session_lock:
                     _nse_session = None  # force re-prime on next call
                 session = _get_nse_session()
-                time.sleep(RETRY_DELAY * attempt)
+                # If was 403, wait more
+                sleep_time = RETRY_DELAY * attempt * (2 if resp.status_code == 403 else 1)
+                time.sleep(sleep_time)
                 continue
             resp.raise_for_status()
             return resp.content
@@ -214,7 +216,8 @@ def parse_bhavcopy(content: bytes, filename: str) -> pd.DataFrame:
 
 
 # Cache security master for the lifetime of the process
-_security_master_cache: pd.DataFrame | None = None
+_security_master_cache = None # type: pd.DataFrame
+
 _SECURITY_MASTER_CACHE_FILE = (
     Path(__file__).parent.parent / "raw_data" / "NSE_MASTER" / "EQUITY_L.csv"
 )
@@ -240,50 +243,82 @@ def fetch_nse_security_master() -> pd.DataFrame:
             logger.debug("Security Master: loading from cache")
             try:
                 df = pd.read_csv(cache)
-                _security_master_cache = df
-                return df
+                # Fall through to normalization
             except Exception:
-                pass
+                df = None
+        else:
+            df = None
+    else:
+        df = None
 
-    # Live download
-    url = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
-    try:
-        session = _get_nse_session()
-        resp = session.get(url, timeout=30)
-        resp.raise_for_status()
-        cache.write_bytes(resp.content)
-        logger.info(f"Security Master: downloaded {len(resp.content):,} bytes")
-        df = pd.read_csv(io.BytesIO(resp.content))
-    except Exception as e:
-        logger.warning(f"Security Master download failed: {e}")
-        # Try stale cache
-        if cache.exists():
-            logger.info("Security Master: using stale cache")
-            try:
-                df = pd.read_csv(cache)
-                _security_master_cache = df
-                return df
-            except Exception:
-                pass
-        return pd.DataFrame()
+    if df is None:
+        # Live download
+        url = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
+        try:
+            session = _get_nse_session()
+            resp = session.get(url, timeout=30)
+            resp.raise_for_status()
+            cache.write_bytes(resp.content)
+            logger.info(f"Security Master: downloaded {len(resp.content):,} bytes")
+            df = pd.read_csv(io.BytesIO(resp.content))
+        except Exception as e:
+            logger.warning(f"Security Master download failed: {e}")
+            # Try stale cache
+            if cache.exists():
+                logger.info("Security Master: using stale cache")
+                try:
+                    df = pd.read_csv(cache)
+                except Exception:
+                    return pd.DataFrame()
+            else:
+                return pd.DataFrame()
 
     df.columns = df.columns.str.strip()
     df = df.rename(columns={
         "SYMBOL": "symbol",
         "NAME OF COMPANY": "name",
-        " ISIN NUMBER": "isin",
         "ISIN NUMBER": "isin",
-        " SERIES": "series",
         "SERIES": "series",
-        " DATE OF LISTING": "listing_date",
         "DATE OF LISTING": "listing_date",
     })
+
+    # Ensure all required exist
     for col in ["symbol", "name", "isin", "series"]:
-        if col in df.columns:
-            df[col] = df[col].str.strip()
+        if col not in df.columns:
+            logger.warning(f"Security Master missing column {col}. Returning empty.")
+            return pd.DataFrame()
+
+    for col in ["symbol", "name", "isin", "series"]:
+        df[col] = df[col].astype(str).str.strip()
+
     result = df[["symbol", "name", "isin", "series", "listing_date"]].dropna(subset=["isin"])
     _security_master_cache = result
     return result
+
+
+def _build_asset_cache(conn):
+    """Build in-memory ISIN→id and symbol→id lookup maps from the assets table."""
+    isin_map = {}
+    symbol_map = {}
+    rows = conn.execute(
+        "SELECT id, isin, nse_symbol FROM assets WHERE asset_class = 'EQUITY'"
+    ).fetchall()
+    for r in rows:
+        if r["isin"]:
+            isin_map[r["isin"]] = r["id"]
+        if r["nse_symbol"]:
+            symbol_map[r["nse_symbol"]] = r["id"]
+    return isin_map, symbol_map
+
+
+def _clean_isin(val) -> str:
+    """Return cleaned ISIN string or None."""
+    if val is None:
+        return None
+    s = str(val).strip()
+    if s.lower() in ("none", "nan", ""):
+        return None
+    return s
 
 
 def upsert_assets(df: pd.DataFrame, security_master: pd.DataFrame):
@@ -291,6 +326,8 @@ def upsert_assets(df: pd.DataFrame, security_master: pd.DataFrame):
     Create or update assets in the database from Bhavcopy rows.
     Uses Security Master for company names when available.
     Handles legacy rows where isin may be None (pre-2002 files).
+
+    Optimized: builds in-memory cache to avoid per-row SELECT queries.
     """
     name_map = {}
     listing_map = {}
@@ -299,42 +336,73 @@ def upsert_assets(df: pd.DataFrame, security_master: pd.DataFrame):
         listing_map = dict(zip(security_master["isin"], security_master.get("listing_date", {})))
 
     with get_db() as conn:
+        isin_cache, symbol_cache = _build_asset_cache(conn)
+
+        new_assets = []  # tuples for batch insert
+        update_symbol = []  # (symbol, id) for batch update
+        update_isin = []  # (isin, id) for batch isin backfill
+
+        seen_isins = set()
+        seen_symbols = set()
+
         for _, row in df.iterrows():
-            isin = row["isin"] if row["isin"] and str(row["isin"]).lower() not in ("none", "nan", "") else None
+            isin = _clean_isin(row["isin"])
             symbol = row["symbol"]
             name = name_map.get(isin, symbol) if isin else symbol
             listing_date = listing_map.get(isin) if isin else None
 
-            # Try to find by ISIN first, then by symbol
-            existing = None
-            if isin:
-                existing = conn.execute(
-                    "SELECT id FROM assets WHERE isin = ?", (isin,)
-                ).fetchone()
-            if not existing:
-                existing = conn.execute(
-                    "SELECT id FROM assets WHERE nse_symbol = ? AND asset_class = 'EQUITY'", (symbol,)
-                ).fetchone()
+            # Resolve existing asset_id from cache
+            existing_id = None
+            if isin and isin in isin_cache:
+                existing_id = isin_cache[isin]
+            if not existing_id and symbol in symbol_cache:
+                existing_id = symbol_cache[symbol]
 
-            if existing:
-                conn.execute(
-                    "UPDATE assets SET nse_symbol = ?, nse_listed = 1, is_active = 1 WHERE id = ?",
-                    (symbol, existing["id"]),
-                )
-                # Backfill ISIN if we now have it
-                if isin:
-                    conn.execute(
-                        "UPDATE assets SET isin = ? WHERE id = ? AND (isin IS NULL OR isin = '')",
-                        (isin, existing["id"]),
-                    )
+            if existing_id:
+                update_symbol.append((symbol, existing_id))
+                if isin and isin not in isin_cache:
+                    update_isin.append((isin, existing_id))
+                    isin_cache[isin] = existing_id  # update cache
+                # Update cache
+                symbol_cache[symbol] = existing_id
             else:
+                # Avoid duplicate inserts for same isin/symbol in same batch
+                if isin and isin in seen_isins:
+                    continue
+                if not isin and symbol in seen_symbols:
+                    continue
+
                 asset_id = generate_id()
-                conn.execute(
-                    """INSERT INTO assets
-                       (id, isin, nse_symbol, name, asset_class, series, nse_listed, is_active, listing_date)
-                       VALUES (?, ?, ?, ?, 'EQUITY', ?, 1, 1, ?)""",
-                    (asset_id, isin, symbol, name, row.get("series", "EQ"), listing_date),
+                new_assets.append(
+                    (asset_id, isin, symbol, name, row.get("series", "EQ"), listing_date)
                 )
+                # Update caches immediately for subsequent rows
+                if isin:
+                    isin_cache[isin] = asset_id
+                    seen_isins.add(isin)
+                symbol_cache[symbol] = asset_id
+                seen_symbols.add(symbol)
+
+        # Batch update existing assets
+        if update_symbol:
+            conn.executemany(
+                "UPDATE assets SET nse_symbol = ?, nse_listed = 1, is_active = 1 WHERE id = ?",
+                update_symbol,
+            )
+        if update_isin:
+            conn.executemany(
+                "UPDATE assets SET isin = ? WHERE id = ? AND (isin IS NULL OR isin = '')",
+                update_isin,
+            )
+        # Batch insert new assets
+        if new_assets:
+            conn.executemany(
+                """INSERT INTO assets
+                   (id, isin, nse_symbol, name, asset_class, series, nse_listed, is_active, listing_date)
+                   VALUES (?, ?, ?, ?, 'EQUITY', ?, 1, 1, ?)""",
+                new_assets,
+            )
+            logger.info(f"Registered {len(new_assets)} new NSE assets")
 
 
 def insert_prices(df: pd.DataFrame):
@@ -342,42 +410,51 @@ def insert_prices(df: pd.DataFrame):
     Insert daily prices into the database.
     Uses INSERT OR REPLACE to handle re-runs idempotently.
     Falls back to symbol matching for legacy rows where isin is None.
+
+    Optimized: resolves asset_ids via in-memory cache, then bulk-inserts.
     """
     with get_db() as conn:
+        isin_cache, symbol_cache = _build_asset_cache(conn)
+
+        price_rows = []
+        skipped = 0
+
         for _, row in df.iterrows():
-            isin = row["isin"] if row["isin"] and str(row["isin"]).lower() not in ("none", "nan", "") else None
+            isin = _clean_isin(row["isin"])
             symbol = row["symbol"]
 
-            asset = None
+            # Resolve asset_id from cache (ISIN first, then symbol)
+            asset_id = None
             if isin:
-                asset = conn.execute(
-                    "SELECT id FROM assets WHERE isin = ?", (isin,)
-                ).fetchone()
-            if not asset:
-                asset = conn.execute(
-                    "SELECT id FROM assets WHERE nse_symbol = ? AND asset_class = 'EQUITY'", (symbol,)
-                ).fetchone()
+                asset_id = isin_cache.get(isin)
+            if not asset_id:
+                asset_id = symbol_cache.get(symbol)
 
-            if not asset:
-                logger.warning(f"Asset not found for {isin or symbol}, skipping price insert")
+            if not asset_id:
+                skipped += 1
                 continue
 
-            conn.execute(
+            price_rows.append((
+                asset_id,
+                row["date"],
+                row.get("open"),
+                row.get("high"),
+                row.get("low"),
+                row["close"],
+                row["close"],  # adj_close starts equal to close; updated by adjust_prices.py
+                int(row.get("volume", 0) or 0),
+                int(row.get("trades", 0) or 0),
+            ))
+
+        if price_rows:
+            conn.executemany(
                 """INSERT OR REPLACE INTO daily_prices
                    (asset_id, date, open, high, low, close, adj_close, volume, trades, source_exchange)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'NSE')""",
-                (
-                    asset["id"],
-                    row["date"],
-                    row.get("open"),
-                    row.get("high"),
-                    row.get("low"),
-                    row["close"],
-                    row["close"],  # adj_close starts equal to close; updated by adjust_prices.py
-                    int(row.get("volume", 0) or 0),
-                    int(row.get("trades", 0) or 0),
-                ),
+                price_rows,
             )
+        if skipped:
+            logger.warning(f"Skipped {skipped} price rows (unresolved assets)")
 
 
 def run_nse_bhavcopy_pipeline(trade_date: date = None):

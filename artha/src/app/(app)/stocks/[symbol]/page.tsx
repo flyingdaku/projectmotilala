@@ -12,8 +12,10 @@ import { OwnershipSection } from "@/components/stock/OwnershipSection";
 import { DocumentsSection } from "@/components/stock/DocumentsSection";
 import { AnalyticsSection } from "@/components/stock/AnalyticsSection";
 import { PeersSection } from "@/components/stock/PeersSection";
-import { AISection } from "@/components/stock/AISection";
 import { FollowButton } from "@/components/stock/FollowButton";
+import { StickyMetricsBar } from "@/components/stock/StickyMetricsBar";
+import { FloatingNavButton } from "@/components/stock/FloatingNavButton";
+import { Sparkline } from "@/components/stock/Sparkline";
 import type { StockDetail } from "@/lib/data";
 import type { CompanyProfile } from "@/lib/data/types";
 
@@ -25,6 +27,8 @@ export default function StockPage() {
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [showStickyBar, setShowStickyBar] = useState(false);
+  const [priceHistory, setPriceHistory] = useState<number[]>([]);
 
   useEffect(() => {
     if (!symbol) return;
@@ -41,6 +45,28 @@ export default function StockPage() {
       })
       .finally(() => setLoading(false));
   }, [symbol]);
+
+  // Fetch price history for sparklines
+  useEffect(() => {
+    if (!symbol) return;
+    fetch(`/api/stocks/${symbol}/chart?range=1M`)
+      .then(r => r.json())
+      .then(data => {
+        if (data?.prices) {
+          setPriceHistory(data.prices.map((p: any) => p.close).slice(-30));
+        }
+      })
+      .catch(() => { });
+  }, [symbol]);
+
+  // Scroll detection for sticky bar
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowStickyBar(window.scrollY > 200);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   if (loading) {
     return (
@@ -65,15 +91,21 @@ export default function StockPage() {
   const isNeg = (stock.pctChange1d ?? 0) < 0;
 
   return (
-    <div className="-mx-8 -mt-8 w-[calc(100%+4rem)]">
+    <div className="w-full">
+      {/* Sticky Metrics Bar */}
+      {stock && <StickyMetricsBar stock={stock} visible={showStickyBar} />}
+
+      {/* Sticky section nav - Now at the very top */}
+      <div className="-mt-8">
+        <SectionNav />
+      </div>
+
+      {/* Floating Navigation Button (Mobile) */}
+      <FloatingNavButton />
+
       {/* Stock Header */}
-      <div className="px-8 pt-6 pb-4 border-b" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <div className="max-w-[1200px] mx-auto">
-          {/* Breadcrumb */}
-          <Link href="/screener" className="inline-flex items-center gap-1 text-xs mb-3 hover:underline"
-            style={{ color: "var(--text-muted)" }}>
-            <ArrowLeft size={12} /> Screener
-          </Link>
+      <div className="-mx-8 px-8 pt-6 pb-4 border-b" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        <div className="max-w-[1400px] mx-auto">
 
           <div className="flex items-start justify-between gap-4 flex-wrap">
             {/* Left: Name + badges */}
@@ -111,19 +143,21 @@ export default function StockPage() {
                 )}
               </div>
 
-              {/* Key metrics row */}
+              {/* Key metrics row with sparklines */}
               <div className="flex items-center gap-4 mt-2 flex-wrap">
                 {[
-                  { label: "Mkt Cap", value: stock.marketCapCr ? `₹${(stock.marketCapCr / 100).toFixed(1)}B Cr` : "—" },
-                  { label: "P/E", value: stock.pe?.toFixed(1) ?? "—" },
-                  { label: "P/B", value: stock.pb?.toFixed(2) ?? "—" },
-                  { label: "Div Yield", value: stock.dividendYield ? `${stock.dividendYield.toFixed(2)}%` : "—" },
-                  { label: "52W H", value: stock.high52w ? `₹${stock.high52w.toFixed(0)}` : "—" },
-                  { label: "52W L", value: stock.low52w ? `₹${stock.low52w.toFixed(0)}` : "—" },
+                  { label: "Mkt Cap", value: stock.marketCapCr ? `₹${(stock.marketCapCr / 100).toFixed(1)}B Cr` : "—", sparkline: null },
+                  { label: "P/E", value: stock.pe?.toFixed(1) ?? "—", sparkline: null },
+                  { label: "P/B", value: stock.pb?.toFixed(2) ?? "—", sparkline: null },
+                  { label: "Div Yield", value: stock.dividendYield ? `${stock.dividendYield.toFixed(2)}%` : "—", sparkline: null },
+                  { label: "52W Range", value: stock.high52w && stock.low52w ? `₹${stock.low52w.toFixed(0)} - ₹${stock.high52w.toFixed(0)}` : "—", sparkline: priceHistory },
                 ].map(m => (
                   <div key={m.label} className="text-center">
                     <div className="text-[10px] font-medium uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>{m.label}</div>
-                    <div className="text-sm font-mono font-semibold mt-0.5" style={{ color: "var(--text-primary)" }}>{m.value}</div>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <div className="text-sm font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{m.value}</div>
+                      {m.sparkline && m.sparkline.length > 0 && <Sparkline data={m.sparkline} height={20} />}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -137,34 +171,29 @@ export default function StockPage() {
         </div>
       </div>
 
-      {/* Sticky section nav */}
-      <SectionNav />
-
       {/* Page content */}
-      <div className="px-8 py-8 max-w-[1200px] mx-auto space-y-12">
+      <div className="px-8 py-8 max-w-[1400px] mx-auto space-y-12">
         {/* Overview */}
         <OverviewSection stock={stock} profile={profile} />
-        
+
         {/* Chart */}
         <div id="chart" className="scroll-mt-28">
           <EmbeddedChart symbol={symbol} currentPrice={stock.price ?? null} priceChange={stock.pctChange1d ?? null} />
         </div>
-        
+
         {/* Financials */}
         <FinancialsSection symbol={symbol} />
-        
+
         {/* Ownership & Governance */}
         <OwnershipSection symbol={symbol} />
-        
+
         {/* Analytics & Quality */}
         <AnalyticsSection symbol={symbol} />
-        
+
         {/* Peer Comparison */}
         <PeersSection symbol={symbol} currentRatios={{ peTtm: stock.pe, roce: stock.roce, roe: stock.roe, pb: stock.pb }} />
-        
-        {/* AI Insights */}
-        <AISection symbol={symbol} stockName={stock.name} />
-        
+
+
         {/* Documents & Filings - At the bottom */}
         <DocumentsSection symbol={symbol} />
       </div>

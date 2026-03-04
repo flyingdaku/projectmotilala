@@ -4,10 +4,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./topbar";
+import { WatchlistPanel } from "./WatchlistPanel";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useWatchlist } from "@/contexts/watchlist-context";
+import { cn } from "@/lib/utils";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { isWatchlistOpen } = useWatchlist();
   useKeyboardShortcuts();
 
   return (
@@ -15,7 +19,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <TopBar />
       <div className="flex flex-1 overflow-hidden relative">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto z-0 relative">
+        <main className={cn(
+          "flex-1 overflow-y-auto z-0 relative transition-all duration-300 ease-in-out",
+          isWatchlistOpen ? "mr-80" : "mr-0"
+        )}>
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
@@ -25,12 +32,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="w-full h-full p-8 flex justify-center"
             >
-              <div className="w-full max-w-[1200px]">
+              <div className="w-full max-w-[1400px]">
                 {children}
               </div>
             </motion.div>
           </AnimatePresence>
         </main>
+        <WatchlistPanel />
       </div>
     </div>
   );

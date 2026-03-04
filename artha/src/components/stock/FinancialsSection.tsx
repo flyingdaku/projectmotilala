@@ -5,8 +5,11 @@ import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, Legend,
 } from "recharts";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, DollarSign, Wallet, Activity, Calculator } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, DollarSign, Wallet, Activity, Calculator, Download } from "lucide-react";
 import type { QuarterlyResult, BalanceSheet, CashFlow, AnomalyFlag } from "@/lib/data/types";
+import { MarginWaterfallChart } from "@/components/stock/MarginWaterfallChart";
+import { WorkingCapitalCycle } from "@/components/stock/WorkingCapitalCycle";
+import { exportAllFinancials } from "@/lib/utils/exportFinancials";
 
 function fmt(v: number | null | undefined, unit = "Cr") {
   if (v == null) return "—";
@@ -188,15 +191,24 @@ export function FinancialsSection({ symbol }: Props) {
       </div>
 
       {/* P&L Pane */}
-      <div className="p-6 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <div className="flex items-center justify-between mb-6">
+      <div id="financials" className="scroll-mt-28">
+        <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <DollarSign size={20} style={{ color: "var(--accent-brand)" }} />
-            <h3 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Profit & Loss</h3>
+            <h2 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Profit & Loss</h2>
           </div>
-          <div className="flex bg-muted/20 p-0.5 rounded-lg border border-border">
-            {(["quarterly", "annual"] as const).map((m) => (
-              <button key={m} onClick={() => setViewMode(m)}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => data && exportAllFinancials(data.quarterly, data.balanceSheets, data.cashFlows, symbol)}
+              className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5"
+              style={{ background: "var(--accent-subtle)", color: "var(--accent-brand)" }}
+              disabled={!data}
+            >
+              <Download size={14} />
+              Export CSV
+            </button>
+            {["quarterly", "annual"].map((m) => (
+              <button key={m} onClick={() => setViewMode(m as any)}
                 className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize ${viewMode === m ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}>
                 {m}
               </button>
@@ -205,6 +217,18 @@ export function FinancialsSection({ symbol }: Props) {
         </div>
 
         <div className="space-y-6">
+          {/* Margin Waterfall Chart */}
+          {data && data.quarterly.length > 0 && data.quarterly[0].revenue && data.quarterly[0].operatingProfit && data.quarterly[0].netProfit && (
+            <div className="p-4 rounded-lg" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+              <MarginWaterfallChart
+                revenue={data.quarterly[0].revenue}
+                operatingProfit={data.quarterly[0].operatingProfit}
+                netProfit={data.quarterly[0].netProfit}
+                period={data.quarterly[0].periodEnd?.slice(0, 7) ?? "Latest"}
+              />
+            </div>
+          )}
+
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={plData} margin={{ top: 4, right: 10, left: 10, bottom: 0 }}>
@@ -335,7 +359,7 @@ export function FinancialsSection({ symbol }: Props) {
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                    {["Year", "Operating CF", "Investing CF", "Financing CF", "Free CF", "Net Change"].map((h) => (
+                    {["Year", "Operating CF", "Investing CF", "Financing CF", "Free CF"].map((h) => (
                       <th key={h} className={`py-2 ${h === "Year" ? "text-left pr-4" : "text-right px-2"} font-semibold`} style={{ color: "var(--text-muted)" }}>{h}</th>
                     ))}
                   </tr>
@@ -348,7 +372,6 @@ export function FinancialsSection({ symbol }: Props) {
                       <td className="text-right py-2 px-2 font-mono" style={{ color: (r.cashFromInvesting ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromInvesting)}</td>
                       <td className="text-right py-2 px-2 font-mono" style={{ color: (r.cashFromFinancing ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromFinancing)}</td>
                       <td className="text-right py-2 px-2 font-mono" style={{ color: (r.freeCashFlow ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.freeCashFlow)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: (r.netCashChange ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.netCashChange)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -365,6 +388,18 @@ export function FinancialsSection({ symbol }: Props) {
           <h3 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Key Ratios & Metrics</h3>
         </div>
         <div className="space-y-6">
+          {/* Working Capital Cycle Visualization */}
+          {data && data.ratios.length > 0 && data.ratios[0].debtorDays && data.ratios[0].inventoryDays && data.ratios[0].daysPayable && (
+            <div className="p-4 rounded-lg" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+              <WorkingCapitalCycle
+                debtorDays={data.ratios[0].debtorDays}
+                inventoryDays={data.ratios[0].inventoryDays}
+                payableDays={data.ratios[0].daysPayable}
+                period={data.ratios[0].periodEndDate?.slice(0, 7) ?? "Latest"}
+              />
+            </div>
+          )}
+
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={ratiosData} margin={{ top: 4, right: 10, left: 10, bottom: 0 }}>

@@ -1,4 +1,4 @@
--- ─── MSI EXTENDED SCHEMA ──────────────────────────────────────────────────────
+yes-- ─── MSI EXTENDED SCHEMA ──────────────────────────────────────────────────────
 -- Applied via ALTER TABLE on existing DB; new tables created fresh.
 
 -- Chart patterns detected by MSI (Cup with Handle, Flag, Double Bottom, etc.)

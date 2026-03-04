@@ -71,12 +71,28 @@ export function OwnershipSection({ symbol }: Props) {
 
   const latestSh = data?.shareholding?.[0];
   const pledgePct = latestSh?.promoterPledgePct ?? 0;
+  
+  // Calculate QoQ changes for institutional holdings
   const promoterQoQ = data && data.shareholding.length >= 2
     ? (data.shareholding[0].promoterPct ?? 0) - (data.shareholding[1].promoterPct ?? 0)
     : null;
   const fiiQoQ = data && data.shareholding.length >= 2
     ? (data.shareholding[0].fiiPct ?? 0) - (data.shareholding[1].fiiPct ?? 0)
     : null;
+  const diiQoQ = data && data.shareholding.length >= 2
+    ? (data.shareholding[0].diiPct ?? 0) - (data.shareholding[1].diiPct ?? 0)
+    : null;
+  const mfQoQ = data && data.shareholding.length >= 2
+    ? (data.shareholding[0].mfPct ?? 0) - (data.shareholding[1].mfPct ?? 0)
+    : null;
+  
+  // Identify significant changes (>1% absolute change)
+  const significantChanges = [
+    { label: "Promoter", change: promoterQoQ, color: SH_COLORS.Promoter },
+    { label: "FII", change: fiiQoQ, color: SH_COLORS.FII },
+    { label: "DII", change: diiQoQ, color: SH_COLORS.DII },
+    { label: "MF", change: mfQoQ, color: SH_COLORS.MF },
+  ].filter(item => item.change !== null && Math.abs(item.change) >= 1.0);
 
   const tooltipStyle = {
     backgroundColor: "var(--surface-elevated)",
@@ -100,6 +116,26 @@ export function OwnershipSection({ symbol }: Props) {
 
   return (
     <section id="ownership" className="scroll-mt-28 space-y-4">
+      {/* Significant Holdings Changes Alert */}
+      {significantChanges.length > 0 && (
+        <div className="flex items-start gap-3 p-3 rounded-lg border border-blue-500/30 bg-blue-500/5 text-sm">
+          <Users size={14} className="mt-0.5 flex-shrink-0 text-blue-400" />
+          <div style={{ color: "var(--text-secondary)" }}>
+            <strong>Significant Institutional Changes:</strong>
+            <div className="flex flex-wrap gap-3 mt-1">
+              {significantChanges.map((item, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1">
+                  <span style={{ color: item.color }}>{item.label}</span>
+                  <span className={item.change! > 0 ? "text-green-500" : "text-red-500"}>
+                    {item.change! > 0 ? "+" : ""}{item.change!.toFixed(2)}%
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Pledge Warning */}
       {pledgePct > 10 && (
         <div className={`flex items-start gap-3 p-3 rounded-lg border text-sm ${pledgePct > 30 ? "border-red-500/30 bg-red-500/5" : "border-yellow-500/30 bg-yellow-500/5"}`}>

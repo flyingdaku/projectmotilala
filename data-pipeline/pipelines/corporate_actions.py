@@ -56,25 +56,34 @@ def _create_nse_session() -> requests.Session:
     NSE's API requires cookies from an active browser-like session.
     """
     session = requests.Session()
-    session.headers.update(NSE_HEADERS)
+    
+    # Randomize User-Agent slightly or use a more recent one
+    headers = NSE_HEADERS.copy()
+    headers["User-Agent"] = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
+    session.headers.update(headers)
 
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             # Prime the session — this sets the necessary cookies
+            # Hit the homepage first
             resp = session.get(NSE_BASE_URL, timeout=15)
             resp.raise_for_status()
+            
+            # Sometimes hitting a specific page helps set more cookies
+            session.get("https://www.nseindia.com/market-data/live-equity-market", timeout=10)
+            
             logger.info(f"NSE session established (attempt {attempt}), cookies: {list(session.cookies.keys())}")
-            time.sleep(1)  # Brief pause before API call
+            time.sleep(2)  # Generous pause
             return session
         except Exception as e:
             logger.warning(f"NSE session attempt {attempt}/{MAX_RETRIES} failed: {e}")
             if attempt < MAX_RETRIES:
-                time.sleep(RETRY_DELAY)
+                time.sleep(RETRY_DELAY * attempt) # Exponential backoff for session establishment
 
     raise RuntimeError(f"Could not establish NSE session after {MAX_RETRIES} attempts")
 
 
-def fetch_nse_corporate_actions(from_date: date, to_date: date) -> list[dict]:
+def fetch_nse_corporate_actions(from_date: date, to_date: date, session: Optional[requests.Session] = None) -> list[dict]:
     """
     Fetch corporate actions from NSE API for the given date range.
     Uses cookie-based session authentication.
@@ -91,12 +100,19 @@ def fetch_nse_corporate_actions(from_date: date, to_date: date) -> list[dict]:
         raw = load_raw_file("NSE_CORP_ACTIONS", from_date, filename)
         return json.loads(raw)
 
-    session = _create_nse_session()
+    if session is None:
+        session = _create_nse_session()
 
     last_error = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             resp = session.get(url, timeout=20)
+            if resp.status_code == 401 or resp.status_code == 403:
+                # Session might be expired
+                logger.warning(f"Session expired or blocked (status {resp.status_code}), re-creating...")
+                session = _create_nse_session()
+                continue
+
             resp.raise_for_status()
             data = resp.json()
             raw_bytes = json.dumps(data).encode()
@@ -107,11 +123,6 @@ def fetch_nse_corporate_actions(from_date: date, to_date: date) -> list[dict]:
             last_error = e
             logger.warning(f"NSE corp actions attempt {attempt}/{MAX_RETRIES} failed: {e}")
             if attempt < MAX_RETRIES:
-                # Re-establish session on failure
-                try:
-                    session = _create_nse_session()
-                except Exception:
-                    pass
                 time.sleep(RETRY_DELAY)
 
     raise RuntimeError(f"Failed to fetch NSE corporate actions after {MAX_RETRIES} retries: {last_error}")
@@ -217,29 +228,43 @@ def _parse_ratio(ratio_str: str) -> tuple[float, float]:
 
 
 def _map_action_type(nse_purpose: str) -> Optional[str]:
-    """Map NSE purpose string to our canonical action_type."""
+    """Map NSE purpose string to our canonical action_type.
+
+    Priority ordering matters: a purpose like 'Bonus issue along with interim dividend'
+    should be classified as BONUS (the structural event) not DIVIDEND.
+    """
     purpose = nse_purpose.upper().strip()
 
-    if any(k in purpose for k in ("SPLIT", "SUB-DIVISION", "SUBDIVISION")):
-        return "SPLIT"
-    elif "BONUS" in purpose:
-        return "BONUS"
-    elif "DIVIDEND" in purpose and "SPECIE" in purpose:
-        return "DIVIDEND"  # Dividend in specie — treat as dividend
-    elif "DIVIDEND" in purpose or "DIV" in purpose:
-        return "DIVIDEND"
-    elif "RIGHTS" in purpose:
-        return "RIGHTS"
-    elif "MERGER" in purpose or "AMALGAMATION" in purpose:
-        return "MERGER"
-    elif "DEMERGER" in purpose or "SPIN-OFF" in purpose or "SPINOFF" in purpose:
+    # ── Structural changes first (highest priority) ────────────────
+    if any(k in purpose for k in ("DEMERGER", "DE-MERGER", "SPIN-OFF", "SPINOFF", "SPIN OFF")):
         return "DEMERGER"
-    elif "BUYBACK" in purpose or "BUY BACK" in purpose:
-        return "BUYBACK"
-    elif "FACE VALUE" in purpose or "FV CHANGE" in purpose:
+    if any(k in purpose for k in ("MERGER", "AMALGAMATION", "AMALGAM")):
+        return "MERGER"
+    if any(k in purpose for k in ("SPLIT", "SUB-DIVISION", "SUBDIVISION", "STOCK SPLIT")):
+        return "SPLIT"
+    if any(k in purpose for k in ("FACE VALUE", "FV CHANGE", "CHANGE IN FACE VALUE",
+                                   "REDUCTION OF FACE VALUE")):
         return "FACE_VALUE_CHANGE"
-    elif "NAME CHANGE" in purpose:
+
+    # ── Share issuance events ──────────────────────────────────────
+    if "BONUS" in purpose:
+        return "BONUS"
+    if "RIGHTS" in purpose or "RIGHT ISSUE" in purpose:
+        return "RIGHTS"
+
+    # ── Capital return events ──────────────────────────────────────
+    if any(k in purpose for k in ("BUYBACK", "BUY BACK", "BUY-BACK")):
+        return "BUYBACK"
+
+    # ── Dividend (lowest structural priority) ─────────────────────
+    if any(k in purpose for k in ("DIVIDEND", "INTERIM DIV", "FINAL DIV",
+                                   "SPECIAL DIV", "DIV -", "DIV-")):
+        return "DIVIDEND"
+
+    # ── Administrative ────────────────────────────────────────────
+    if "NAME CHANGE" in purpose:
         return "NAME_CHANGE"
+
     return None
 
 

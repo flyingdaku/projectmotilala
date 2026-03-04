@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, Settings, BarChart2 } from "lucide-react";
+import { Search, Settings, BarChart2, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -10,7 +10,7 @@ import { useWatchlist } from "@/contexts/watchlist-context";
 
 export function TopBar() {
   const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<{ symbol: string; name: string }[]>([]);
+  const [searchResults, setSearchResults] = useState<{ id: number; symbol: string; name: string }[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -74,7 +74,7 @@ export function TopBar() {
             <div className="absolute top-full mt-1.5 w-full rounded-lg border shadow-lg overflow-hidden z-50"
               style={{ background: "var(--surface-elevated)", borderColor: "var(--border)" }}>
               {searchResults.map(r => (
-                <button key={r.symbol}
+                <button key={`${r.symbol}-${r.id}`}
                   className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[var(--surface-hover)] transition-colors"
                   onClick={() => { router.push(`/stocks/${r.symbol}`); setSearchOpen(false); setSearch(""); }}>
                   <span className="font-mono font-semibold text-sm" style={{ color: "var(--accent-brand)" }}>{r.symbol}</span>
@@ -87,14 +87,27 @@ export function TopBar() {
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-1 min-w-[180px] justify-end">
+      <div className="flex items-center gap-1.5 min-w-[200px] justify-end">
         {/* Watchlist */}
         <button
           onClick={toggleWatchlist}
-          className="relative p-2 rounded-md transition-colors hover:bg-[var(--surface-elevated)]"
+          className="relative p-2 rounded-lg transition-all hover:bg-[var(--surface-elevated)] active:scale-95 group"
           style={{ color: "var(--text-muted)" }} title="Watchlist">
-          <BarChart2 size={17} />
+          <BarChart2 size={18} className="transition-colors group-hover:text-[var(--accent-brand)]" />
         </button>
+
+        {/* Profile */}
+        <button
+          className="relative p-2 rounded-lg transition-all hover:bg-[var(--surface-elevated)] active:scale-95 group"
+          style={{ color: "var(--text-muted)" }} title="Profile">
+          <User size={18} className="transition-colors group-hover:text-[var(--accent-brand)]" />
+        </button>
+
+        {/* User initials / Avatar small */}
+        <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-bold select-none cursor-pointer bg-[var(--accent-brand)] text-white shadow-sm hover:opacity-90 transition-opacity"
+          title="Profile">
+          RK
+        </div>
       </div>
     </header>
   );

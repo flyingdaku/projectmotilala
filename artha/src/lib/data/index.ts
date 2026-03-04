@@ -81,7 +81,7 @@ function generateMockPrices(assetId: number, startDate?: string): PriceBar[] {
         date: cur.toISOString().split("T")[0],
         open: open,
         high: +(Math.max(open, price) * (1 + Math.random() * 0.01)).toFixed(2),
-        low:  +(Math.min(open, price) * (1 - Math.random() * 0.01)).toFixed(2),
+        low: +(Math.min(open, price) * (1 - Math.random() * 0.01)).toFixed(2),
         close: +price.toFixed(2),
         volume: Math.floor(100000 + Math.random() * 2000000),
       });
@@ -459,11 +459,16 @@ function createMockAdapter(): DataAdapter {
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
+import { createSqliteAdapter } from "./sqlite-adapter";
+
 let adapterInstance: DataAdapter | null = null;
 
 export async function getDataAdapter(): Promise<DataAdapter> {
   if (!adapterInstance) {
-    adapterInstance = createMockAdapter();
+    // Use real SQLite adapter. To swap to Postgres/Clickhouse:
+    //   replace createSqliteAdapter() with the new adapter
+    //   and update src/lib/data/db.ts accordingly.
+    adapterInstance = createSqliteAdapter() as unknown as DataAdapter;
   }
   return adapterInstance;
 }

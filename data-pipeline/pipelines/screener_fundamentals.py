@@ -36,10 +36,11 @@ def _parse_screener_table(soup: BeautifulSoup, table_id: str) -> List[Dict]:
     tbody = table.find("tbody")
     if not tbody: return []
     
-    for tr in tbody.find_all("tr", class_=None):
+    for tr in tbody.find_all("tr"):
         cols = tr.find_all("td")
         if not cols: continue
-        row_label = cols[0].text.strip().lower()
+        # Robust label cleanup: handles "Sales +", "Sales&nbsp;+", and button labels
+        row_label = " ".join(cols[0].text.split()).lower().replace("+", "").strip()
         values = [c.text.strip().replace(",", "") for c in cols[1:]]
         
         for i, val in enumerate(values):
@@ -83,21 +84,29 @@ def fetch_screener_data(identifier: str) -> Dict[str, List[Dict]]:
 
     # 2. Fallback: live fetch
     if not html:
-        for url in [
-            f"https://www.screener.in/company/{identifier}/consolidated/",
-            f"https://www.screener.in/company/{identifier}/",
-        ]:
-            try:
-                resp = requests.get(url, headers=HEADERS, timeout=20)
-                if resp.status_code == 404:
-                    continue
-                resp.raise_for_status()
-                html = resp.text
-                # Save for future runs
-                cache_path.write_text(html, encoding="utf-8")
+        for attempt in range(1, 4):
+            for url in [
+                f"https://www.screener.in/company/{identifier}/consolidated/",
+                f"https://www.screener.in/company/{identifier}/",
+            ]:
+                try:
+                    resp = requests.get(url, headers=HEADERS, timeout=20)
+                    if resp.status_code == 429:
+                        wait = 30 * attempt
+                        logger.warning(f"[SCREENER] {identifier} 429 - waiting {wait}s...")
+                        time.sleep(wait)
+                        break # Try again from start of URL list after wait
+                    if resp.status_code == 404:
+                        continue
+                    resp.raise_for_status()
+                    html = resp.text
+                    # Save for future runs
+                    cache_path.write_text(html, encoding="utf-8")
+                    break
+                except Exception as e:
+                    logger.warning(f"[SCREENER] fetch failed for {identifier} (attempt {attempt}): {e}")
+            if html:
                 break
-            except Exception as e:
-                logger.warning(f"[SCREENER] fetch failed for {identifier}: {e}")
 
     if not html:
         return {}
@@ -118,7 +127,9 @@ def fetch_screener_data(identifier: str) -> Dict[str, List[Dict]]:
 
 def _period_to_iso(period_str: str) -> Optional[str]:
      try:
-        dt = datetime.strptime(period_str, "%b %Y")
+        # Handle "Mar 2023(C)" or other consolidated suffixes
+        clean_period = period_str.split("(")[0].strip()
+        dt = datetime.strptime(clean_period, "%b %Y")
         last_day = calendar.monthrange(dt.year, dt.month)[1]
         return dt.replace(day=last_day).strftime("%Y-%m-%d")
      except:
@@ -149,11 +160,13 @@ def run_screener_fundamentals(trade_date: date):
             cls = fetch_classification(identifier)
             if cls:
                 update_asset_classification(asset["id"], cls)
-            # 1. Quarterly Results
-            for row in data.get("quarters", []):
-                period_date = _period_to_iso(row["period"])
-                if not period_date: continue
-                conn.execute("""
+        
+        # 1. Quarterly Results
+        for row in data.get("quarters", []):
+            period_date = _period_to_iso(row["period"])
+            if not period_date: continue
+            with get_db() as dml_conn:
+                dml_conn.execute("""
                     INSERT OR REPLACE INTO screener_quarterly (
                         id, asset_id, period_end_date, sales, expenses, operating_profit, opm_pct, pbt, tax_pct, net_profit, eps
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -164,11 +177,12 @@ def run_screener_fundamentals(trade_date: date):
                     row.get("net profit"), row.get("eps in rs")
                 ))
 
-            # 2. Balance Sheet
-            for row in data.get("balance_sheet", []):
-                period_date = _period_to_iso(row["period"])
-                if not period_date: continue
-                conn.execute("""
+        # 2. Balance Sheet
+        for row in data.get("balance_sheet", []):
+            period_date = _period_to_iso(row["period"])
+            if not period_date: continue
+            with get_db() as dml_conn:
+                dml_conn.execute("""
                     INSERT OR REPLACE INTO screener_balance_sheet (
                         id, asset_id, period_end_date, share_capital, reserves, borrowings, other_liabilities, fixed_assets, cwip, investments, other_assets, total_assets
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -179,11 +193,12 @@ def run_screener_fundamentals(trade_date: date):
                     row.get("investments"), row.get("other assets"), row.get("total assets")
                 ))
 
-            # 3. Cash Flow
-            for row in data.get("cash_flow", []):
-                period_date = _period_to_iso(row["period"])
-                if not period_date: continue
-                conn.execute("""
+        # 3. Cash Flow
+        for row in data.get("cash_flow", []):
+            period_date = _period_to_iso(row["period"])
+            if not period_date: continue
+            with get_db() as dml_conn:
+                dml_conn.execute("""
                     INSERT OR REPLACE INTO screener_cashflow (
                         id, asset_id, period_end_date, cash_from_operating, cash_from_investing, cash_from_financing, net_cash_flow
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)

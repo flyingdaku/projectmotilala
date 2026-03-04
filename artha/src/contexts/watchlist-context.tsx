@@ -11,9 +11,9 @@ interface WatchlistContextValue {
 
 const WatchlistContext = createContext<WatchlistContextValue>({
   isWatchlistOpen: false,
-  toggleWatchlist: () => {},
-  openWatchlist: () => {},
-  closeWatchlist: () => {},
+  toggleWatchlist: () => { },
+  openWatchlist: () => { },
+  closeWatchlist: () => { },
 });
 
 export function WatchlistProvider({ children }: { children: React.ReactNode }) {

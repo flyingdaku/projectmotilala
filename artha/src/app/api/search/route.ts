@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const stocks = await adapter.stocks.search(q, limit);
 
     const results = stocks.map(s => ({
+      id: s.id,
       symbol: s.symbol,
       name: s.name,
       exchange: s.exchange ?? "NSE",

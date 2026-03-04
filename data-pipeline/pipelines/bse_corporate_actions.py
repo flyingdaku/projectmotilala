@@ -1,147 +1,188 @@
 """
-BSE Corporate Actions Pipeline.
-Fetches financial results via unofficial BSE WebAPI (XBRL data).
-Updates asset table with bse_codes using List_Scrips CSV if possible.
+BSE Corporate Actions Pipeline — Fixed.
+Uses the correct BseIndiaAPI/api/CorporateAction/w endpoint per scripcode.
+Falls back to a per-scripcode approach since the bulk endpoint is unreliable.
 """
 import json
 import logging
 import time
+import re
 import requests
-import io
-import pandas as pd
 from datetime import date, datetime, timedelta
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 
 from utils.db import get_db, generate_id
 from utils.storage import save_raw_file, raw_file_exists, load_raw_file
-from pipelines.bse_corporate_actions_parser import classify_bse_action, parse_bse_dividend_amount, parse_bse_bonus_ratio
+from pipelines.bse_corporate_actions_parser import (
+    classify_bse_action,
+    parse_bse_dividend_amount,
+    parse_bse_bonus_ratio,
+)
 
 logger = logging.getLogger(__name__)
 
-BSE_MASTER_URL = "https://www.bseindia.com/corporates/List_Scrips.aspx"
-BSE_CORP_ACTIONS_URL = "https://api.bseindia.com/BseWebAPI/api/CorporateAction/w"
+BSE_CORP_ACTION_URL = "https://api.bseindia.com/BseIndiaAPI/api/CorporateAction/w"
 
-def sync_bse_security_master():
-    """Update asset table with bse_codes using List_Scrips CSV if possible."""
-    logger.info("[BSE_CORP_ACTIONS] Syncing BSE security master (ISIN → bse_code mapping)...")
-    # This is a simplified version of the sync logic
-    # In a real run, we would download the full CSV from BSE
-    with get_db() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM assets WHERE bse_code IS NOT NULL").fetchone()[0]
-        logger.info(f"[BSE_CORP_ACTIONS] Security master sync: {count} BSE codes already present")
+BSE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://www.bseindia.com/",
+    "Accept": "application/json",
+}
 
-def fetch_bse_corporate_actions(from_date: date, to_date: date) -> list:
-    """Fetch BSE corporate actions from the unofficial BSE API."""
-    from_str = from_date.strftime("%Y%m%d")
-    to_str = to_date.strftime("%Y%m%d")
-    url = f"{BSE_CORP_ACTIONS_URL}?type=ALL&fromdate={from_str}&todate={to_str}"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Referer": "https://www.bseindia.com/",
-    }
-    
+
+def fetch_bse_corporate_actions_by_scrip(scrip_code: str) -> List[Dict]:
+    """Fetch ALL corporate actions for a single BSE scrip code.
+    Returns the Table2 array which has the full history of actions with ex_dates.
+    """
+    url = f"{BSE_CORP_ACTION_URL}?scripcode={scrip_code}"
     try:
-        resp = requests.get(url, headers=headers, timeout=15)
+        resp = requests.get(url, headers=BSE_HEADERS, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        return data if isinstance(data, list) else []
+        # Table2 has the detailed actions with ex_date, purpose, etc.
+        return data.get("Table2", [])
     except Exception as e:
-        logger.warning(f"Failed to fetch BSE corporate actions: {e}")
+        logger.warning(f"BSE CA fetch failed for {scrip_code}: {e}")
         return []
 
+
+def fetch_bse_corporate_actions(from_date: date, to_date: date) -> List[Dict]:
+    """Legacy bulk API — returns empty if the date-range bulk URL fails."""
+    from_str = from_date.strftime("%Y%m%d")
+    to_str = to_date.strftime("%Y%m%d")
+    url = f"{BSE_CORP_ACTION_URL}?type=ALL&fromdate={from_str}&todate={to_str}"
+
+    try:
+        resp = requests.get(url, headers=BSE_HEADERS, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        if isinstance(data, list):
+            return data
+        # The API returns a dict with Table2 for per-scrip calls
+        return data.get("Table2", [])
+    except Exception as e:
+        logger.warning(f"BSE bulk CA fetch failed: {e}")
+        return []
+
+
+def _parse_bse_action_record(raw: dict, bse_cache: dict, isin_cache: dict) -> Optional[Tuple]:
+    """Parse a single BSE corporate action record from Table2 format.
+    Returns a tuple ready for DB insertion, or None if unparseable.
+    """
+    scrip_code = str(raw.get("scrip_code", "")).strip()
+    purpose = str(raw.get("purpose", "")).strip()
+    ex_date_str = str(raw.get("Ex_date", "")).strip()
+    details = str(raw.get("Details", "")).strip()
+
+    if not scrip_code or not ex_date_str:
+        return None
+
+    # Parse ex_date — format is usually "28 Oct 2024"
+    ex_date = None
+    for fmt in ("%d %b %Y", "%d-%b-%Y", "%Y-%m-%d"):
+        try:
+            ex_date = datetime.strptime(ex_date_str, fmt).date()
+            break
+        except ValueError:
+            continue
+    if ex_date is None:
+        return None
+
+    action_type = classify_bse_action(purpose)
+    if not action_type:
+        return None
+
+    # Resolve asset_id
+    asset_id = bse_cache.get(scrip_code)
+    if not asset_id:
+        return None
+
+    # Parse amounts/ratios from details and purpose
+    div_amt = 0.0
+    ratio_num = 0.0
+    ratio_den = 1.0
+
+    if action_type == "DIVIDEND":
+        # Try Details first (e.g. "5.50"), then purpose string
+        try:
+            div_amt = float(details.replace(",", "").strip())
+        except (ValueError, TypeError):
+            div_amt = parse_bse_dividend_amount(purpose)
+
+    elif action_type in ("SPLIT", "FACE_VALUE_CHANGE"):
+        ratio_num, ratio_den = parse_bse_bonus_ratio(purpose + " " + details)
+
+    elif action_type == "BONUS":
+        # BSE format: "issue 1:1" in value field
+        ratio_num, ratio_den = parse_bse_bonus_ratio(purpose + " " + details)
+
+    return (
+        generate_id(), asset_id, action_type, ex_date.isoformat(),
+        ratio_num, ratio_den, div_amt, 0.0,  # rights_price
+        "BSE", json.dumps(raw)
+    )
+
+
 def run_bse_corporate_actions_pipeline(from_date: date, to_date: date):
+    """Pipeline entry point for BSE corporate actions."""
     logger.info(f"[BSE_CORP_ACTIONS] Starting BSE corporate actions pipeline from {from_date} to {to_date}...")
-    sync_bse_security_master()
-    
-    actions = fetch_bse_corporate_actions(from_date, to_date)
-    logger.info(f"[BSE_CORP_ACTIONS] Fetched {len(actions)} BSE corporate action rows")
-    
+
+    # Build caches
+    with get_db() as conn:
+        bse_rows = conn.execute("SELECT id, bse_code FROM assets WHERE bse_code IS NOT NULL").fetchall()
+        bse_cache = {str(r["bse_code"]).strip(): r["id"] for r in bse_rows}
+
+        isin_rows = conn.execute("SELECT id, isin FROM assets WHERE isin IS NOT NULL").fetchall()
+        isin_cache = {r["isin"]: r["id"] for r in isin_rows}
+
+        existing = conn.execute(
+            "SELECT asset_id, action_type, ex_date FROM corporate_actions WHERE source_exchange = 'BSE'"
+        ).fetchall()
+        existing_set = {(r["asset_id"], r["action_type"], r["ex_date"]) for r in existing}
+
+    logger.info(f"[BSE_CORP_ACTIONS] BSE cache: {len(bse_cache)} scrips, existing CAs: {len(existing_set)}")
+
     inserted = 0
     skipped = 0
-    
-    with get_db() as conn:
+
+    for i, (scrip_code, asset_id) in enumerate(bse_cache.items()):
+        actions = fetch_bse_corporate_actions_by_scrip(scrip_code)
+        if not actions:
+            continue
+
+        batch = []
         for raw in actions:
-            scrip_code = str(raw.get("ScripCode", "")).strip()
-            purpose = raw.get("Purpose", "").strip()
-            ex_date_str = raw.get("ExDate", "").strip()
-            
-            if not scrip_code or not ex_date_str:
+            parsed = _parse_bse_action_record(raw, bse_cache, isin_cache)
+            if not parsed:
                 skipped += 1
                 continue
-            
-            # Map ScripCode to asset_id
-            asset = conn.execute("SELECT id FROM assets WHERE bse_code = ?", (scrip_code,)).fetchone()
-            if not asset:
-                # If not found by bse_code, we can't process
+
+            # Filter by date range
+            ex_date = date.fromisoformat(parsed[3])
+            if ex_date < from_date or ex_date > to_date:
+                continue
+
+            key = (parsed[1], parsed[2], parsed[3])
+            if key in existing_set:
                 skipped += 1
                 continue
-            
-            asset_id = asset["id"]
-            action_type = classify_bse_action(purpose)
-            if not action_type:
-                skipped += 1
-                continue
-                
-            # Parse ex_date
-            try:
-                # BSE format: '2023-12-31T00:00:00' or similar
-                ex_date = datetime.fromisoformat(ex_date_str.split("T")[0]).date()
-            except:
-                skipped += 1
-                continue
-            
-            # Check for existing
-            existing = conn.execute("""
-                SELECT id FROM corporate_actions 
-                WHERE asset_id = ? AND action_type = ? AND ex_date = ? AND source_exchange = 'BSE'
-            """, (asset_id, action_type, ex_date.isoformat())).fetchone()
-            
-            if existing:
-                skipped += 1
-                continue
-            
-            # Parse amounts/ratios
-            div_amt = 0.0
-            ratio_num = 0.0
-            ratio_den = 1.0
-            
-            if action_type == "DIVIDEND":
-                div_amt = parse_bse_dividend_amount(purpose)
-            elif action_type in ("SPLIT", "BONUS"):
-                ratio_num, ratio_den = parse_bse_bonus_ratio(purpose)
-            
-            # Note: For BSE, we don't always have the prev_close to calculate the factor immediately
-            # We'll set a placeholder or fetch it if needed. 
-            # In Artha, we'll let adjust_prices.py handle the factor restatements if they are complex.
-            from pipelines.corporate_actions import calculate_adjustment_factor
-            
-            # Fetch prev_close for factor calculation
-            prev_row = conn.execute("""
-                SELECT close FROM daily_prices 
-                WHERE asset_id = ? AND date < ? 
-                ORDER BY date DESC LIMIT 1
-            """, (asset_id, ex_date.isoformat())).fetchone()
-            prev_close = float(prev_row["close"]) if prev_row else 0.0
-            
-            factor = calculate_adjustment_factor(
-                action_type=action_type,
-                ratio_num=ratio_num,
-                ratio_den=ratio_den,
-                dividend_amount=div_amt,
-                prev_close=prev_close
-            )
-            
-            conn.execute("""
-                INSERT INTO corporate_actions (
-                    id, asset_id, action_type, ex_date, ratio_numerator, ratio_denominator,
-                    dividend_amount, adjustment_factor, source_exchange, raw_announcement
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BSE', ?)
-            """, (
-                generate_id(), asset_id, action_type, ex_date.isoformat(),
-                ratio_num, ratio_den, div_amt, factor, json.dumps(raw)
-            ))
-            inserted += 1
-            
+
+            batch.append(parsed)
+            existing_set.add(key)
+
+        if batch:
+            with get_db() as conn:
+                conn.executemany("""
+                    INSERT OR IGNORE INTO corporate_actions
+                    (id, asset_id, action_type, ex_date, ratio_numerator, ratio_denominator,
+                     dividend_amount, rights_price, source_exchange, raw_announcement)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, batch)
+            inserted += len(batch)
+
+        if (i + 1) % 100 == 0:
+            logger.info(f"[BSE_CORP_ACTIONS] Progress [{i+1}/{len(bse_cache)}]: {inserted} inserted")
+        time.sleep(0.3)
+
     logger.info(f"[BSE_CORP_ACTIONS] ✅ Done. {inserted} inserted, {skipped} skipped")
     return inserted, skipped

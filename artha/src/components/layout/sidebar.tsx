@@ -182,7 +182,7 @@ export function Sidebar() {
             <Accordion
               type="single"
               collapsible
-              defaultValue={mounted ? defaultExpanded : undefined}
+              defaultValue={defaultExpanded}
               className="space-y-0.5"
             >
               {CATEGORIES.map(({ id, icon: Icon, title, items }) => {
