@@ -110,9 +110,9 @@ class SqliteConnection(DatabaseConnection):
     - Configurable path (defaults to db/market_data.db)
     """
 
-    def __init__(self, db_path: str = DEFAULT_DB_PATH, timeout: float = 30.0):
-        self._db_path = db_path
-        self._conn = sqlite3.connect(db_path, timeout=timeout)
+    def __init__(self, db_path: Optional[str] = None, timeout: float = 30.0):
+        self._db_path = db_path or DEFAULT_DB_PATH
+        self._conn = sqlite3.connect(self._db_path, timeout=timeout)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL;")
         self._conn.execute("PRAGMA foreign_keys=ON;")
@@ -149,7 +149,7 @@ class SqliteConnection(DatabaseConnection):
 
 
 @contextmanager
-def get_connection(db_path: str = DEFAULT_DB_PATH) -> Iterator[SqliteConnection]:
+def get_connection(db_path: Optional[str] = None) -> Iterator[SqliteConnection]:
     """
     Context manager — drop-in replacement for the old utils.db.get_db().
 
@@ -186,14 +186,14 @@ def now_iso() -> str:
 # Legacy alias — pipelines still import `get_db` from utils.db.
 # During migration, utils/db.py will be updated to delegate here.
 @contextmanager
-def get_db(db_path: str = DEFAULT_DB_PATH):
+def get_db(db_path: Optional[str] = None):
     """
     Legacy context manager that returns a raw sqlite3.Connection.
 
     This exists solely for backwards compatibility with existing pipeline code
     that calls conn.execute() directly. New code should use get_connection().
     """
-    conn = sqlite3.connect(db_path, timeout=30.0)
+    conn = sqlite3.connect(db_path or DEFAULT_DB_PATH, timeout=30.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys=ON;")

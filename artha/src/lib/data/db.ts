@@ -16,7 +16,7 @@ import path from "path";
 
 export type Row = Record<string, unknown>;
 
-interface Db {
+export interface Db {
     queryAll<T extends Row>(sql: string, params?: unknown[]): T[];
     queryOne<T extends Row>(sql: string, params?: unknown[]): T | undefined;
 }
