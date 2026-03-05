@@ -5,6 +5,7 @@ import { Building2, Users, Globe, Star, TrendingUp, AlertTriangle, ChevronDown, 
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { CompanyProfile } from "@/lib/data/types";
 import type { StockDetail } from "@/lib/data";
+import { getSectorEmoji, getIndustryGroupEmoji } from "@/lib/utils/emojis";
 
 const SEGMENT_COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#8B5CF6", "#EF4444", "#F97316", "#06B6D4"];
 
@@ -46,7 +47,11 @@ export function OverviewSection({ stock, profile }: Props) {
           ) : (
             <p className="text-sm" style={{ color: "var(--text-muted)" }}>
               {stock.sector && stock.industry
-                ? `${stock.name} operates in the ${stock.industry} segment of the ${stock.sector} sector.`
+                ? (
+                  <span>
+                    {stock.name} operates in the <strong>{getIndustryGroupEmoji(stock.industry)} {stock.industry}</strong> segment of the <strong>{getSectorEmoji(stock.sector)} {stock.sector}</strong> sector.
+                  </span>
+                )
                 : `${stock.name} is a listed company on NSE/BSE.`}
             </p>
           )}

@@ -16,6 +16,7 @@ import { FollowButton } from "@/components/stock/FollowButton";
 import { StickyMetricsBar } from "@/components/stock/StickyMetricsBar";
 import { FloatingNavButton } from "@/components/stock/FloatingNavButton";
 import { Sparkline } from "@/components/stock/Sparkline";
+import { getSectorEmoji } from "@/lib/utils/emojis";
 import type { StockDetail } from "@/lib/data";
 import type { CompanyProfile } from "@/lib/data/types";
 
@@ -104,7 +105,7 @@ export default function StockPage() {
       <FloatingNavButton />
 
       {/* Stock Header */}
-      <div className="-mx-8 px-8 pt-6 pb-4 border-b" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+      <div className="-mx-8 px-8 pt-6 pb-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="max-w-[1400px] mx-auto">
 
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -123,9 +124,10 @@ export default function StockPage() {
                   </span>
                 )}
                 {stock.sector && (
-                  <span className="text-xs px-2 py-0.5 rounded"
+                  <span className="text-xs px-2 py-0.5 rounded flex items-center gap-1.5"
                     style={{ background: "var(--surface-elevated)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
-                    {stock.sector}
+                    <span className="text-[14px] leading-none">{getSectorEmoji(stock.sector)}</span>
+                    <span>{stock.sector}</span>
                   </span>
                 )}
               </div>

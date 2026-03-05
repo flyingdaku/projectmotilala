@@ -21,7 +21,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <main className={cn(
           "flex-1 overflow-y-auto z-0 relative transition-all duration-300 ease-in-out",
-          isWatchlistOpen ? "mr-80" : "mr-0"
+          isWatchlistOpen ? "mr-96" : "mr-0"
         )}>
           <AnimatePresence mode="wait">
             <motion.div

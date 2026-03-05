@@ -19,7 +19,6 @@ export function StickyMetricsBar({ stock, visible }: Props) {
         }`}
       style={{
         background: "var(--surface)",
-        borderBottom: "1px solid var(--border)",
         backdropFilter: "blur(8px)",
       }}
     >

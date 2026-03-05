@@ -16,7 +16,7 @@ export function LayoutContent({ children }: LayoutContentProps) {
       {children}
       {isWatchlistOpen && (
         <div className="fixed inset-y-0 right-0 z-50 flex">
-          <div className="w-80 border-l border-border bg-background">
+          <div className="w-96 border-l border-border bg-background">
             <WatchlistPanel onClose={closeWatchlist} />
           </div>
         </div>

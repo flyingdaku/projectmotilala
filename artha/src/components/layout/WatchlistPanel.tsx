@@ -6,6 +6,7 @@ import { useWatchlist } from "@/contexts/watchlist-context";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { getIndustryGroupEmoji } from "@/lib/utils/emojis";
 
 interface WatchlistItem {
     symbol: string;
@@ -13,13 +14,14 @@ interface WatchlistItem {
     price: number;
     change: number;
     pctChange: number;
+    industry: string;
 }
 
 const MOCK_WATCHLIST: WatchlistItem[] = [
-    { symbol: "RELIANCE", name: "Reliance Industries", price: 2984.50, change: 12.40, pctChange: 0.42 },
-    { symbol: "TCS", name: "TATA Consultancy Services", price: 4120.30, change: -45.20, pctChange: -1.08 },
-    { symbol: "HDFCBANK", name: "HDFC Bank Ltd", price: 1642.15, change: 5.60, pctChange: 0.34 },
-    { symbol: "INFY", name: "Infosys Ltd", price: 1540.00, change: -12.30, pctChange: -0.79 },
+    { symbol: "RELIANCE", name: "Reliance Industries", price: 2984.50, change: 12.40, pctChange: 0.42, industry: "Oil&Gas-Integrated" },
+    { symbol: "TCS", name: "TATA Consultancy Services", price: 4120.30, change: -45.20, pctChange: -1.08, industry: "Computer-Tech Services" },
+    { symbol: "HDFCBANK", name: "HDFC Bank Ltd", price: 1642.15, change: 5.60, pctChange: 0.34, industry: "Banks-Money Center" },
+    { symbol: "INFY", name: "Infosys Ltd", price: 1540.00, change: -12.30, pctChange: -0.79, industry: "Computer-Tech Services" },
 ];
 
 export function WatchlistPanel() {
@@ -45,14 +47,14 @@ export function WatchlistPanel() {
                         animate={{ x: 0 }}
                         exit={{ x: "100%" }}
                         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                        className="absolute right-0 top-0 bottom-0 w-80 z-30 border-l flex flex-col"
+                        className="absolute right-0 top-0 bottom-0 w-96 z-30 border-l flex flex-col"
                         style={{
                             background: "var(--surface)",
                             borderColor: "var(--border)"
                         }}
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-transparent to-[var(--surface-elevated)]" style={{ borderColor: "var(--border)" }}>
+                        <div className="flex items-center justify-between px-4 h-14 border-b bg-gradient-to-r from-transparent to-[var(--surface-elevated)]" style={{ borderColor: "var(--border)" }}>
                             <div className="flex items-center gap-2">
                                 <Star size={18} className="text-[var(--accent-brand)] fill-[var(--accent-brand)]" />
                                 <h2 className="font-bold text-sm tracking-tight" style={{ color: "var(--text-primary)" }}>Watchlist</h2>
@@ -98,6 +100,9 @@ export function WatchlistPanel() {
                                         <div className="flex flex-col min-w-0">
                                             <span className="font-bold text-xs" style={{ color: "var(--text-primary)" }}>{item.symbol}</span>
                                             <span className="text-[10px] truncate" style={{ color: "var(--text-muted)" }}>{item.name}</span>
+                                        </div>
+                                        <div className="flex-1 flex justify-center text-lg drop-shadow-sm" title={item.industry}>
+                                            {getIndustryGroupEmoji(item.industry)}
                                         </div>
                                         <div className="flex flex-col items-end shrink-0">
                                             <span className="font-mono text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
