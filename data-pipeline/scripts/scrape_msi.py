@@ -82,7 +82,7 @@ def setup_db(db_path):
     );
     ''')
     conn.execute('''
-    CREATE TABLE IF NOT EXISTS msi_fundamentals_quarterly (
+    CREATE TABLE IF NOT EXISTS src_msi_quarterly (
         asset_id TEXT,
         period_end_date TEXT,
         revenue_ops REAL, total_revenue REAL, materials_consumed REAL,
@@ -93,7 +93,7 @@ def setup_db(db_path):
     );
     ''')
     conn.execute('''
-    CREATE TABLE IF NOT EXISTS msi_balance_sheets (
+    CREATE TABLE IF NOT EXISTS src_msi_balance_sheet (
         asset_id TEXT,
         period_end_date TEXT,
         equity_capital REAL, reserves REAL,
@@ -610,7 +610,7 @@ def _safe_float(val):
 # ---------------------------------------------------------------------------
 
 def _upsert_income(conn, records, is_quarterly=False):
-    table = 'msi_fundamentals_quarterly' if is_quarterly else 'msi_fundamentals_annual'
+    table = 'src_msi_quarterly' if is_quarterly else 'msi_fundamentals_annual'
     base_cols = 'asset_id, period_end_date, revenue_ops, total_revenue, materials_consumed, employee_benefits, depreciation, finance_costs, profit_before_tax, net_profit, basic_eps, diluted_eps'
     base_placeholders = ', '.join(['?'] * 12)
     for r in records:
@@ -646,7 +646,7 @@ def _upsert_income(conn, records, is_quarterly=False):
 def _upsert_balance_sheet(conn, records):
     for r in records:
         conn.execute('''
-            INSERT INTO msi_balance_sheets
+            INSERT INTO src_msi_balance_sheet
               (asset_id, period_end_date, equity_capital, reserves, long_term_borrowings,
                short_term_borrowings, total_liabilities, fixed_assets, cwip, investments,
                inventories, trade_receivables, cash_equivalents, total_assets)
@@ -667,7 +667,7 @@ def _upsert_balance_sheet(conn, records):
 def _upsert_cash_flows(conn, records):
     for r in records:
         conn.execute('''
-            INSERT INTO msi_cash_flows
+            INSERT INTO src_msi_cashflow
               (asset_id, period_end_date, ops_profit_before_wc, wc_changes, net_cash_operating,
                capex, net_cash_investing, net_cash_financing, net_change_in_cash)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -682,7 +682,7 @@ def _upsert_cash_flows(conn, records):
 
 
 def _upsert_ratios(conn, records, is_quarterly=False):
-    table = 'msi_ratios_quarterly' if is_quarterly else 'msi_ratios_annual'
+    table = 'src_msi_ratios' if is_quarterly else 'msi_ratios_annual'
     for r in records:
         conn.execute(f'''
             INSERT INTO {table}
@@ -703,7 +703,7 @@ def _upsert_ratios(conn, records, is_quarterly=False):
 def _upsert_shareholding(conn, records):
     for r in records:
         conn.execute('''
-            INSERT INTO msi_shareholding
+            INSERT INTO src_msi_shareholding
               (asset_id, period_end_date, promoter_holding, fii_holding, dii_holding, public_holding, pledged_shares)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(asset_id, period_end_date) DO UPDATE SET
