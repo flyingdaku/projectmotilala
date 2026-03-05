@@ -148,7 +148,7 @@ class ScreenerFundamentalsIngester(SourceIngester):
                 if not period_date:
                     continue
                 conn.execute(
-                    """INSERT OR REPLACE INTO screener_quarterly
+                    """INSERT OR REPLACE INTO src_screener_quarterly
                        (id, asset_id, period_end_date, sales, expenses,
                         operating_profit, opm_pct, pbt, tax_pct, net_profit, eps)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -168,7 +168,7 @@ class ScreenerFundamentalsIngester(SourceIngester):
                 if not period_date:
                     continue
                 conn.execute(
-                    """INSERT OR REPLACE INTO screener_balance_sheet
+                    """INSERT OR REPLACE INTO src_screener_balance_sheet
                        (id, asset_id, period_end_date, share_capital, reserves,
                         borrowings, other_liabilities, fixed_assets, cwip,
                         investments, other_assets, total_assets)
@@ -189,7 +189,7 @@ class ScreenerFundamentalsIngester(SourceIngester):
                 if not period_date:
                     continue
                 conn.execute(
-                    """INSERT OR REPLACE INTO screener_cashflow
+                    """INSERT OR REPLACE INTO src_screener_cashflow
                        (id, asset_id, period_end_date, cash_from_operating,
                         cash_from_investing, cash_from_financing, net_cash_flow)
                        VALUES (?, ?, ?, ?, ?, ?, ?)""",

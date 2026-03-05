@@ -26,34 +26,34 @@ export class FundamentalsRepository extends BaseRepository {
     }
 
     public estimateMarketCap(assetId: string, price: number, faceValue: number | null): number | null {
-        const bs = this.db.queryOne<{ equity_capital: number }>(
+        const scrBS = this.db.queryOne<{ share_capital: number }>(
+            `SELECT share_capital FROM src_screener_balance_sheet
+             WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 1`,
+            [assetId]
+        );
+        const msiBS = this.db.queryOne<{ equity_capital: number }>(
             `SELECT equity_capital FROM src_msi_balance_sheet
              WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 1`,
             [assetId]
         );
-        if (!bs?.equity_capital || !faceValue) return null;
-        // equity_capital in ₹ Cr → shares = (cr * 1e7) / face_value
-        const shares = (bs.equity_capital * 1e7) / faceValue;
+        const capital = scrBS?.share_capital ?? msiBS?.equity_capital;
+        if (!capital || !faceValue) return null;
+        // share_capital in ₹ Cr → shares = (cr * 1e7) / face_value
+        const shares = (capital * 1e7) / faceValue;
         return +((shares * price) / 1e7).toFixed(2); // result in ₹ Cr
     }
 
     public getCompanyData(assetId: string) {
-        // Use MSI company data for ratings/scores
-        const msiData = this.db.queryOne<{
-            composite_rating: number | null;
-            eps_rating: number | null;
-            rs_rating: number | null;
-            smr_rating: string | null;
-            week_high_52: number | null;
-            week_low_52: number | null;
-            pct_from_high: number | null;
-        }>(
-            `SELECT composite_rating, eps_rating, rs_rating, smr_rating,
-                  week_high_52, week_low_52, pct_from_high
-             FROM src_msi_company_data WHERE asset_id = ?`,
-            [assetId]
-        );
-        return msiData ?? null;
+        // MSI ratings are deprecated; returning placeholder object to satisfy frontend types
+        return {
+            composite_rating: null,
+            eps_rating: null,
+            rs_rating: null,
+            smr_rating: null,
+            week_high_52: null,
+            week_low_52: null,
+            pct_from_high: null,
+        };
     }
 
     public getTtmRatios(assetId: string) {
@@ -70,7 +70,18 @@ export class FundamentalsRepository extends BaseRepository {
             [assetId]
         );
 
-        const bs = this.db.queryOne<{
+        const scrBS = this.db.queryOne<{
+            share_capital: number | null;
+            reserves: number | null;
+            borrowings: number | null;
+            total_assets: number | null;
+        }>(
+            `SELECT share_capital, reserves, borrowings, total_assets
+             FROM src_screener_balance_sheet WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 1`,
+            [assetId]
+        );
+
+        const msiBS = this.db.queryOne<{
             equity_capital: number | null;
             reserves: number | null;
             long_term_borrowings: number | null;
@@ -88,19 +99,33 @@ export class FundamentalsRepository extends BaseRepository {
         const ttmEps = rows.reduce((s: number, r: any) => s + (r.eps ?? 0), 0);
         const ttmRev = rows.reduce((s: number, r: any) => s + (r.revenue ?? 0), 0);
 
-        const equity = bs ? (bs.equity_capital ?? 0) + (bs.reserves ?? 0) : null;
-        const debt = bs ? (bs.long_term_borrowings ?? 0) + (bs.short_term_borrowings ?? 0) : null;
+        const equity = scrBS
+            ? (scrBS.share_capital ?? 0) + (scrBS.reserves ?? 0)
+            : msiBS
+                ? (msiBS.equity_capital ?? 0) + (msiBS.reserves ?? 0)
+                : null;
+        const debt = scrBS
+            ? (scrBS.borrowings ?? 0)
+            : msiBS
+                ? (msiBS.long_term_borrowings ?? 0) + (msiBS.short_term_borrowings ?? 0)
+                : null;
+        const totalAssets = scrBS?.total_assets ?? msiBS?.total_assets ?? null;
 
-        return { ttmPat, ttmEps, ttmRev, equity, debt, totalAssets: bs?.total_assets };
+        return { ttmPat, ttmEps, ttmRev, equity, debt, totalAssets };
     }
 
     public getLatestShares(assetId: string, faceValue: number): number | null {
-        const bs = this.db.queryOne<{ equity_capital: number }>(
+        const scrBS = this.db.queryOne<{ share_capital: number }>(
+            `SELECT share_capital FROM src_screener_balance_sheet WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 1`,
+            [assetId]
+        );
+        const msiBS = this.db.queryOne<{ equity_capital: number }>(
             `SELECT equity_capital FROM src_msi_balance_sheet WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 1`,
             [assetId]
         );
-        if (!bs?.equity_capital) return null;
-        return (bs.equity_capital * 1e7) / faceValue;
+        const capital = scrBS?.share_capital ?? msiBS?.equity_capital;
+        if (!capital) return null;
+        return (capital * 1e7) / faceValue;
     }
 
     public getQuarterly(assetId: string): QuarterlyResult[] {
@@ -112,9 +137,7 @@ export class FundamentalsRepository extends BaseRepository {
             pat: number | null;
             eps: number | null;
         }>(
-            `SELECT period_end_date, revenue, 
-                    (ebit + depreciation) as operating_profit, 
-                    pat, eps
+            `SELECT period_end_date, revenue, operating_profit, pat, eps
              FROM fundamentals
              WHERE asset_id = ?
              ORDER BY period_end_date DESC LIMIT 16`,
@@ -141,7 +164,7 @@ export class FundamentalsRepository extends BaseRepository {
     }
 
     public getBalanceSheet(assetId: string): BalanceSheet[] {
-        // Fallback-based logic (MSI preferred)
+        // Golden dataset first
         const msiBS = this.db.queryAll<{
             period_end_date: string;
             equity_capital: number | null;
@@ -171,9 +194,9 @@ export class FundamentalsRepository extends BaseRepository {
             [assetId]
         );
 
-        const isMsi = msiBS.length > 0;
+        const isMsi = scrBS.length === 0 && msiBS.length > 0;
         type AnyBsRow = { period_end_date: string; reserves: number | null; total_assets: number | null; equity_capital?: number | null; long_term_borrowings?: number | null; short_term_borrowings?: number | null; cash_equivalents?: number | null; trade_receivables?: number | null; share_capital?: number | null; borrowings?: number | null };
-        const bsRows: AnyBsRow[] = isMsi ? msiBS as AnyBsRow[] : scrBS as AnyBsRow[];
+        const bsRows: AnyBsRow[] = scrBS.length > 0 ? scrBS as AnyBsRow[] : msiBS as AnyBsRow[];
         return bsRows.map((r) => {
             const equity = isMsi
                 ? (r.equity_capital ?? 0) + (r.reserves ?? 0)
@@ -200,19 +223,6 @@ export class FundamentalsRepository extends BaseRepository {
     }
 
     public getCashFlow(assetId: string): CashFlow[] {
-        const msiCF = this.db.queryAll<{
-            period_end_date: string;
-            net_cash_operating: number | null;
-            net_cash_investing: number | null;
-            net_cash_financing: number | null;
-            capex: number | null;
-        }>(
-            `SELECT period_end_date, net_cash_operating, net_cash_investing,
-                  net_cash_financing, capex
-             FROM src_msi_cash_flows WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 10`,
-            [assetId]
-        );
-
         const scrCF = this.db.queryAll<{
             period_end_date: string;
             cash_from_operating: number | null;
@@ -224,15 +234,11 @@ export class FundamentalsRepository extends BaseRepository {
             [assetId]
         );
 
-        const isCfMsi = msiCF.length > 0;
-        type AnyCfRow = { period_end_date: string; net_cash_operating?: number | null; net_cash_investing?: number | null; net_cash_financing?: number | null; capex?: number | null; cash_from_operating?: number | null; cash_from_investing?: number | null; cash_from_financing?: number | null };
-        const cfRows: AnyCfRow[] = isCfMsi ? msiCF as AnyCfRow[] : scrCF as AnyCfRow[];
-        return cfRows.map((r) => {
-            const opCF = isCfMsi ? r.net_cash_operating ?? null : r.cash_from_operating ?? null;
-            const invCF = isCfMsi ? r.net_cash_investing ?? null : r.cash_from_investing ?? null;
-            const finCF = isCfMsi ? r.net_cash_financing ?? null : r.cash_from_financing ?? null;
-            const capex = isCfMsi ? r.capex ?? null : null;
-            const freeCF = opCF != null && capex != null ? opCF + capex : null;
+        return scrCF.map((r) => {
+            const opCF = r.cash_from_operating ?? null;
+            const invCF = r.cash_from_investing ?? null;
+            const finCF = r.cash_from_financing ?? null;
+
             return {
                 periodEnd: r.period_end_date,
                 year: this.periodToFY(r.period_end_date),
@@ -242,9 +248,9 @@ export class FundamentalsRepository extends BaseRepository {
                 cashFromInvesting: invCF,
                 financingCF: finCF,
                 cashFromFinancing: finCF,
-                freeCF,
-                freeCashFlow: freeCF,
-                capex,
+                freeCF: null, // Need CAPEX for free cash flow
+                freeCashFlow: null,
+                capex: null,
             };
         });
     }
@@ -276,11 +282,11 @@ export class FundamentalsRepository extends BaseRepository {
             [assetId]
         );
 
-        const useMsi = msiSH.length > 0;
-        const shRows = useMsi ? msiSH : scrSH;
+        const useMsi = scrSH.length === 0 && msiSH.length > 0;
+        const shRows = scrSH.length > 0 ? scrSH : msiSH;
 
         type AnyShRow = { period_end_date: string; promoter_holding?: number | null; fii_holding?: number | null; dii_holding?: number | null; public_holding?: number | null; pledged_shares?: number | null; promoters_pct?: number | null; fii_pct?: number | null; dii_pct?: number | null; public_pct?: number | null };
-        const typedShRows: AnyShRow[] = useMsi ? msiSH as AnyShRow[] : scrSH as AnyShRow[];
+        const typedShRows: AnyShRow[] = scrSH.length > 0 ? scrSH as AnyShRow[] : msiSH as AnyShRow[];
         return typedShRows.map((r) => {
             const n = (v: number | null | undefined) => v ?? undefined;
             return {
@@ -323,11 +329,19 @@ export class FundamentalsRepository extends BaseRepository {
 
     public getRecentCashFlow(assetId: string) {
         // CFO/PAT ratio (earnings quality)
-        const cfRow = this.db.queryOne<{ net_cash_operating: number | null }>(
+        const scrRow = this.db.queryOne<{ cash_from_operating: number | null }>(
+            `SELECT cash_from_operating FROM src_screener_cashflow WHERE asset_id = ?
+             ORDER BY period_end_date DESC LIMIT 1`,
+            [assetId]
+        );
+        if (scrRow?.cash_from_operating) {
+            return { net_cash_operating: scrRow.cash_from_operating };
+        }
+        const msiRow = this.db.queryOne<{ net_cash_operating: number | null }>(
             `SELECT net_cash_operating FROM src_msi_cash_flows WHERE asset_id = ?
              ORDER BY period_end_date DESC LIMIT 1`,
             [assetId]
         );
-        return cfRow ?? null;
+        return msiRow ?? null;
     }
 }

@@ -278,10 +278,11 @@ def get_all_dates(start: date, end: date) -> list[date]:
 
 
 def get_active_assets() -> list[dict]:
-    from core.db import execute_query
-    return execute_query(
-        "SELECT id, nse_symbol, bse_code FROM assets WHERE asset_class='EQUITY' AND is_active=1"
-    )
+    from core.db import get_connection
+    with get_connection() as conn:
+        return conn.fetchall(
+            "SELECT id, nse_symbol, bse_code FROM assets WHERE asset_class='EQUITY' AND is_active=1"
+        )
 
 
 def prefetch_bhavcopy(start: date, end: date, workers: int = 8):

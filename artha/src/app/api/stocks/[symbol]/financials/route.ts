@@ -18,8 +18,8 @@ export async function GET(
 
         const { quarterly, balanceSheet, cashFlow } = await adapter.company.getFinancials(assetId);
         return NextResponse.json({ quarterly, annual: quarterly, balanceSheets: balanceSheet, cashFlows: cashFlow, ratios: [] });
-    } catch (err) {
-        console.error('[stock financials]', err);
-        return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    } catch (err: any) {
+        console.error('[stock financials error]', err?.message, err?.stack);
+        return NextResponse.json({ error: 'Internal error', details: err?.message }, { status: 500 });
     }
 }
