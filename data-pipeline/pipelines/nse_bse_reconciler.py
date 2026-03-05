@@ -6,7 +6,7 @@ import logging
 from datetime import date, timedelta
 from typing import List, Dict
 
-from utils.db import get_db
+from core.db import get_db
 
 logger = logging.getLogger(__name__)
 

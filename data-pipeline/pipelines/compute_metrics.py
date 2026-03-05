@@ -16,7 +16,7 @@ from typing import Optional
 import pandas as pd
 
 from utils.alerts import alert_pipeline_failure, alert_pipeline_success
-from utils.db import generate_id, get_db
+from core.db import generate_id, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -98,12 +98,68 @@ def _compute_sharpe(prices: pd.Series) -> Optional[float]:
     if len(prices) < 20:
         return None
     daily_returns = prices.pct_change().dropna()
-    if daily_returns.std() == 0:
+    if daily_returns.empty:
         return None
-    daily_rf = RISK_FREE_RATE / 252
-    excess = daily_returns - daily_rf
-    sharpe = (excess.mean() / excess.std()) * math.sqrt(252)
-    return round(float(sharpe), 4)
+    ann_return = daily_returns.mean() * 252
+    ann_vol = daily_returns.std() * math.sqrt(252)
+    if ann_vol == 0:
+        return None
+    return round(float((ann_return - RISK_FREE_RATE) / ann_vol), 4)
+
+
+def _get_ttm_values(conn, asset_id: str) -> dict:
+    """
+    Fetch the last 4 quarters of fundamentals from the golden layer and aggregate them
+    to compute Trailing Twelve Months (TTM) values.
+    Returns an empty dict if < 4 quarters are available.
+    """
+    rows = conn.execute(
+        """
+        SELECT revenue_ops as revenue, operating_profit, profit_before_tax as pbt,
+               net_profit as pat, basic_eps as eps,
+               finance_costs as interest, depreciation
+        FROM src_msi_quarterly
+        WHERE asset_id = ?
+        ORDER BY period_end_date DESC
+        LIMIT 4
+        """,
+        (asset_id,),
+    ).fetchall()
+
+    if len(rows) < 4:
+        # Fallback to screener if MSI doesn't have 4 quarters
+        rows = conn.execute(
+            """
+            SELECT sales as revenue, operating_profit, pbt, net_profit as pat, eps,
+                   interest, depreciation
+            FROM src_screener_quarterly
+            WHERE asset_id = ?
+            ORDER BY period_end_date DESC
+            LIMIT 4
+            """,
+            (asset_id,),
+        ).fetchall()
+
+        if len(rows) < 4:
+            return {}
+
+    ttm = {
+        "revenue": 0.0,
+        "operating_profit": 0.0,
+        "pbt": 0.0,
+        "pat": 0.0,
+        "eps": 0.0,
+        "interest": 0.0,
+        "depreciation": 0.0,
+    }
+
+    for idx, r in enumerate(rows):
+        for k in ttm.keys():
+            val = r[k]
+            if val is not None:
+                ttm[k] += float(val)
+                
+    return ttm
 
 
 def _get_nifty50_prices(conn) -> pd.Series:

@@ -17,7 +17,7 @@ from datetime import date, timedelta
 
 from utils.alerts import send_telegram_alert
 from utils.calendar import ensure_holiday_cache, get_trading_dates_in_range
-from utils.db import execute_one
+from core.db import execute_one
 
 logger = logging.getLogger(__name__)
 

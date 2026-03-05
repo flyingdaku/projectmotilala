@@ -1,10 +1,16 @@
+import sys
+import os
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+WORKSPACE_ROOT = os.path.dirname(PROJECT_ROOT)
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+if WORKSPACE_ROOT not in sys.path:
+    sys.path.insert(0, WORKSPACE_ROOT)
+
 import pytest
 import sqlite3
 from unittest.mock import MagicMock
 from pipelines.compute_metrics import _get_ttm_values
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from artha.update_historical_data import MOCK_90S
 
 def test_ttm_strict_4_quarter_rule():
@@ -13,9 +19,9 @@ def test_ttm_strict_4_quarter_rule():
     
     # CASE 1: 3 Quarters (Should return empty dict)
     mock_conn.execute.return_value.fetchall.return_value = [
-        {"revenue": 100, "operating_profit": 10, "ebit": 10, "pat": 8, "eps": 1, "interest": 1, "total_equity": 500, "total_debt": 0, "total_assets": 500, "cash_equivalents": 50, "cfo": 12},
-        {"revenue": 110, "operating_profit": 11, "ebit": 11, "pat": 9, "eps": 1.1, "interest": 1, "total_equity": 510, "total_debt": 0, "total_assets": 510, "cash_equivalents": 60, "cfo": 13},
-        {"revenue": 105, "operating_profit": 10.5, "ebit": 10.5, "pat": 8.5, "eps": 1.05, "interest": 1, "total_equity": 505, "total_debt": 0, "total_assets": 505, "cash_equivalents": 55, "cfo": 12.5},
+        {"revenue": 100, "operating_profit": 10, "pbt": 10, "pat": 8, "eps": 1, "interest": 1, "depreciation": 2, "total_equity": 500, "total_debt": 0, "total_assets": 500, "cash_equivalents": 50, "cfo": 12},
+        {"revenue": 110, "operating_profit": 11, "pbt": 11, "pat": 9, "eps": 1.1, "interest": 1, "depreciation": 2, "total_equity": 510, "total_debt": 0, "total_assets": 510, "cash_equivalents": 60, "cfo": 13},
+        {"revenue": 105, "operating_profit": 10.5, "pbt": 10.5, "pat": 8.5, "eps": 1.05, "interest": 1, "depreciation": 2, "total_equity": 505, "total_debt": 0, "total_assets": 505, "cash_equivalents": 55, "cfo": 12.5},
     ]
     
     result = _get_ttm_values(mock_conn, "MOCK_ASSET")
@@ -23,7 +29,7 @@ def test_ttm_strict_4_quarter_rule():
 
     # CASE 2: 4 Quarters (Should compute TTM)
     mock_conn.execute.return_value.fetchall.return_value.append(
-        {"revenue": 100, "operating_profit": 10, "ebit": 10, "pat": 8, "eps": 1, "interest": 1, "total_equity": 500, "total_debt": 0, "total_assets": 500, "cash_equivalents": 50, "cfo": 12}
+        {"revenue": 100, "operating_profit": 10, "pbt": 10, "pat": 8, "eps": 1, "interest": 1, "depreciation": 2, "total_equity": 500, "total_debt": 0, "total_assets": 500, "cash_equivalents": 50, "cfo": 12}
     )
     result = _get_ttm_values(mock_conn, "MOCK_ASSET")
     assert result != {}, "TTM should compute for exactly 4 quarters"

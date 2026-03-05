@@ -16,7 +16,7 @@ def test_classify_bse_action():
     assert classify_bse_action("Bonus issue 1:1") == "BONUS"
     assert classify_bse_action("Sub-division of equity shares") == "SPLIT"
 
-def test_nse_fetch_mock(mocker):
+def test_nse_fetch_mock():
     # Mocking would happen here
     pass
 

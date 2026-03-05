@@ -10,7 +10,7 @@ import calendar
 from datetime import date, datetime
 from typing import Dict, Any, List, Optional
 from bs4 import BeautifulSoup
-from utils.db import get_db, generate_id
+from core.db import get_db, generate_id
 
 logger = logging.getLogger(__name__)
 

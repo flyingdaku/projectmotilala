@@ -10,7 +10,7 @@ from typing import Optional, List, Dict
 
 import requests
 
-from utils.db import get_db, generate_id
+from core.db import get_db, generate_id
 from utils.storage import raw_file_exists, save_raw_file, load_raw_file
 
 logger = logging.getLogger(__name__)

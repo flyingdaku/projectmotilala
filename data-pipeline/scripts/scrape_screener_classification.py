@@ -34,7 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from utils.db import get_db
+from core.db import get_db
 
 logging.basicConfig(
     level=logging.INFO,

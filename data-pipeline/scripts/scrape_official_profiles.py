@@ -19,7 +19,7 @@ from typing import Optional, Dict, List
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from utils.db import get_db, generate_id
+from core.db import get_db, generate_id
 from bs4 import BeautifulSoup
 
 logging.basicConfig(

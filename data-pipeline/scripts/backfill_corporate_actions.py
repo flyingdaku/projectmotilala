@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from utils.db import get_db, generate_id
+from core.db import get_db, generate_id
 from pipelines.corporate_actions import (
     fetch_nse_corporate_actions,
     _map_action_type,

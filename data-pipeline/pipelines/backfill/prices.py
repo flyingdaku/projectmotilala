@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from utils.calendar import ensure_holiday_cache, get_trading_dates_in_range
-from utils.db import execute_one
+from core.db import execute_one
 
 logger = logging.getLogger(__name__)
 

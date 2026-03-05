@@ -1,12 +1,15 @@
+import sys
+import os
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 """
 Unit tests for corporate actions adjustment factor calculations.
 Run with: pytest tests/test_corporate_actions.py -v
 """
 import pytest
-import sys
-import os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from pipelines.corporate_actions import calculate_adjustment_factor, _parse_ratio
 

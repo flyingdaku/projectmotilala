@@ -88,7 +88,7 @@ def _safe_float(value) -> Optional[float]:
 
 def _get_previous_closes(trade_date: date) -> dict[str, float]:
     """Return {isin: close} for the most recent trading day before trade_date."""
-    from utils.db import get_db
+    from core.db import get_db
     from utils.calendar import get_previous_trading_date
 
     try:
@@ -110,7 +110,7 @@ def _get_previous_closes(trade_date: date) -> dict[str, float]:
 
 def _get_corp_action_isins_for_date(trade_date: date) -> set[str]:
     """Return the set of ISINs that have a corporate action ex_date on trade_date."""
-    from utils.db import get_db
+    from core.db import get_db
 
     with get_db() as conn:
         rows = conn.execute(

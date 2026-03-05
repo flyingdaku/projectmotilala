@@ -16,7 +16,7 @@ import requests
 from utils.alerts import alert_pipeline_failure, alert_pipeline_success
 from utils.calendar import ensure_holiday_cache, is_trading_day
 from utils.circuit_breakers import run_circuit_breakers
-from utils.db import generate_id, get_db
+from core.db import generate_id, get_db
 from utils.storage import load_raw_file, raw_file_exists, save_raw_file
 
 logger = logging.getLogger(__name__)

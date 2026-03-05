@@ -13,7 +13,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 
 from utils.alerts import alert_pipeline_failure, alert_pipeline_success
-from utils.db import generate_id, get_db
+from core.db import generate_id, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ def compute_adj_close_for_all_assets():
 
 def compute_adj_close_for_single_asset(isin: str):
     """Recompute adj_close for a single asset by ISIN. Useful for targeted fixes."""
-    from utils.db import get_asset_id_by_isin
+    from core.db import get_asset_id_by_isin
 
     asset_id = get_asset_id_by_isin(isin)
     if not asset_id:

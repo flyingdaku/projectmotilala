@@ -16,7 +16,7 @@ logging.basicConfig(
 logger = logging.getLogger("bse_resume")
 
 from utils.calendar import ensure_holiday_cache, get_trading_dates_in_range
-from utils.db import execute_one
+from core.db import execute_one
 from pipelines.bse_bhavcopy import run_bse_bhavcopy_pipeline
 
 def main():

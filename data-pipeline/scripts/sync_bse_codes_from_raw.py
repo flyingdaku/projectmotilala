@@ -10,7 +10,7 @@ import pandas as pd
 from datetime import date
 from pathlib import Path
 
-from utils.db import get_db
+from core.db import get_db
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("sync_bse_codes")

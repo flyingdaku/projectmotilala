@@ -81,7 +81,7 @@ def step(name: str, fn, *args, skip=False, **kwargs):
 
 def drop_and_init_db():
     """Delete existing DB file and recreate from schema.sql."""
-    from utils.db import DB_PATH, init_db
+    from core.db import DB_PATH, init_db
     db_path = Path(DB_PATH)
     if db_path.exists():
         logger.info(f"Deleting existing DB at {db_path} ({db_path.stat().st_size / 1e6:.1f} MB)")
@@ -270,7 +270,7 @@ def main():
     if args.no_reinit:
         logger.info("⏭️  Skipping DB reinit (--no-reinit). Using existing database.")
         # Ensure new schema objects exist without dropping old data
-        from utils.db import init_db
+        from core.db import init_db
         init_db()  # CREATE IF NOT EXISTS — safe to run on live DB
     else:
         step("1. Drop & Init DB",         drop_and_init_db)

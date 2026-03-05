@@ -7,7 +7,7 @@ import time
 from datetime import date
 from typing import Dict, Any, Optional, List
 
-from utils.db import get_db, generate_id
+from core.db import get_db, generate_id
 
 logger = logging.getLogger(__name__)
 

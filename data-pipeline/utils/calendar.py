@@ -77,7 +77,7 @@ def fetch_nse_holidays_from_api() -> list[dict]:
 
 def refresh_holiday_cache():
     """Fetch holidays from NSE and store in the local SQLite cache."""
-    from utils.db import get_db, generate_id
+    from core.db import get_db, generate_id
 
     holidays = fetch_nse_holidays_from_api()
 
@@ -93,7 +93,7 @@ def refresh_holiday_cache():
 
 def get_cached_holidays() -> Set[str]:
     """Return the set of NSE holiday date strings from the local cache."""
-    from utils.db import execute_query
+    from core.db import execute_query
 
     rows = execute_query("SELECT date FROM trading_holidays WHERE exchange = 'NSE'")
     return {row["date"] for row in rows}
@@ -149,7 +149,7 @@ def ensure_holiday_cache(force_refresh: bool = False):
     On API failure, logs a warning but does not crash — the pipeline
     will still run using weekday logic only.
     """
-    from utils.db import execute_one
+    from core.db import execute_one
 
     count = execute_one("SELECT COUNT(*) as cnt FROM trading_holidays WHERE exchange = 'NSE'")
     if force_refresh or (count and count["cnt"] == 0):

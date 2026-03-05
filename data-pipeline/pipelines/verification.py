@@ -16,7 +16,7 @@ from typing import Optional
 
 from utils.alerts import alert_pipeline_failure, send_telegram_alert
 from utils.calendar import ensure_holiday_cache, get_trading_dates_in_range, is_trading_day
-from utils.db import execute_one, execute_query, generate_id, get_db
+from core.db import execute_one, execute_query, generate_id, get_db
 
 logger = logging.getLogger(__name__)
 

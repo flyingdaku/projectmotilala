@@ -110,7 +110,7 @@ def fetch_and_insert_legacy(db_path, scode, asset_id, start_year, end_year):
 def run_legacy_sync(start_year, end_year, max_workers=2):
     import sys
     sys.path.append('.')
-    from utils.db import DB_PATH
+    from core.db import DB_PATH
     import os
     
     if not os.path.exists(DB_PATH):

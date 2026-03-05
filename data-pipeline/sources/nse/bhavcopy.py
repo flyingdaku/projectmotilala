@@ -90,10 +90,13 @@ def parse_bhavcopy(content: bytes, is_zip: bool = True) -> pd.DataFrame:
 
     # Rename variants to canonical names
     rename_map = {
-        "TOTTRDQTY": "VOLUME", "TTL_TRD_QNTY": "VOLUME", "TOTAL_TRADED_QUANTITY": "VOLUME",
+        "TOTTRDQTY": "VOLUME", "TTL_TRD_QNTY": "VOLUME", "TOTAL_TRADED_QUANTITY": "VOLUME", "TTLTRADGVOL": "VOLUME",
         "TOTTRDVAL": "TURNOVER", "TTL_TRD_VAL": "TURNOVER",
-        "TOTALTRADES": "TRADES", "NO_OF_TRADES": "TRADES",
-        "PREV_CLOSE": "PREVCLOSE", "PREVIOUS_CLOSE": "PREVCLOSE",
+        "TOTALTRADES": "TRADES", "NO_OF_TRADES": "TRADES", "TTLNBOFTXSEXCTD": "TRADES",
+        "PREV_CLOSE": "PREVCLOSE", "PREVIOUS_CLOSE": "PREVCLOSE", "PRVSCLSGPRIC": "PREVCLOSE",
+        "TCKRSYMB": "SYMBOL", "SCTYSRS": "SERIES",
+        "OPNPRIC": "OPEN", "HGHPRIC": "HIGH", "LWPRIC": "LOW", "CLSPRIC": "CLOSE", "LASTPRIC": "LAST",
+        "TRADDT": "TIMESTAMP"
     }
     df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns}, inplace=True)
 

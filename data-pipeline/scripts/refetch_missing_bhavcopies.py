@@ -7,7 +7,7 @@ from pathlib import Path
 # Add project root to sys.path
 sys.path.insert(0, '/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline')
 
-from utils.db import get_db
+from core.db import get_db
 from pipelines.nse_bhavcopy import run_nse_bhavcopy_pipeline
 from pipelines.bse_bhavcopy import run_bse_bhavcopy_pipeline
 

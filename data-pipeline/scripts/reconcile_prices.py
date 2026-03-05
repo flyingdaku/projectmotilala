@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 sys.path.insert(0, '/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline')
 
-from utils.db import get_db
+from core.db import get_db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("reconciler")

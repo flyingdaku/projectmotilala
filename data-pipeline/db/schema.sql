@@ -28,6 +28,10 @@ CREATE TABLE IF NOT EXISTS assets (
   is_active      INTEGER DEFAULT 1,
   nse_listed     INTEGER DEFAULT 0,
   bse_listed     INTEGER DEFAULT 0,
+  face_value     REAL,
+  website_url    TEXT,
+  description    TEXT,
+  management_json TEXT,
   classification_updated_at TEXT, -- when sector/industry was last synced
   created_at     TEXT DEFAULT (datetime('now'))
 );

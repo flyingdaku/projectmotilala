@@ -278,7 +278,7 @@ def get_all_dates(start: date, end: date) -> list[date]:
 
 
 def get_active_assets() -> list[dict]:
-    from utils.db import execute_query
+    from core.db import execute_query
     return execute_query(
         "SELECT id, nse_symbol, bse_code FROM assets WHERE asset_class='EQUITY' AND is_active=1"
     )

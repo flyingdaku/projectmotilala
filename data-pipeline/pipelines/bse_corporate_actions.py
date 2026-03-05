@@ -11,7 +11,7 @@ import requests
 from datetime import date, datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 
-from utils.db import get_db, generate_id
+from core.db import get_db, generate_id
 from utils.storage import save_raw_file, raw_file_exists, load_raw_file
 from pipelines.bse_corporate_actions_parser import (
     classify_bse_action,
