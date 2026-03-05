@@ -1,5 +1,7 @@
 # Artha Data Pipeline Ignore
 *.db
+*.db-wal
+*.db-shm
 *.log
 *.csv
 *.zip
