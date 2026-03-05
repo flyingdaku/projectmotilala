@@ -69,12 +69,12 @@ def seed_assets(tmp_db):
 
     with db_module.get_db() as conn:
         conn.execute(
-            """INSERT INTO assets (id, isin, nse_symbol, name, asset_class, nse_listed, is_active)
+            """INSERT OR IGNORE INTO assets (id, isin, nse_symbol, name, asset_class, nse_listed, is_active)
                VALUES (?, ?, ?, ?, 'EQUITY', 1, 1)""",
             (generate_id(), "INE009A01021", "INFOSYS", "Infosys Limited"),
         )
         conn.execute(
-            """INSERT INTO assets (id, isin, nse_symbol, name, asset_class, nse_listed, is_active)
+            """INSERT OR IGNORE INTO assets (id, isin, nse_symbol, name, asset_class, nse_listed, is_active)
                VALUES (?, ?, ?, ?, 'EQUITY', 1, 1)""",
             (generate_id(), "INE002A01018", "RELIANCE", "Reliance Industries"),
         )
