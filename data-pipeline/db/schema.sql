@@ -125,44 +125,9 @@ CREATE TABLE IF NOT EXISTS fundamentals (
 CREATE INDEX IF NOT EXISTS idx_fundamentals_asset ON fundamentals(asset_id, period_end_date DESC);
 
 -- ─── SOURCE-SPECIFIC FUNDAMENTALS ─────────────────────────────
-CREATE TABLE IF NOT EXISTS nse_fundamentals (
-  id                  TEXT PRIMARY KEY,
-  asset_id            TEXT NOT NULL,
-  period_end_date     TEXT NOT NULL,
-  is_consolidated     INTEGER DEFAULT 1,
-  revenue             REAL,
-  operating_profit    REAL,
-  interest            REAL,
-  pbt                 REAL,
-  tax                 REAL,
-  pat                 REAL,
-  eps                 REAL,
-  raw_json            TEXT,
-  created_at          TEXT DEFAULT (datetime('now')),
-  UNIQUE (asset_id, period_end_date, is_consolidated),
-  FOREIGN KEY (asset_id) REFERENCES assets(id)
-);
+-- Dropped nse_fundamentals and bse_fundamentals (0 rows, subsumed by MSI/Screener)
 
-CREATE TABLE IF NOT EXISTS bse_fundamentals (
-  id                  TEXT PRIMARY KEY,
-  asset_id            TEXT NOT NULL,
-  period_end_date     TEXT NOT NULL,
-  is_consolidated     INTEGER DEFAULT 1,
-  revenue             REAL,
-  operating_profit    REAL,
-  interest            REAL,
-  pbt                 REAL,
-  tax                 REAL,
-  pat                 REAL,
-  eps                 REAL,
-  expense_breakdown   TEXT,
-  raw_json            TEXT,
-  created_at          TEXT DEFAULT (datetime('now')),
-  UNIQUE (asset_id, period_end_date, is_consolidated),
-  FOREIGN KEY (asset_id) REFERENCES assets(id)
-);
-
-CREATE TABLE IF NOT EXISTS screener_quarterly (
+CREATE TABLE IF NOT EXISTS src_screener_quarterly (
   id                      TEXT PRIMARY KEY,
   asset_id                TEXT NOT NULL,
   period_end_date         TEXT NOT NULL,
@@ -184,7 +149,7 @@ CREATE TABLE IF NOT EXISTS screener_quarterly (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
-CREATE TABLE IF NOT EXISTS screener_balance_sheet (
+CREATE TABLE IF NOT EXISTS src_screener_balance_sheet (
   id                      TEXT PRIMARY KEY,
   asset_id                TEXT NOT NULL,
   period_end_date         TEXT NOT NULL,
@@ -204,7 +169,7 @@ CREATE TABLE IF NOT EXISTS screener_balance_sheet (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
-CREATE TABLE IF NOT EXISTS screener_cashflow (
+CREATE TABLE IF NOT EXISTS src_screener_cashflow (
   id                      TEXT PRIMARY KEY,
   asset_id                TEXT NOT NULL,
   period_end_date         TEXT NOT NULL,
@@ -218,7 +183,7 @@ CREATE TABLE IF NOT EXISTS screener_cashflow (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
-CREATE TABLE IF NOT EXISTS screener_ratios (
+CREATE TABLE IF NOT EXISTS src_screener_ratios (
   id                      TEXT PRIMARY KEY,
   asset_id                TEXT NOT NULL,
   period_end_date         TEXT NOT NULL,
@@ -234,7 +199,7 @@ CREATE TABLE IF NOT EXISTS screener_ratios (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
-CREATE TABLE IF NOT EXISTS screener_shareholding (
+CREATE TABLE IF NOT EXISTS src_screener_shareholding (
   id                      TEXT PRIMARY KEY,
   asset_id                TEXT NOT NULL,
   period_end_date         TEXT NOT NULL,
@@ -293,6 +258,7 @@ CREATE TABLE IF NOT EXISTS asset_metrics (
 CREATE TABLE IF NOT EXISTS pipeline_runs (
   id               TEXT PRIMARY KEY,
   run_date         TEXT NOT NULL,
+  pipeline_type    TEXT NOT NULL DEFAULT 'DAILY', -- DAILY / BACKFILL / WEEKLY
   source           TEXT NOT NULL,
   status           TEXT NOT NULL CHECK(status IN ('SUCCESS', 'PARTIAL', 'FAILED')),
   records_inserted INTEGER,

@@ -1,7 +1,7 @@
 import pytest
 import sqlite3
 from unittest.mock import MagicMock
-from pipelines.compute_ratios import _get_ttm_values
+from pipelines.compute_metrics import _get_ttm_values
 import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
