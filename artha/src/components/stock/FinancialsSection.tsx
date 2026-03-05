@@ -34,7 +34,7 @@ function detectAnomalies(quarterly: QuarterlyResult[] | null | undefined, balanc
   const flags: AnomalyFlag[] = [];
   const qData = quarterly || [];
   const bsData = balanceSheets || [];
-  
+
   if (qData.length >= 4) {
     const latest = qData[0];
     const prev = qData[4];
@@ -246,34 +246,60 @@ export function FinancialsSection({ symbol }: Props) {
 
           {data && (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                    <th className="text-left py-2 pr-4 font-semibold" style={{ color: "var(--text-muted)" }}>Quarter</th>
-                    <th className="text-right py-2 px-2 font-semibold" style={{ color: "var(--text-muted)" }}>Revenue (Cr)</th>
-                    <th className="text-right py-2 px-2 font-semibold" style={{ color: "var(--text-muted)" }}>Op. Profit</th>
-                    <th className="text-right py-2 px-2 font-semibold" style={{ color: "var(--text-muted)" }}>OPM%</th>
-                    <th className="text-right py-2 px-2 font-semibold" style={{ color: "var(--text-muted)" }}>Net Profit</th>
-                    <th className="text-right py-2 px-2 font-semibold" style={{ color: "var(--text-muted)" }}>NPM%</th>
-                    <th className="text-right py-2 px-2 font-semibold" style={{ color: "var(--text-muted)" }}>EPS</th>
+                    <th className="py-2 text-left pr-4 font-semibold min-w-[140px]" style={{ color: "var(--text-muted)" }}>Parameters</th>
+                    {data.quarterly.slice(0, 8).map((r, i) => (
+                      <th key={i} className="text-right py-2 px-3 font-semibold min-w-[80px]" style={{ color: "var(--text-muted)" }}>
+                        {(r.periodEnd ?? "").slice(0, 7)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {data.quarterly.slice(0, 8).map((r, i) => {
-                    const opm = r.revenue && r.operatingProfit ? (r.operatingProfit / r.revenue * 100) : null;
-                    const npm = r.revenue && r.netProfit ? (r.netProfit / r.revenue * 100) : null;
-                    return (
-                      <tr key={i} style={{ borderBottom: "1px solid var(--border)", opacity: i === 0 ? 1 : 0.85 }}>
-                        <td className="py-2 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>{(r.periodEnd ?? "").slice(0, 7)}</td>
-                        <td className="text-right py-2 px-2 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.revenue)}</td>
-                        <td className="text-right py-2 px-2 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.operatingProfit)}</td>
-                        <td className="text-right py-2 px-2 font-mono" style={{ color: opm && opm > 0 ? "#10B981" : "#EF4444" }}>{fmtPct(opm)}</td>
-                        <td className="text-right py-2 px-2 font-mono" style={{ color: (r.netProfit ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.netProfit)}</td>
-                        <td className="text-right py-2 px-2 font-mono" style={{ color: npm && npm > 0 ? "#10B981" : "#EF4444" }}>{fmtPct(npm)}</td>
-                        <td className="text-right py-2 px-2 font-mono" style={{ color: "var(--text-primary)" }}>{r.eps?.toFixed(2) ?? "—"}</td>
-                      </tr>
-                    );
-                  })}
+                <tbody className="divide-y divide-[var(--border)]">
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Revenue (Cr)</td>
+                    {data.quarterly.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.revenue)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Operating Profit</td>
+                    {data.quarterly.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.operatingProfit)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>OPM %</td>
+                    {data.quarterly.slice(0, 8).map((r, i) => {
+                      const opm = r.revenue && r.operatingProfit ? (r.operatingProfit / r.revenue * 100) : null;
+                      return (
+                        <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: opm && opm > 0 ? "#10B981" : "#EF4444" }}>{fmtPct(opm)}</td>
+                      );
+                    })}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Net Profit</td>
+                    {data.quarterly.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.netProfit ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.netProfit)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>NPM %</td>
+                    {data.quarterly.slice(0, 8).map((r, i) => {
+                      const npm = r.revenue && r.netProfit ? (r.netProfit / r.revenue * 100) : null;
+                      return (
+                        <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: npm && npm > 0 ? "#10B981" : "#EF4444" }}>{fmtPct(npm)}</td>
+                      );
+                    })}
+                  </tr>
+                  <tr className="bg-muted/5 font-bold">
+                    <td className="py-3 pr-4" style={{ color: "var(--text-primary)" }}>EPS</td>
+                    {data.quarterly.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-3 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{r.eps?.toFixed(2) ?? "—"}</td>
+                    ))}
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -304,26 +330,54 @@ export function FinancialsSection({ symbol }: Props) {
           </div>
           {data && (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                    {["Year", "Eq. Capital", "Reserves", "Borrowings", "Total Assets", "Receivables", "Cash"].map((h) => (
-                      <th key={h} className={`py-2 ${h === "Year" ? "text-left pr-4" : "text-right px-2"} font-semibold`} style={{ color: "var(--text-muted)" }}>{h}</th>
+                    <th className="py-2 text-left pr-4 font-semibold min-w-[140px]" style={{ color: "var(--text-muted)" }}>Parameters</th>
+                    {data.balanceSheets.slice(0, 8).map((r, i) => (
+                      <th key={i} className="text-right py-2 px-3 font-semibold min-w-[80px]" style={{ color: "var(--text-muted)" }}>
+                        {(r.periodEndDate ?? r.periodEnd ?? "").slice(0, 7)}
+                      </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {data.balanceSheets.slice(0, 8).map((r, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                      <td className="py-2 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>{(r.periodEndDate ?? r.periodEnd ?? "").slice(0, 7)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.equityCapital)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.reserves)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: (r.borrowings ?? 0) > 0 ? "#EF4444" : "var(--text-primary)" }}>{fmt(r.borrowings)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.totalAssets)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.tradeReceivables)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: "#10B981" }}>{fmt(r.cashEquivalents)}</td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-[var(--border)]">
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Equity Capital</td>
+                    {data.balanceSheets.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.equityCapital)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Reserves</td>
+                    {data.balanceSheets.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.reserves)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Borrowings</td>
+                    {data.balanceSheets.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.borrowings ?? 0) > 0 ? "#EF4444" : "var(--text-primary)" }}>{fmt(r.borrowings)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Trade Receivables</td>
+                    {data.balanceSheets.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.tradeReceivables)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Cash & Equiv.</td>
+                    {data.balanceSheets.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "#10B981" }}>{fmt(r.cashEquivalents)}</td>
+                    ))}
+                  </tr>
+                  <tr className="bg-muted/5 font-bold">
+                    <td className="py-3 pr-4" style={{ color: "var(--text-primary)" }}>Total Assets</td>
+                    {data.balanceSheets.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-3 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.totalAssets)}</td>
+                    ))}
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -356,24 +410,42 @@ export function FinancialsSection({ symbol }: Props) {
           </div>
           {data && (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-xs border-collapse">
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                    {["Year", "Operating CF", "Investing CF", "Financing CF", "Free CF"].map((h) => (
-                      <th key={h} className={`py-2 ${h === "Year" ? "text-left pr-4" : "text-right px-2"} font-semibold`} style={{ color: "var(--text-muted)" }}>{h}</th>
+                    <th className="py-2 text-left pr-4 font-semibold min-w-[140px]" style={{ color: "var(--text-muted)" }}>Parameters</th>
+                    {data.cashFlows.slice(0, 8).map((r, i) => (
+                      <th key={i} className="text-right py-2 px-3 font-semibold min-w-[80px]" style={{ color: "var(--text-muted)" }}>
+                        {(r.periodEndDate ?? r.periodEnd ?? "").slice(0, 7)}
+                      </th>
                     ))}
                   </tr>
                 </thead>
-                <tbody>
-                  {data.cashFlows.slice(0, 8).map((r, i) => (
-                    <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                      <td className="py-2 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>{(r.periodEndDate ?? r.periodEnd ?? "").slice(0, 7)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: (r.cashFromOperating ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromOperating)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: (r.cashFromInvesting ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromInvesting)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: (r.cashFromFinancing ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromFinancing)}</td>
-                      <td className="text-right py-2 px-2 font-mono" style={{ color: (r.freeCashFlow ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.freeCashFlow)}</td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-[var(--border)]">
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Operating CF</td>
+                    {data.cashFlows.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.cashFromOperating ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromOperating)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Investing CF</td>
+                    {data.cashFlows.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.cashFromInvesting ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromInvesting)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Financing CF</td>
+                    {data.cashFlows.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.cashFromFinancing ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromFinancing)}</td>
+                    ))}
+                  </tr>
+                  <tr className="bg-muted/5 font-bold">
+                    <td className="py-3 pr-4" style={{ color: "var(--text-primary)" }}>Free Cash Flow</td>
+                    {data.cashFlows.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-3 px-3 font-mono" style={{ color: (r.freeCashFlow ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.freeCashFlow)}</td>
+                    ))}
+                  </tr>
                 </tbody>
               </table>
             </div>
