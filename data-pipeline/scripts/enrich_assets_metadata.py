@@ -79,6 +79,21 @@ def parse_screener_metadata(html: str) -> dict:
             elif "chairman" in text and "independent" not in text:
                 mgmt["chairman"] = name
 
+    # ── About / Description ───────────────────────────────────────────────────
+    about_el = soup.select_one("div.company-profile div.about, section#about div.sub")
+    if not about_el:
+        # Fallback to meta description if content is relevant
+        meta_desc = soup.find("meta", attrs={"name": "description"})
+        if meta_desc and "·" in meta_desc.get("content", ""):
+            # Usually too short, but better than nothing
+            result["description"] = meta_desc["content"].split("·")[0].strip()
+    else:
+        # Clean up tags and extra whitespace
+        desc = about_el.get_text(" ", strip=True)
+        # Remove footnote markers like [1], [2]
+        desc = re.sub(r"\[\d+\]", "", desc)
+        result["description"] = desc
+
     if mgmt:
         result["management_json"] = json.dumps(mgmt)
 
@@ -123,6 +138,9 @@ def main():
         if "management_json" in meta:
             update_cols.append("management_json = COALESCE(management_json, ?)")
             values.append(meta["management_json"])
+        if "description" in meta:
+            update_cols.append("description = COALESCE(description, ?)")
+            values.append(meta["description"])
 
         if not update_cols:
             continue
