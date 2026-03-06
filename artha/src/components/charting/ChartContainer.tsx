@@ -15,7 +15,7 @@
  * When isFullscreen=true the whole shell is portal'd to a fixed overlay.
  */
 
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useChartStore } from './store/useChartStore';
 import { ChartEngine }    from './core/ChartEngine';
@@ -31,6 +31,9 @@ import { DataWindow }         from './widgets/DataWindow';
 import { IndicatorDialog }    from './widgets/IndicatorDialog';
 import { LayoutPanel }        from './widgets/LayoutPanel';
 import { WatchlistPanel }     from './widgets/WatchlistPanel';
+import { DEFAULT_WATCHLIST_CONFIG } from './widgets/WatchlistPanel';
+import { getWatchlistPanelWidth } from './widgets/WatchlistPanel';
+import type { WatchlistConfig } from './widgets/WatchlistPanel';
 import type { CrosshairData, OHLCVBar } from './core/types';
 import { DARK_THEME, LIGHT_THEME } from './core/types';
 import { Loader2, X } from 'lucide-react';
@@ -63,6 +66,7 @@ function ChartContent({
   const [showIndDialog, setShowIndDialog] = useState(false);
   const [crosshair, setCrosshair]         = useState<CrosshairData | null>(null);
   const [paneRects, setPaneRects]         = useState<Array<{ id: string; index: number; top: number; height: number; indicators: string[] }>>([]);
+  const [watchlistConfig, setWatchlistConfig] = useState<WatchlistConfig>(DEFAULT_WATCHLIST_CONFIG);
 
   const {
     timeframe, chartType, isDark, indicators, drawings,
@@ -73,6 +77,7 @@ function ChartContent({
 
   const { bars, loading, error } = useChartData(symbol, timeframe);
   const theme = isDark ? DARK_THEME : LIGHT_THEME;
+  const watchlistWidth = showWatchlist ? getWatchlistPanelWidth(watchlistConfig) : 0;
 
   // ── 1. Initialise chart engine ────────────────────────────────────────────
 
@@ -305,10 +310,12 @@ function ChartContent({
         onIndicatorsClick={() => setShowIndDialog(true)}
         onScreenshot={handleScreenshot}
         fullscreenMode={fullscreenMode}
+        watchlistConfig={watchlistConfig}
+        onWatchlistConfigChange={setWatchlistConfig}
       />
-
+  
       {/* Body row */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="relative flex flex-1 min-h-0 overflow-hidden">
         {/* Drawing toolbar */}
         <DrawingToolbar />
 
@@ -388,9 +395,13 @@ function ChartContent({
           </div>
         )}
 
+        {showWatchlist && <div className="flex-shrink-0" style={{ width: `${watchlistWidth}px` }} />}
+
         {/* Watchlist panel */}
         {showWatchlist && (
-          <WatchlistPanel />
+          <div className="absolute right-0 top-0 bottom-0 z-30 flex">
+            <WatchlistPanel config={watchlistConfig} onConfigChange={setWatchlistConfig} />
+          </div>
         )}
       </div>
 
@@ -405,9 +416,11 @@ function ChartContent({
 export function ChartContainer(props: ChartContainerProps) {
   const { fullscreenMode = false } = props;
   const { isFullscreen, toggleFullscreen } = useChartStore();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => { setMounted(true); }, []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   // Keyboard shortcut: Escape closes fullscreen
   useEffect(() => {

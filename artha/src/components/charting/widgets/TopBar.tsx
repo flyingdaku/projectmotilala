@@ -7,16 +7,28 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, type Dispatch, type SetStateAction } from 'react';
 import {
   BarChart2, LineChart, AreaChart,
   Maximize2, Minimize2, Moon, Sun, BarChart,
-  Camera, List, Layout,
+  Camera, List, Layout, Settings,
 } from 'lucide-react';
 import { useChartStore } from '../store/useChartStore';
+import { DEFAULT_WATCHLIST } from './WatchlistPanel';
+import type { WatchlistConfig } from './WatchlistPanel';
 import type { Timeframe, ChartType } from '../core/types';
 import { TIMEFRAMES } from '../core/types';
 import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { Select } from '@/components/ui/select';
 
 const CHART_TYPES: { value: ChartType; icon: React.ReactNode; label: string }[] = [
   { value: 'candlestick', icon: <BarChart size={20} />, label: 'Candlestick' },
@@ -33,6 +45,8 @@ interface TopBarProps {
   onIndicatorsClick: () => void;
   onScreenshot?: () => void;
   fullscreenMode?: boolean;
+  watchlistConfig: WatchlistConfig;
+  onWatchlistConfigChange: Dispatch<SetStateAction<WatchlistConfig>>;
 }
 
 export function TopBar({
@@ -42,6 +56,8 @@ export function TopBar({
   onIndicatorsClick,
   onScreenshot,
   fullscreenMode = false,
+  watchlistConfig,
+  onWatchlistConfigChange,
 }: TopBarProps) {
   const {
     timeframe, chartType, isDark, isFullscreen, indicators,
@@ -165,18 +181,147 @@ export function TopBar({
       <div className="flex-1" />
 
       {/* Watchlist toggle */}
-      <button
-        onClick={toggleWatchlist}
-        className={cn(
-          'p-1.5 rounded transition-colors',
-          showWatchlist
-            ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
-            : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+      <div className="flex items-center gap-1.5">
+        {showWatchlist && (
+          <span className="text-[10px] text-muted-foreground px-2 py-1 rounded-md border border-border bg-muted/20">
+            {DEFAULT_WATCHLIST.length} stocks
+          </span>
         )}
-        title="Watchlist"
-      >
-        <List size={20} />
-      </button>
+
+        {showWatchlist && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                title="Configure watchlist"
+              >
+                <Settings size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 p-2">
+              <DropdownMenuLabel>Watchlist Columns</DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={watchlistConfig.industryIcon.enabled}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(checked) =>
+                  onWatchlistConfigChange((prev) => ({
+                    ...prev,
+                    industryIcon: { ...prev.industryIcon, enabled: Boolean(checked) },
+                  }))
+                }
+              >
+                Industry Icon
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={watchlistConfig.rvol1.enabled}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(checked) =>
+                  onWatchlistConfigChange((prev) => ({
+                    ...prev,
+                    rvol1: { ...prev.rvol1, enabled: Boolean(checked) },
+                  }))
+                }
+              >
+                RVOL
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={watchlistConfig.atr.enabled}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(checked) =>
+                  onWatchlistConfigChange((prev) => ({
+                    ...prev,
+                    atr: { ...prev.atr, enabled: Boolean(checked) },
+                  }))
+                }
+              >
+                ATR
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={watchlistConfig.natr.enabled}
+                onSelect={(e) => e.preventDefault()}
+                onCheckedChange={(checked) =>
+                  onWatchlistConfigChange((prev) => ({
+                    ...prev,
+                    natr: { ...prev.natr, enabled: Boolean(checked) },
+                  }))
+                }
+              >
+                NATR
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <div className="grid gap-3 px-2 py-2">
+                <div className="grid grid-cols-[1fr_88px] items-center gap-2">
+                  <span className="text-xs text-muted-foreground">RVOL Period</span>
+                  <Select
+                    value={String(watchlistConfig.rvol1.period ?? 1)}
+                    onChange={(e) =>
+                      onWatchlistConfigChange((prev) => ({
+                        ...prev,
+                        rvol1: { ...prev.rvol1, period: Number(e.target.value) },
+                      }))
+                    }
+                    className="h-8 text-xs"
+                  >
+                    <option value="1">1</option>
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-[1fr_88px] items-center gap-2">
+                  <span className="text-xs text-muted-foreground">ATR Period</span>
+                  <Select
+                    value={String(watchlistConfig.atr.period ?? 14)}
+                    onChange={(e) =>
+                      onWatchlistConfigChange((prev) => ({
+                        ...prev,
+                        atr: { ...prev.atr, period: Number(e.target.value) },
+                      }))
+                    }
+                    className="h-8 text-xs"
+                  >
+                    <option value="7">7</option>
+                    <option value="14">14</option>
+                    <option value="21">21</option>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-[1fr_88px] items-center gap-2">
+                  <span className="text-xs text-muted-foreground">NATR Period</span>
+                  <Select
+                    value={String(watchlistConfig.natr.period ?? 14)}
+                    onChange={(e) =>
+                      onWatchlistConfigChange((prev) => ({
+                        ...prev,
+                        natr: { ...prev.natr, period: Number(e.target.value) },
+                      }))
+                    }
+                    className="h-8 text-xs"
+                  >
+                    <option value="7">7</option>
+                    <option value="14">14</option>
+                    <option value="21">21</option>
+                  </Select>
+                </div>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        <button
+          onClick={toggleWatchlist}
+          className={cn(
+            'p-1.5 rounded transition-colors',
+            showWatchlist
+              ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+          )}
+          title="Watchlist"
+        >
+          <List size={20} />
+        </button>
+      </div>
 
       {/* Layout panel toggle */}
       <button

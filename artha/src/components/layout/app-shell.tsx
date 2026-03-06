@@ -2,27 +2,33 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { Sidebar } from "./sidebar";
 import { TopBar } from "./topbar";
 import { WatchlistPanel } from "./WatchlistPanel";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useWatchlist } from "@/contexts/watchlist-context";
 import { cn } from "@/lib/utils";
+import { DEFAULT_WATCHLIST_CONFIG, getWatchlistPanelWidth, type WatchlistConfig } from "@/components/charting/widgets/WatchlistPanel";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { isWatchlistOpen } = useWatchlist();
+  const [watchlistConfig, setWatchlistConfig] = useState<WatchlistConfig>(DEFAULT_WATCHLIST_CONFIG);
+  const watchlistWidth = isWatchlistOpen ? getWatchlistPanelWidth(watchlistConfig) : 0;
   useKeyboardShortcuts();
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-[var(--background)]">
+    <div className="min-h-screen bg-[var(--background)]">
       <TopBar />
-      <div className="flex flex-1 overflow-hidden relative">
+      <div className="relative flex min-h-[calc(100vh-4rem)]">
         <Sidebar />
-        <main className={cn(
-          "flex-1 overflow-y-auto z-0 relative transition-all duration-300 ease-in-out",
-          isWatchlistOpen ? "mr-96" : "mr-0"
-        )}>
+        <main
+          className={cn(
+            "relative z-0 flex-1 transition-all duration-300 ease-in-out"
+          )}
+          style={{ marginRight: watchlistWidth }}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={pathname}
@@ -30,7 +36,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="w-full h-full p-8 flex justify-center"
+              className="flex w-full justify-center p-8"
             >
               <div className="w-full max-w-[1400px]">
                 {children}
@@ -38,7 +44,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </motion.div>
           </AnimatePresence>
         </main>
-        <WatchlistPanel />
+        <WatchlistPanel config={watchlistConfig} onConfigChange={setWatchlistConfig} />
       </div>
     </div>
   );

@@ -205,14 +205,17 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
 
   return (
     <section id="chart" className="scroll-mt-28 space-y-0">
-      <div className="rounded-xl border overflow-hidden" style={{ background: 'var(--surface)', borderColor: 'var(--border)' }}>
+      <div className="overflow-hidden rounded-2xl border shadow-sm" style={{ background: 'color-mix(in srgb, var(--surface) 96%, transparent)', borderColor: 'var(--border)' }}>
 
         {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center justify-between flex-wrap gap-3 px-5 py-4 border-b" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-3">
-            <h2 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Price Chart</h2>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Market Structure</div>
+              <h2 className="mt-1 text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Price Chart</h2>
+            </div>
             {currentPrice != null && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ background: 'var(--background)', borderColor: 'var(--border)' }}>
                 <span className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
                   ₹{currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
@@ -227,12 +230,12 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
 
           <div className="flex items-center gap-2 flex-wrap">
             {/* Period selector */}
-            <div className="flex bg-muted/20 p-0.5 rounded-lg border border-border">
+            <div className="flex rounded-xl border border-border bg-muted/20 p-0.5">
               {QUICK_PERIODS.map(p => (
                 <button
                   key={p.label}
                   onClick={() => handlePeriodSelect(p.label)}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                     selectedPeriod === p.label
                       ? 'bg-background shadow-sm text-foreground border border-border'
                       : 'text-muted-foreground hover:text-foreground'
@@ -246,17 +249,17 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
             {/* Full chart button */}
             <button
               onClick={handleOpenFullChart}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:border-amber-500/50 transition-all"
+              className="flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/40 hover:border-amber-500/50 transition-all"
               title="Toggle fullscreen mode"
             >
               <Maximize2 size={12} />
-              Fullscreen
+              Open Full Chart
             </button>
           </div>
         </div>
 
         {/* Chart canvas */}
-        <div className="relative" style={{ height: 360 }}>
+        <div className="relative" style={{ height: 400 }}>
           <div ref={canvasRef} className="w-full h-full" />
 
           {loading && (
@@ -279,10 +282,13 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
         </div>
 
         {/* Footer hint */}
-        <div className="px-5 py-2 border-t flex items-center justify-end" style={{ borderColor: 'var(--border)' }}>
+        <div className="flex items-center justify-between border-t px-5 py-3" style={{ borderColor: 'var(--border)' }}>
+          <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+            Review long-range structure here, then switch to fullscreen for indicators, drawings, and layouts.
+          </div>
           <button
             onClick={handleOpenFullChart}
-            className="text-[10px] text-amber-500 hover:text-amber-400 font-medium transition-colors"
+            className="text-[11px] text-amber-500 hover:text-amber-400 font-medium transition-colors"
           >
             Open full charting mode →
           </button>

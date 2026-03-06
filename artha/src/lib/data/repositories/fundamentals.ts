@@ -337,11 +337,14 @@ export class FundamentalsRepository extends BaseRepository {
         if (scrRow?.cash_from_operating) {
             return { net_cash_operating: scrRow.cash_from_operating };
         }
-        const msiRow = this.db.queryOne<{ net_cash_operating: number | null }>(
-            `SELECT net_cash_operating FROM src_msi_cash_flows WHERE asset_id = ?
+        const msiRow = this.db.queryOne<{ cfo: number | null }>(
+            `SELECT cfo FROM fundamentals WHERE asset_id = ?
              ORDER BY period_end_date DESC LIMIT 1`,
             [assetId]
         );
-        return msiRow ?? null;
+        if (msiRow?.cfo != null) {
+            return { net_cash_operating: msiRow.cfo };
+        }
+        return null;
     }
 }
