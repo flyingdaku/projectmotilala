@@ -478,7 +478,7 @@ class CogencisFundamentalsIngester(SourceIngester):
 
     def _ensure_session(self):
         if self._session is None:
-            self._session = create_cogencis_session()
+            self._session = create_cogencis_session(prime=True)
 
     def _scrape_asset(self, asset_id: str, company_url: str, conn: DatabaseConnection) -> int:
         self._ensure_session()

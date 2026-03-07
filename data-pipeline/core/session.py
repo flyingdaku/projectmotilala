@@ -107,7 +107,12 @@ def create_amfi_session() -> requests.Session:
 def create_cogencis_session(prime: bool = False) -> requests.Session:
     session = requests.Session()
     session.headers.update({
-        **_DEFAULT_HEADERS,
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Encoding": "gzip, deflate, br",
+        "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
+        "Connection": "keep-alive",
+        "DNT": "1",
         "Referer": os.getenv("COGENCIS_REFERER", "https://iinvest.cogencis.com/"),
     })
     cookie_header = os.getenv("COGENCIS_COOKIE", "").strip()
@@ -123,6 +128,9 @@ def create_cogencis_session(prime: bool = False) -> requests.Session:
     if bearer_token:
         session.headers["Authorization"] = f"Bearer {bearer_token}"
     session.headers.setdefault("Origin", "https://iinvest.cogencis.com")
+    session.headers.setdefault("Sec-Fetch-Dest", "empty")
+    session.headers.setdefault("Sec-Fetch-Mode", "cors")
+    session.headers.setdefault("Sec-Fetch-Site", "same-site")
     if prime:
         prime_url = os.getenv("COGENCIS_PRIME_URL", "https://iinvest.cogencis.com/")
         try:
