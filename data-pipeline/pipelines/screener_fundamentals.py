@@ -83,33 +83,10 @@ def fetch_screener_data(identifier: str) -> Dict[str, List[Dict]]:
         logger.debug(f"[SCREENER] Loading {identifier} from cache")
         html = cache_path.read_text(encoding="utf-8")
 
-    # 2. Fallback: live fetch
+    # 2. Skip live fetch for now (to avoid IP blocks)
+    # We only process if it was pre-fetched
     if not html:
-        for attempt in range(1, 4):
-            for url in [
-                f"https://www.screener.in/company/{identifier}/consolidated/",
-                f"https://www.screener.in/company/{identifier}/",
-            ]:
-                try:
-                    resp = requests.get(url, headers=HEADERS, timeout=20)
-                    if resp.status_code == 429:
-                        wait = 30 * attempt
-                        logger.warning(f"[SCREENER] {identifier} 429 - waiting {wait}s...")
-                        time.sleep(wait)
-                        break # Try again from start of URL list after wait
-                    if resp.status_code == 404:
-                        continue
-                    resp.raise_for_status()
-                    html = resp.text
-                    # Save for future runs
-                    cache_path.write_text(html, encoding="utf-8")
-                    break
-                except Exception as e:
-                    logger.warning(f"[SCREENER] fetch failed for {identifier} (attempt {attempt}): {e}")
-            if html:
-                break
-
-    if not html:
+        logger.debug(f"[SCREENER] {identifier} not in cache, skipping")
         return {}
 
     try:
