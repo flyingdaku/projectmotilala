@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Home, PieChart, Target, Search, Layers, BarChart2,
   Wrench, History, Activity, ChevronLeft, ChevronRight, Bell,
-  Globe, Settings, Sun, Moon, Monitor
+  Globe, Settings
 } from "lucide-react";
-import { useTheme } from "@/contexts/theme-context";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -131,17 +130,6 @@ const CATEGORIES = [
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const { theme, setTheme } = useTheme();
-  useEffect(() => setMounted(true), []);
-
-  const ThemeIcon = { light: Sun, dark: Moon, system: Monitor }[theme] ?? Monitor;
-
-  const cycleTheme = () => {
-    const order = ["light", "dark", "system"] as const;
-    const next = order[(order.indexOf(theme) + 1) % order.length];
-    setTheme(next);
-  };
 
   const defaultExpanded = CATEGORIES.filter(cat =>
     cat.items.some(item => pathname.startsWith(item.href))
@@ -150,12 +138,12 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "flex flex-col h-full border-r transition-all duration-300 ease-in-out shrink-0 app-nav-theme relative z-20",
+        "app-nav-theme sticky top-14 z-20 flex h-[calc(100vh-3.5rem)] shrink-0 flex-col border-r border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(250,250,249,0.96)_100%)] shadow-[0_10px_30px_rgba(10,15,28,0.06)] backdrop-blur-xl transition-all duration-300 ease-in-out",
         collapsed ? "w-16" : "w-[220px]"
       )}
       style={{ borderColor: "var(--nav-border)" }}
     >
-      <ScrollArea className="flex-1 py-4">
+      <ScrollArea className="min-h-0 flex-1 py-4">
         <div className="px-2 space-y-0.5">
           {MAIN_NAV_ITEMS.map((item) => {
             const isActive = pathname === item.href ||
@@ -183,7 +171,7 @@ export function Sidebar() {
               type="single"
               collapsible
               defaultValue={defaultExpanded}
-              className="space-y-0.5"
+              className="space-y-1"
             >
               {CATEGORIES.map(({ id, icon: Icon, title, items }) => {
                 const isActiveCategory = items.some(item => pathname.startsWith(item.href));
@@ -191,18 +179,18 @@ export function Sidebar() {
                   <AccordionItem value={id} key={id} className="border-none">
                     <AccordionTrigger
                       className={cn(
-                        "py-2 px-3 rounded-md hover:no-underline transition-colors duration-150 hover:bg-white/10",
-                        isActiveCategory && "bg-white/10"
+                        "rounded-xl px-3 py-2.5 hover:no-underline transition-colors duration-150",
+                        isActiveCategory ? "bg-[var(--accent-subtle)]" : "hover:bg-[var(--nav-hover-bg)]"
                       )}
                       style={{ color: "var(--nav-text)" }}
                     >
                       <span className="flex items-center gap-2.5">
                         <Icon size={15} className="shrink-0 opacity-80" />
-                        <span className="text-[12.5px] font-medium tracking-tight">{title}</span>
+                        <span className="text-[12.5px] font-semibold tracking-tight">{title}</span>
                       </span>
                     </AccordionTrigger>
                     <AccordionContent className="pb-1 pt-0.5">
-                      <div className="flex flex-col gap-0.5 ml-5 pl-2.5 border-l border-white/15">
+                      <div className="ml-5 flex flex-col gap-1 border-l pl-3" style={{ borderColor: "rgba(245,158,11,0.16)" }}>
                         {items.map(item => {
                           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                           return (
@@ -210,10 +198,10 @@ export function Sidebar() {
                               key={item.href}
                               href={item.href}
                               className={cn(
-                                "px-2.5 py-1.5 text-[13.5px] rounded-md transition-colors duration-150 leading-tight font-medium",
+                                "rounded-lg px-2.5 py-1.5 text-[13px] font-medium leading-tight transition-colors duration-150",
                                 isActive
-                                  ? "bg-white/15 text-white"
-                                  : "text-black hover:bg-white/10 hover:text-black"
+                                  ? "bg-[var(--accent-subtle)] text-[var(--accent-dark)]"
+                                  : "text-[color:var(--nav-text-muted)] hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text)]"
                               )}
                             >
                               {item.label}
@@ -236,8 +224,8 @@ export function Sidebar() {
                     onClick={() => setCollapsed(false)}
                     title={title}
                     className={cn(
-                      "flex items-center justify-center w-full p-2 rounded-md transition-colors duration-150 h-9",
-                      isActiveCategory ? "bg-white/15" : "hover:bg-white/10"
+                      "flex h-9 w-full items-center justify-center rounded-xl p-2 transition-colors duration-150",
+                      isActiveCategory ? "bg-[var(--accent-subtle)] text-[var(--accent-dark)]" : "hover:bg-[var(--nav-hover-bg)]"
                     )}
                     style={{ color: "var(--nav-text)" }}
                   >
@@ -250,35 +238,7 @@ export function Sidebar() {
         </div>
       </ScrollArea>
 
-      <div className="p-2 border-t space-y-0.5" style={{ borderColor: "var(--nav-border)" }}>
-        {/* User controls */}
-        {!collapsed && (
-          <div className="px-2 py-1">
-            <div className="flex items-center gap-1">
-              {/* Notifications */}
-              <Link href="/feed"
-                className="flex items-center justify-center w-8 h-8 rounded-md transition-colors hover:bg-white/10"
-                style={{ color: "var(--nav-text-muted)" }} title="My Feed">
-                <Bell size={16} />
-              </Link>
-
-              {/* Theme toggle */}
-              <button onClick={cycleTheme}
-                className="flex items-center justify-center w-8 h-8 rounded-md transition-colors hover:bg-white/10"
-                style={{ color: "var(--nav-text-muted)" }}
-                title={`Theme: ${theme}`}>
-                <ThemeIcon size={16} />
-              </button>
-
-              {/* Avatar */}
-              <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold select-none cursor-pointer bg-white/20"
-                style={{ color: "#000" }} title="Profile">
-                RK
-              </div>
-            </div>
-          </div>
-        )}
-
+      <div className="border-t p-2 space-y-1" style={{ borderColor: "var(--nav-border)" }}>
         <NavItem
           icon={Settings}
           label="Settings"
@@ -288,7 +248,7 @@ export function Sidebar() {
         />
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="w-full flex items-center justify-center p-2 rounded-md transition-colors duration-150 hover:bg-white/10"
+          className="flex w-full items-center justify-center rounded-xl p-2 transition-colors duration-150 hover:bg-[var(--nav-hover-bg)]"
           style={{ color: "var(--nav-text-muted)" }}
           title={collapsed ? "Expand" : "Collapse"}
         >
@@ -317,13 +277,13 @@ function NavItem({
       href={href}
       title={collapsed ? label : undefined}
       className={cn(
-        "flex items-center gap-2.5 px-3 py-2 rounded-md text-[13.5px] font-semibold transition-colors duration-150 h-9",
+        "flex h-9 items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-semibold transition-colors duration-150",
         collapsed && "justify-center px-0",
         active
-          ? "bg-white/15 text-white"
-          : "hover:bg-white/10"
+          ? "bg-[var(--accent-subtle)] text-[var(--accent-dark)]"
+          : "hover:bg-[var(--nav-hover-bg)]"
       )}
-      style={{ color: active ? "#fff" : "var(--nav-text)" }}
+      style={{ color: active ? "var(--accent-dark)" : "var(--nav-text)" }}
     >
       <Icon size={15} strokeWidth={active ? 2.5 : 2} className="shrink-0" />
       {!collapsed && <span className="truncate tracking-tight">{label}</span>}

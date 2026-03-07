@@ -1,19 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { Building2, Users, Globe, Star, TrendingUp, AlertTriangle, ChevronDown, ChevronUp, Award } from "lucide-react";
+import { Building2, Users, Globe, TrendingUp, Award } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { CompanyProfile } from "@/lib/data/types";
 import type { StockDetail } from "@/lib/data";
-import { getSectorEmoji, getIndustryGroupEmoji } from "@/lib/utils/emojis";
 
 const SEGMENT_COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#8B5CF6", "#EF4444", "#F97316", "#06B6D4"];
-
-const SEVERITY_COLORS: Record<string, string> = {
-  high: "#EF4444",
-  medium: "#F59E0B",
-  low: "#10B981",
-};
 
 interface Props {
   stock: StockDetail;
@@ -21,111 +13,22 @@ interface Props {
 }
 
 export function OverviewSection({ stock, profile }: Props) {
-  const [showAnalyst, setShowAnalyst] = useState(false);
-
   const segments = profile?.businessSegments ?? [];
-  const riskTags = profile?.riskTags ?? [];
   const indexMemberships = profile?.indexMemberships ?? [];
-  const thesis = profile?.investmentThesis ?? [];
 
   return (
-    <section id="overview" className="scroll-mt-28 space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Business Summary */}
-        <div
-          className="lg:col-span-2 p-6 rounded-xl border space-y-4"
-          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-        >
-          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
-            About {stock.name}
-          </h2>
-
-          {profile?.descriptionShort ? (
-            <p className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              {profile.descriptionShort}
-            </p>
-          ) : (
-            <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-              {stock.sector && stock.industry
-                ? (
-                  <span>
-                    {stock.name} operates in the <strong>{getIndustryGroupEmoji(stock.industry)} {stock.industry}</strong> segment of the <strong>{getSectorEmoji(stock.sector)} {stock.sector}</strong> sector.
-                  </span>
-                )
-                : `${stock.name} is a listed company on NSE/BSE.`}
-            </p>
-          )}
-
-          {profile?.descriptionAnalyst && (
-            <div>
-              <button
-                onClick={() => setShowAnalyst((v) => !v)}
-                className="flex items-center gap-1 text-xs font-medium transition-colors"
-                style={{ color: "var(--accent-brand)" }}
-              >
-                {showAnalyst ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                {showAnalyst ? "Show less" : "Read analyst summary"}
-              </button>
-              {showAnalyst && (
-                <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                  {profile.descriptionAnalyst}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Risk Tags */}
-          {riskTags.length > 0 && (
-            <div className="flex flex-wrap gap-2 pt-2">
-              {riskTags.map((tag, i) => (
-                <span
-                  key={i}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-                  style={{
-                    background: `${SEVERITY_COLORS[tag.severity]}18`,
-                    color: SEVERITY_COLORS[tag.severity],
-                    border: `1px solid ${SEVERITY_COLORS[tag.severity]}40`,
-                  }}
-                >
-                  <AlertTriangle size={10} />
-                  {tag.label}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Investment Thesis */}
-          {thesis.length > 0 && (
-            <div
-              className="mt-4 p-4 rounded-lg border-l-4"
-              style={{ borderLeftColor: "var(--accent-brand)", background: "var(--accent-subtle)" }}
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <Star size={14} style={{ color: "var(--accent-brand)" }} />
-                <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--accent-brand)" }}>
-                  Investment Thesis
-                </span>
-              </div>
-              <ul className="space-y-1.5">
-                {thesis.map((point, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--accent-brand)" }} />
-                    {point}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+    <section id="overview" className="scroll-mt-28 space-y-0">
+      <div className="overflow-hidden rounded-2xl border shadow-sm" style={{ background: "color-mix(in srgb, var(--surface) 96%, transparent)", borderColor: "var(--border)" }}>
+        <div className="border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>Company Snapshot</div>
+          <h2 className="mt-1 text-base font-semibold" style={{ color: "var(--text-primary)" }}>Overview</h2>
         </div>
-
-        {/* Key Facts + Segments */}
-        <div className="space-y-4">
-          {/* Key Facts */}
+        <div className="grid gap-4 p-5 xl:grid-cols-2">
           <div
-            className="p-5 rounded-xl border"
+            className="rounded-xl border p-5"
             style={{ background: "var(--surface)", borderColor: "var(--border)" }}
           >
-            <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+            <h3 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
               Key Facts
             </h3>
             <dl className="space-y-3">
@@ -213,13 +116,12 @@ export function OverviewSection({ stock, profile }: Props) {
             </dl>
           </div>
 
-          {/* Business Segment Donut */}
-          {segments.length > 0 && (
+          {segments.length > 0 ? (
             <div
-              className="p-5 rounded-xl border"
+              className="rounded-xl border p-5"
               style={{ background: "var(--surface)", borderColor: "var(--border)" }}
             >
-              <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+              <h3 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                 Revenue Mix
               </h3>
               <div className="h-44">
@@ -258,6 +160,18 @@ export function OverviewSection({ stock, profile }: Props) {
                   </li>
                 ))}
               </ul>
+            </div>
+          ) : (
+            <div
+              className="rounded-xl border p-5"
+              style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+            >
+              <h3 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                Revenue Mix
+              </h3>
+              <div className="flex h-[234px] items-center justify-center rounded-xl border border-dashed text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--surface-elevated)" }}>
+                Revenue mix data is not available.
+              </div>
             </div>
           )}
         </div>

@@ -60,40 +60,46 @@ export function SectionNav() {
 
   return (
     <nav
-      className="sticky top-14 z-30 w-[calc(100%+64px)] -mx-8 px-8 py-3 backdrop-blur"
-      style={{ background: "color-mix(in srgb, var(--background) 82%, transparent)", borderColor: "var(--border)" }}
+      className="sticky top-14 z-40 border-b px-6 backdrop-blur-xl"
+      style={{ background: "color-mix(in srgb, var(--background) 94%, transparent)", borderColor: "var(--border)" }}
     >
       {/* Desktop nav */}
-      <div className="hidden md:flex items-center gap-1 rounded-2xl border px-2.5 py-2 overflow-x-auto max-w-[1400px] mx-auto shadow-sm"
-        style={{ background: "color-mix(in srgb, var(--surface) 90%, transparent)", borderColor: "var(--border)" }}>
+      <div className="mx-auto hidden max-w-[1600px] md:block">
+        <div className="flex items-center gap-8 overflow-x-auto">
         {SECTIONS.map((s) => (
           <button
             key={s.id}
             onClick={() => scrollTo(s.id)}
-            className={`px-4 py-2.5 text-sm font-medium whitespace-nowrap rounded-xl transition-all ${active === s.id
-              ? "text-[var(--accent-brand)] shadow-sm"
-              : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+            className={`whitespace-nowrap border-b-[3px] px-0 py-3 text-sm transition-colors ${active === s.id
+              ? "font-semibold"
+              : "font-medium"
               }`}
-            style={active === s.id ? { background: "var(--accent-subtle)", border: "1px solid rgba(245,158,11,0.22)" } : undefined}
+            style={active === s.id
+              ? {
+                  color: "var(--text-primary)",
+                  borderBottomColor: "var(--text-primary)",
+                }
+              : { color: "var(--text-muted)", borderBottomColor: "transparent" }}
           >
             {s.label}
           </button>
         ))}
+        </div>
       </div>
 
       {/* Mobile nav — "Jump to section" dropdown */}
-      <div className="md:hidden">
+      <div className="mx-auto max-w-[1600px] md:hidden">
         <button
           onClick={() => setMobileOpen((o) => !o)}
-          className="flex items-center justify-between w-full px-4 py-3 rounded-2xl border text-sm font-medium shadow-sm"
-          style={{ borderColor: "var(--border)", color: "var(--text-primary)", background: "color-mix(in srgb, var(--surface) 92%, transparent)" }}
+          className="flex w-full items-center justify-between px-0 py-3 text-sm font-medium"
+          style={{ color: "var(--text-primary)" }}
         >
-          <span>Jump to: <span style={{ color: "var(--accent-brand)" }}>{activeLabel}</span></span>
+          <span>Jump to: <span style={{ color: "var(--text-primary)" }}>{activeLabel}</span></span>
           <ChevronDown size={16} className={`transition-transform ${mobileOpen ? "rotate-180" : ""}`} />
         </button>
         {mobileOpen && (
           <div
-            className="mt-2 rounded-2xl border overflow-hidden shadow-lg"
+            className="mt-2 overflow-hidden rounded-xl border"
             style={{ background: "var(--surface)", borderColor: "var(--border)" }}
           >
             {SECTIONS.map((s) => (
@@ -105,8 +111,8 @@ export function SectionNav() {
                   : "hover:bg-[var(--surface-elevated)]"
                   }`}
                 style={{
-                  color: active === s.id ? "var(--accent-brand)" : "var(--text-primary)",
-                  background: active === s.id ? "var(--accent-subtle)" : undefined,
+                  color: active === s.id ? "var(--text-primary)" : "var(--text-primary)",
+                  background: active === s.id ? "var(--surface-elevated)" : undefined,
                 }}
               >
                 {s.label}

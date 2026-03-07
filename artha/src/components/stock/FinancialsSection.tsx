@@ -178,45 +178,46 @@ export function FinancialsSection({ symbol }: Props) {
         </div>
       )}
 
-      {/* Global Controls */}
-      <div className="flex justify-end">
-        <div className="flex bg-muted/20 p-0.5 rounded-lg border border-border">
-          {["Consol.", "Standalone"].map((m, idx) => (
-            <button key={m} onClick={() => setIsConsolidated(idx === 0)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${isConsolidated === (idx === 0) ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}>
-              {m}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* P&L Pane */}
-      <div id="financials" className="scroll-mt-28">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <DollarSign size={20} style={{ color: "var(--accent-brand)" }} />
-            <h2 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Profit & Loss</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => data && exportAllFinancials(data.quarterly, data.balanceSheets, data.cashFlows, symbol)}
-              className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5"
-              style={{ background: "var(--accent-subtle)", color: "var(--accent-brand)" }}
-              disabled={!data}
-            >
-              <Download size={14} />
-              Export CSV
-            </button>
-            {["quarterly", "annual"].map((m) => (
-              <button key={m} onClick={() => setViewMode(m as any)}
-                className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize ${viewMode === m ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}>
+      <div className="rounded-xl border p-6" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        {/* Global Controls */}
+        <div className="mb-6 flex justify-end">
+          <div className="flex bg-muted/20 p-0.5 rounded-lg border border-border">
+            {["Consol.", "Standalone"].map((m, idx) => (
+              <button key={m} onClick={() => setIsConsolidated(idx === 0)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${isConsolidated === (idx === 0) ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}>
                 {m}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="space-y-6">
+        {/* P&L Pane */}
+        <div id="financials" className="scroll-mt-28">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <DollarSign size={20} style={{ color: "var(--accent-brand)" }} />
+              <h2 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>Profit & Loss</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => data && exportAllFinancials(data.quarterly, data.balanceSheets, data.cashFlows, symbol)}
+                className="px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5"
+                style={{ background: "var(--accent-subtle)", color: "var(--accent-brand)" }}
+                disabled={!data}
+              >
+                <Download size={14} />
+                Export CSV
+              </button>
+              {["quarterly", "annual"].map((m) => (
+                <button key={m} onClick={() => setViewMode(m as any)}
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize ${viewMode === m ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}>
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-6">
           {/* Margin Waterfall Chart */}
           {data && data.quarterly.length > 0 && data.quarterly[0].revenue && data.quarterly[0].operatingProfit && data.quarterly[0].netProfit && (
             <div className="p-4 rounded-lg" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
@@ -305,6 +306,7 @@ export function FinancialsSection({ symbol }: Props) {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Balance Sheet Pane */}

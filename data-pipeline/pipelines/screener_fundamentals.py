@@ -60,6 +60,7 @@ def _parse_screener_table(soup: BeautifulSoup, table_id: str) -> List[Dict]:
     return list(period_rows.values())
 
 SCREENER_CACHE_DIR = Path(__file__).resolve().parent.parent / "raw_data" / "SCREENER"
+print(f"DEBUG: SCREENER_CACHE_DIR = {SCREENER_CACHE_DIR}")
 
 
 def _screener_cache_path(identifier: str) -> Path:
@@ -167,7 +168,7 @@ def run_screener_fundamentals(trade_date: date):
             if not period_date: continue
             with get_db() as dml_conn:
                 dml_conn.execute("""
-                    INSERT OR REPLACE INTO screener_quarterly (
+                    INSERT OR REPLACE INTO src_screener_quarterly (
                         id, asset_id, period_end_date, sales, expenses, operating_profit, opm_pct, pbt, tax_pct, net_profit, eps
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -183,7 +184,7 @@ def run_screener_fundamentals(trade_date: date):
             if not period_date: continue
             with get_db() as dml_conn:
                 dml_conn.execute("""
-                    INSERT OR REPLACE INTO screener_balance_sheet (
+                    INSERT OR REPLACE INTO src_screener_balance_sheet (
                         id, asset_id, period_end_date, share_capital, reserves, borrowings, other_liabilities, fixed_assets, cwip, investments, other_assets, total_assets
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -199,7 +200,7 @@ def run_screener_fundamentals(trade_date: date):
             if not period_date: continue
             with get_db() as dml_conn:
                 dml_conn.execute("""
-                    INSERT OR REPLACE INTO screener_cashflow (
+                    INSERT OR REPLACE INTO src_screener_cashflow (
                         id, asset_id, period_end_date, cash_from_operating, cash_from_investing, cash_from_financing, net_cash_flow
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (
@@ -209,4 +210,4 @@ def run_screener_fundamentals(trade_date: date):
                 ))
 
         logger.info(f"[SCREENER] Updated {identifier}")
-        time.sleep(1) 
+        time.sleep(1)

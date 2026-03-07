@@ -8,31 +8,6 @@ import {
 import { TrendingUp, BarChart2, Zap } from "lucide-react";
 import type { FactorExposure, EarningsQuality, ComputedRatios } from "@/lib/data/types";
 
-function ScoreGauge({ score, label }: { score: number | null; label: string }) {
-  const pct = score ?? 0;
-  const color = pct >= 70 ? "#10B981" : pct >= 40 ? "#F59E0B" : "#EF4444";
-  const r = 36;
-  const circ = 2 * Math.PI * r;
-  const dashLen = (pct / 100) * circ;
-
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative w-24 h-24">
-        <svg className="w-full h-full -rotate-90" viewBox="0 0 88 88">
-          <circle cx="44" cy="44" r={r} stroke="var(--border)" strokeWidth="6" fill="none" />
-          <circle cx="44" cy="44" r={r} stroke={color} strokeWidth="6" fill="none"
-            strokeDasharray={`${dashLen} ${circ}`} strokeLinecap="round" />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-xl font-bold font-mono" style={{ color }}>{score?.toFixed(0) ?? "—"}</span>
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>/100</span>
-        </div>
-      </div>
-      <span className="text-xs font-medium text-center" style={{ color: "var(--text-secondary)" }}>{label}</span>
-    </div>
-  );
-}
-
 interface Props {
   symbol: string;
 }
@@ -116,31 +91,6 @@ export function AnalyticsSection({ symbol }: Props) {
 
   return (
     <section id="analytics" className="scroll-mt-28 space-y-4">
-      {/* Scores Row */}
-      <div className="p-6 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <h2 className="text-base font-semibold mb-6" style={{ color: "var(--text-primary)" }}>Quality Scores</h2>
-        <div className="flex flex-wrap justify-around gap-6">
-          <ScoreGauge score={data?.ratios?.qualityScore ?? null} label="Overall Quality" />
-          <ScoreGauge score={data?.earningsQuality?.overallScore ?? null} label="Earnings Quality" />
-          <ScoreGauge
-            score={data?.earningsQuality?.cfoPatRatio != null ? Math.min(100, (data.earningsQuality.cfoPatRatio) * 70) : null}
-            label="Cash Conversion"
-          />
-        </div>
-
-        {/* Earnings Quality Flags */}
-        {(data?.earningsQuality?.flags?.length ?? 0) > 0 && (
-          <div className="mt-4 pt-4 border-t space-y-1" style={{ borderColor: "var(--border)" }}>
-            {(data!.earningsQuality!.flags ?? []).map((flag, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs text-yellow-400">
-                <Zap size={11} />
-                {flag}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Valuation Band Chart */}
       <div className="p-6 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">

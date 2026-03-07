@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { ArrowUpDown, ChevronDown, Plus, Settings, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Plus, Settings, Trash2 } from 'lucide-react';
 import { useChartStore } from '../store/useChartStore';
 import { cn } from '@/lib/utils';
 import { getIndustryGroupEmoji } from '@/lib/utils/emojis';
@@ -89,15 +89,15 @@ export interface WatchlistConfig {
   marketCap: WatchlistColumnConfig;
 }
 
-const WATCHLIST_PANEL_SYMBOL_WIDTH = 152;
-const WATCHLIST_PANEL_INDUSTRY_WIDTH = 34;
-const WATCHLIST_PANEL_CHANGE_WIDTH = 84;
-const WATCHLIST_PANEL_PRICE_WIDTH = 98;
-const WATCHLIST_PANEL_PADDING_WIDTH = 24;
+const WATCHLIST_PANEL_SYMBOL_WIDTH = 136;
+const WATCHLIST_PANEL_INDUSTRY_WIDTH = 28;
+const WATCHLIST_PANEL_CHANGE_WIDTH = 76;
+const WATCHLIST_PANEL_PRICE_WIDTH = 90;
+const WATCHLIST_PANEL_PADDING_WIDTH = 16;
 const WATCHLIST_MAX_CUSTOM_COLUMNS = 10;
 
 const WATCHLIST_METRICS: WatchlistMetricDefinition[] = [
-  { key: 'rvol1', label: 'RVOL', shortLabel: 'RVOL', width: 88, kind: 'number', periodOptions: [1, 5, 10, 20] },
+  { key: 'rvol1', label: 'RVol', shortLabel: 'RVol', width: 88, kind: 'number', periodOptions: [1, 5, 10, 20] },
   { key: 'atr', label: 'ATR', shortLabel: 'ATR', width: 88, kind: 'number', periodOptions: [7, 14, 21] },
   { key: 'natr', label: 'NATR', shortLabel: 'NATR', width: 88, kind: 'percent', periodOptions: [7, 14, 21] },
   { key: 'pe', label: 'P/E', shortLabel: 'P/E', width: 82, kind: 'multiple' },
@@ -114,6 +114,9 @@ const WATCHLIST_METRICS: WatchlistMetricDefinition[] = [
 const METRIC_DEFINITIONS = Object.fromEntries(
   WATCHLIST_METRICS.map((metric) => [metric.key, metric])
 ) as Record<WatchlistMetricKey, WatchlistMetricDefinition>;
+
+const TECHNICAL_METRIC_KEYS: WatchlistMetricKey[] = ['rvol1', 'atr', 'natr'];
+const FUNDAMENTAL_METRIC_KEYS: WatchlistMetricKey[] = ['pe', 'pb', 'roe', 'roce', 'debtToEquity', 'dividendYield', 'salesGrowth', 'profitGrowth', 'marketCap'];
 
 export const DEFAULT_WATCHLIST: WatchItem[] = [
   { symbol: 'RELIANCE', name: 'Reliance Industries', price: 2984.5, change: 1.23, industryGroup: 'Oil&Gas-Integrated', rvol1: 1.84, atr: 72.4, natr: 2.43, pe: 28.1, pb: 2.1, roe: 8.4, roce: 9.8, debtToEquity: 0.34, dividendYield: 0.37, salesGrowth: 11.6, profitGrowth: 7.8, marketCap: 2015 },
@@ -208,6 +211,18 @@ function getSortValue(item: WatchItem, sortKey: SortKey) {
   return item[sortKey];
 }
 
+function SortArrow({ active, direction }: { active: boolean; direction: 'asc' | 'desc' }) {
+  if (!active) {
+    return <ChevronDown size={11} className="text-foreground/70" />;
+  }
+
+  if (direction === 'asc') {
+    return <ChevronUp size={11} className="text-foreground" />;
+  }
+
+  return <ChevronDown size={11} className="text-foreground" />;
+}
+
 export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose }: WatchlistPanelProps) {
   const { symbol: activeSymbol, setSymbol } = useChartStore();
   const [sortKey, setSortKey] = useState<SortKey>('change');
@@ -222,6 +237,15 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
     [selectedWatchlistIds, watchlists]
   );
   const activeWatchlist = activeWatchlists[0] ?? watchlists[0];
+  const industryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    (activeWatchlist?.items ?? []).forEach((item) => {
+      counts.set(item.industryGroup, (counts.get(item.industryGroup) ?? 0) + 1);
+    });
+
+    return counts;
+  }, [activeWatchlist]);
   const gridTemplateColumns = useMemo(() => {
     const segments = [`${WATCHLIST_PANEL_SYMBOL_WIDTH}px`];
 
@@ -233,8 +257,8 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
       segments.push(`${metric.width}px`);
     });
 
-    segments.push(`${WATCHLIST_PANEL_CHANGE_WIDTH}px`);
     segments.push(`${WATCHLIST_PANEL_PRICE_WIDTH}px`);
+    segments.push(`${WATCHLIST_PANEL_CHANGE_WIDTH}px`);
     return segments.join(' ');
   }, [config.industryIcon.enabled, enabledMetricColumns]);
 
@@ -242,6 +266,20 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
     const items = [...(activeWatchlist?.items ?? [])];
 
     items.sort((left, right) => {
+      if (sortKey === 'industryGroup') {
+        const leftCount = industryCounts.get(left.industryGroup) ?? 0;
+        const rightCount = industryCounts.get(right.industryGroup) ?? 0;
+
+        if (leftCount !== rightCount) {
+          return sortDirection === 'asc' ? leftCount - rightCount : rightCount - leftCount;
+        }
+
+        const industryCompare = left.industryGroup.localeCompare(right.industryGroup);
+        if (industryCompare !== 0) {
+          return sortDirection === 'asc' ? industryCompare : -industryCompare;
+        }
+      }
+
       const leftValue = getSortValue(left, sortKey);
       const rightValue = getSortValue(right, sortKey);
 
@@ -257,7 +295,7 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
     });
 
     return items;
-  }, [activeWatchlist, sortDirection, sortKey]);
+  }, [activeWatchlist, industryCounts, sortDirection, sortKey]);
 
   function handleSelect(item: WatchItem) {
     setSymbol(item.symbol);
@@ -364,13 +402,13 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
       className="flex h-full flex-col overflow-hidden border-l border-border bg-background/95 shadow-2xl backdrop-blur"
       style={{ width: `${getWatchlistPanelWidth(config)}px` }}
     >
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="min-w-0 flex-1 pr-1">
+      <div className="flex items-center justify-between border-b border-border px-2 py-2">
+        <div className="min-w-0 flex-1 pr-0.5">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-full justify-between px-1.5 text-left text-sm font-semibold text-foreground">
+              <Button variant="ghost" className="h-7 w-[188px] justify-between gap-1 px-1 text-left text-[13px] font-semibold text-foreground">
                 <span className="truncate">{activeWatchlist?.name ?? 'Watchlist'}</span>
-                <ChevronDown size={16} />
+                <ChevronDown size={14} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[260px] p-1">
@@ -408,122 +446,132 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" title="Watchlist settings">
-                <Settings size={16} />
+              <Button variant="ghost" size="icon" className="h-7 w-7" title="Watchlist settings">
+                <Settings size={15} />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[360px] p-0">
+            <DropdownMenuContent align="end" className="w-[320px] p-0">
               <div className="p-3">
-                <DropdownMenuLabel className="px-0 pb-2 pt-0 text-foreground">Watchlist Columns</DropdownMenuLabel>
-                <div className="rounded-lg border border-border bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
-                  Symbol is fixed as the first column. %Change / LTP is fixed as the last column. Select up to {WATCHLIST_MAX_CUSTOM_COLUMNS} indicator columns.
-                </div>
+                <DropdownMenuLabel className="px-0 py-0 text-foreground">Watchlist Columns</DropdownMenuLabel>
               </div>
               <DropdownMenuSeparator />
               <div className="max-h-[420px] space-y-3 overflow-y-auto p-3">
                 <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
                   <div>
                     <div className="text-sm font-medium text-foreground">Industry Group</div>
-                    <div className="text-[11px] text-muted-foreground">Add the industry-group icon between symbol and indicators.</div>
                   </div>
                   <button
                     type="button"
                     onClick={() => updateColumnEnabled('industryIcon', !config.industryIcon.enabled)}
                     className={cn(
-                      'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
+                      'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors',
                       config.industryIcon.enabled
                         ? 'border-amber-500/40 bg-amber-500/10 text-amber-500'
                         : 'border-border text-muted-foreground hover:bg-muted/50'
                     )}
                   >
-                    {config.industryIcon.enabled ? 'Enabled' : 'Disabled'}
+                    {config.industryIcon.enabled && <Check size={12} />}
+                    <span>{config.industryIcon.enabled ? 'Include' : 'Exclude'}</span>
                   </button>
                 </div>
 
-                {WATCHLIST_METRICS.map((metric) => {
-                  const column = config[metric.key];
-                  const limitReached = !column.enabled && enabledIndicatorCount >= WATCHLIST_MAX_CUSTOM_COLUMNS;
+                {[
+                  { title: 'Technicals', keys: TECHNICAL_METRIC_KEYS },
+                  { title: 'Fundamentals', keys: FUNDAMENTAL_METRIC_KEYS },
+                ].map((section) => (
+                  <div key={section.title} className="space-y-2">
+                    <div className="px-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{section.title}</div>
+                    {section.keys.map((metricKey) => {
+                      const metric = METRIC_DEFINITIONS[metricKey];
+                      const column = config[metric.key];
+                      const limitReached = !column.enabled && enabledIndicatorCount >= WATCHLIST_MAX_CUSTOM_COLUMNS;
 
-                  return (
-                    <div key={metric.key} className="rounded-lg border border-border bg-background px-3 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-foreground">{metric.label}</div>
-                          <div className="text-[11px] text-muted-foreground">Width {metric.width}px</div>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={limitReached}
-                          onClick={() => updateColumnEnabled(metric.key, !column.enabled)}
-                          className={cn(
-                            'rounded-md border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                            column.enabled
-                              ? 'border-amber-500/40 bg-amber-500/10 text-amber-500'
-                              : 'border-border text-muted-foreground hover:bg-muted/50'
+                      return (
+                        <div key={metric.key} className="rounded-lg border border-border bg-background px-3 py-2.5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="text-sm font-medium text-foreground">{metric.label}</div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={limitReached}
+                              onClick={() => updateColumnEnabled(metric.key, !column.enabled)}
+                              className={cn(
+                                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
+                                column.enabled
+                                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-500'
+                                  : 'border-border text-muted-foreground hover:bg-muted/50'
+                              )}
+                            >
+                              {column.enabled && <Check size={12} />}
+                              <span>{column.enabled ? 'Included' : 'Include'}</span>
+                            </button>
+                          </div>
+
+                          {metric.periodOptions && (
+                            <div className="mt-2 grid grid-cols-[1fr_84px] items-center gap-2">
+                              <div className="text-[11px] text-muted-foreground">Parameter</div>
+                              <Select
+                                value={String(column.period ?? metric.periodOptions[0])}
+                                onChange={(event) => updateColumnPeriod(metric.key, Number(event.target.value))}
+                                className="h-7 text-xs"
+                              >
+                                {metric.periodOptions.map((option) => (
+                                  <option key={option} value={option}>{option}</option>
+                                ))}
+                              </Select>
+                            </div>
                           )}
-                        >
-                          {column.enabled ? 'Added' : 'Add'}
-                        </button>
-                      </div>
-
-                      {metric.periodOptions && (
-                        <div className="mt-3 grid grid-cols-[1fr_92px] items-center gap-3">
-                          <div className="text-[11px] text-muted-foreground">Parameter</div>
-                          <Select
-                            value={String(column.period ?? metric.periodOptions[0])}
-                            onChange={(event) => updateColumnPeriod(metric.key, Number(event.target.value))}
-                            className="h-8 text-xs"
-                          >
-                            {metric.periodOptions.map((option) => (
-                              <option key={option} value={option}>{option}</option>
-                            ))}
-                          </Select>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      <div className="grid items-center gap-1 border-b border-border bg-muted/30 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground" style={{ gridTemplateColumns }}>
-        <button type="button" onClick={() => handleSort('symbol')} className="flex min-w-0 items-center gap-1 text-left hover:text-foreground">
+      <div className="grid items-center gap-0.5 border-b border-border bg-muted/30 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground" style={{ gridTemplateColumns }}>
+        <button type="button" onClick={() => handleSort('symbol')} className="flex min-w-0 items-center gap-0.5 text-left hover:text-foreground">
           <span>Symbol</span>
-          <ArrowUpDown size={12} className={cn(sortKey === 'symbol' ? 'text-amber-500' : '')} />
+          <SortArrow active={sortKey === 'symbol'} direction={sortDirection} />
         </button>
 
         {config.industryIcon.enabled && (
-          <button type="button" onClick={() => handleSort('industryGroup')} className="flex items-center justify-center gap-1 text-center hover:text-foreground">
-            <span>Industry</span>
-            <ArrowUpDown size={12} className={cn(sortKey === 'industryGroup' ? 'text-amber-500' : '')} />
+          <button type="button" onClick={() => handleSort('industryGroup')} className="flex items-center justify-center gap-0.5 hover:text-foreground">
+            <span>Ind</span>
+            <SortArrow active={sortKey === 'industryGroup'} direction={sortDirection} />
           </button>
         )}
 
         {enabledMetricColumns.map((metric) => (
-          <button key={metric.key} type="button" onClick={() => handleSort(metric.key)} className="flex items-center justify-end gap-1 text-right hover:text-foreground">
+          <button key={metric.key} type="button" onClick={() => handleSort(metric.key)} className="flex items-center justify-end gap-0.5 text-right hover:text-foreground">
             <span>{metric.shortLabel}{config[metric.key].period ? `(${config[metric.key].period})` : ''}</span>
-            <ArrowUpDown size={12} className={cn(sortKey === metric.key ? 'text-amber-500' : '')} />
+            <SortArrow active={sortKey === metric.key} direction={sortDirection} />
           </button>
         ))}
 
-        <button type="button" onClick={() => handleSort('change')} className="flex items-center justify-end gap-1 text-right hover:text-foreground">
-          <span>%Change</span>
-          <ArrowUpDown size={12} className={cn(sortKey === 'change' ? 'text-amber-500' : '')} />
+        <button type="button" onClick={() => handleSort('price')} className="flex items-center justify-end gap-0.5 text-right hover:text-foreground">
+          <span>LTP</span>
+          <SortArrow active={sortKey === 'price'} direction={sortDirection} />
         </button>
 
-        <button type="button" onClick={() => handleSort('price')} className="flex items-center justify-end gap-1 text-right hover:text-foreground">
-          <span>LTP</span>
-          <ArrowUpDown size={12} className={cn(sortKey === 'price' ? 'text-amber-500' : '')} />
+        <button type="button" onClick={() => handleSort('change')} className="flex items-center justify-end text-right hover:text-foreground">
+          <span className="relative inline-block pr-3">
+            <span>Chg%</span>
+            <span className="absolute -top-1 right-0">
+              <SortArrow active={sortKey === 'change'} direction={sortDirection} />
+            </span>
+          </span>
         </button>
       </div>
 
-      <div className="px-4 pb-2">
+      <div className="px-0 pb-1">
         <div>
           {sortedItems.map((item) => {
             const isActive = item.symbol === activeSymbol;
@@ -536,35 +584,35 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
                 type="button"
                 onClick={() => handleSelect(item)}
                 className={cn(
-                  'group relative grid w-full items-center gap-1 border-b border-border/80 py-2 text-left transition-colors',
+                  'group relative grid min-h-10 w-full items-center gap-0.5 border-b border-border/80 px-2 py-2 text-left transition-colors',
                   isActive
                     ? 'bg-amber-500/5 hover:bg-muted/40'
                     : 'bg-transparent hover:bg-muted/40'
                 )}
                 style={{ gridTemplateColumns }}
               >
-                <div className={cn('min-w-0 truncate text-[13px] font-semibold', isActive ? 'text-amber-500' : 'text-foreground')}>
+                <div className={cn('min-w-0 truncate text-[12px] font-semibold', isActive ? 'text-amber-500' : 'text-foreground')}>
                   {item.symbol}
                 </div>
 
                 {config.industryIcon.enabled && (
-                  <div className="flex items-center justify-center text-lg leading-none" title={item.industryGroup}>
+                  <div className="flex items-center justify-center text-base leading-none" title={item.industryGroup}>
                     {getIndustryGroupEmoji(item.industryGroup)}
                   </div>
                 )}
 
                 {enabledMetricColumns.map((metric) => (
-                  <div key={metric.key} className="truncate text-right text-[12px] font-mono text-foreground/90">
+                  <div key={metric.key} className="truncate text-right text-[11px] font-mono text-foreground/90">
                     {formatMetricValue(item, metric.key)}
                   </div>
                 ))}
 
-                <div className={cn('truncate pr-6 text-right text-[12px] font-semibold', isPositive ? 'text-emerald-500' : isNegative ? 'text-rose-500' : 'text-muted-foreground')}>
-                  {isPositive ? '+' : ''}{item.change.toFixed(2)}%
+                <div className="truncate pr-5 text-right text-[11px] font-mono text-muted-foreground">
+                  ₹{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
 
-                <div className="truncate pr-6 text-right text-[12px] font-mono text-muted-foreground">
-                  ₹{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <div className={cn('truncate pr-5 text-right text-[11px] font-semibold', isPositive ? 'text-emerald-500' : isNegative ? 'text-rose-500' : 'text-muted-foreground')}>
+                  {isPositive ? '+' : ''}{item.change.toFixed(2)}%
                 </div>
 
                 <span
@@ -581,7 +629,7 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
                       removeRow(item.symbol);
                     }
                   }}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground opacity-0 transition-all hover:bg-background hover:text-rose-500 group-hover:opacity-100"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground opacity-0 transition-all hover:bg-background hover:text-rose-500 group-hover:opacity-100"
                   title="Remove row"
                 >
                   <Trash2 size={13} />

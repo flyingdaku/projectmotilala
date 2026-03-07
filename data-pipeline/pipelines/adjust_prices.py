@@ -57,7 +57,7 @@ def compute_adj_close_for_asset(asset_id: str, conn) -> int:
         return 0
 
     # Build list of (ex_date_str, factor) sorted DESC for efficient lookup
-    action_list = [(a["ex_date"], float(a["adjustment_factor"])) for a in actions]
+    action_list = [(a["ex_date"], float(a["adjustment_factor"]) if a["adjustment_factor"] is not None else 1.0) for a in actions]
 
     rows_to_update = []
     for price in prices:

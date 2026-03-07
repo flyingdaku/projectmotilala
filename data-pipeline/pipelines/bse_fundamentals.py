@@ -30,16 +30,27 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 def fetch_bse_financial_results(scrip_code: str) -> List[Dict]:
-    # ScripCode is the BSE numeric id
+    # 1. Try local cache first
+    try:
+        from pathlib import Path
+        cache_dir = Path(__file__).resolve().parent.parent / "raw_data" / "BSE_FUNDAMENTALS"
+        cache_path = cache_dir / f"{scrip_code}.json"
+        if cache_path.exists() and cache_path.stat().st_size > 100:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+    except Exception as e:
+        logger.debug(f"BSE cache read failed for {scrip_code}: {e}")
+
+    # 2. Live fetch
     url = f"{BSE_FINANCIAL_API}?scripcode={scrip_code}"
-    
     try:
         resp = requests.get(url, headers=BSE_HEADERS, timeout=15)
         resp.raise_for_status()
         data = resp.json()
         return data if isinstance(data, list) else []
     except Exception as e:
-        logger.warning(f"BSE fetch failed for {scrip_code}: {e}")
+        logger.warning(f"BSE live fetch failed for {scrip_code}: {e}")
         return []
 
 def process_bse_fundamentals(asset_id: str, results: List[Dict]):

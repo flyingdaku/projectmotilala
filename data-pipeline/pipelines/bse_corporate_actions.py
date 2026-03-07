@@ -116,10 +116,30 @@ def _parse_bse_action_record(raw: dict, bse_cache: dict, isin_cache: dict) -> Op
         # BSE format: "issue 1:1" in value field
         ratio_num, ratio_den = parse_bse_bonus_ratio(purpose + " " + details)
 
+    # Calculate adjustment factor
+    from pipelines.corporate_actions import calculate_adjustment_factor
+    prev_close = 0.0
+    with get_db() as conn:
+        prev_row = conn.execute("""
+            SELECT close FROM daily_prices
+            WHERE asset_id = ? AND date < ?
+            ORDER BY date DESC LIMIT 1
+        """, (asset_id, ex_date.isoformat())).fetchone()
+        if prev_row:
+            prev_close = float(prev_row["close"])
+
+    factor = calculate_adjustment_factor(
+        action_type=action_type,
+        ratio_num=ratio_num,
+        ratio_den=ratio_den,
+        dividend_amount=div_amt,
+        prev_close=prev_close
+    )
+
     return (
         generate_id(), asset_id, action_type, ex_date.isoformat(),
         ratio_num, ratio_den, div_amt, 0.0,  # rights_price
-        "BSE", json.dumps(raw)
+        factor, "BSE", json.dumps(raw)
     )
 
 
@@ -175,8 +195,8 @@ def run_bse_corporate_actions_pipeline(from_date: date, to_date: date):
                 conn.executemany("""
                     INSERT OR IGNORE INTO corporate_actions
                     (id, asset_id, action_type, ex_date, ratio_numerator, ratio_denominator,
-                     dividend_amount, rights_price, source_exchange, raw_announcement)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     dividend_amount, rights_price, adjustment_factor, source_exchange, raw_announcement)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, batch)
             inserted += len(batch)
 

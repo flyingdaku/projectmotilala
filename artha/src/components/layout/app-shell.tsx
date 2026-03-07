@@ -25,7 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Sidebar />
         <main
           className={cn(
-            "relative z-0 flex-1 transition-all duration-300 ease-in-out"
+            "relative z-0 flex-1"
           )}
           style={{ marginRight: watchlistWidth }}
         >
@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="flex w-full justify-center p-8"
             >
-              <div className="w-full max-w-[1400px]">
+              <div className="w-full">
                 {children}
               </div>
             </motion.div>

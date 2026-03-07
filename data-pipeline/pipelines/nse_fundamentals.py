@@ -47,6 +47,20 @@ def _safe_float(val) -> Optional[float]:
         return None
 
 def fetch_nse_financial_results(symbol: str) -> List[Dict]:
+    # 1. Try local cache first
+    try:
+        from pathlib import Path
+        cache_dir = Path(__file__).resolve().parent.parent / "raw_data" / "NSE_FUNDAMENTALS"
+        cache_path = cache_dir / f"{symbol}.json"
+        if cache_path.exists() and cache_path.stat().st_size > 100:
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # The API returns a dict with 'financial_results' key
+                return data.get("financial_results", [])
+    except Exception as e:
+        logger.debug(f"NSE cache read failed for {symbol}: {e}")
+
+    # 2. Live fetch
     url = NSE_CORP_INFO_URL.format(symbol=symbol)
     session = _create_nse_session()
     
@@ -55,7 +69,6 @@ def fetch_nse_financial_results(symbol: str) -> List[Dict]:
             resp = session.get(url, timeout=20)
             resp.raise_for_status()
             data = resp.json()
-            # The API returns a dict with 'financial_results' key
             return data.get("financial_results", [])
         except Exception as e:
             logger.warning(f"NSE fetch failed for {symbol} (attempt {attempt}): {e}")
