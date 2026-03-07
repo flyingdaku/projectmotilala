@@ -219,6 +219,324 @@ CREATE TABLE IF NOT EXISTS src_screener_shareholding (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
+CREATE TABLE IF NOT EXISTS src_cogencis_company_map (
+  asset_id                TEXT PRIMARY KEY,
+  company_url             TEXT NOT NULL UNIQUE,
+  isin_token              TEXT,
+  group_slug              TEXT,
+  exchange_code           TEXT,
+  symbol_slug             TEXT,
+  company_slug            TEXT,
+  is_active               INTEGER DEFAULT 1,
+  last_scraped_at         TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  updated_at              TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_page_fetches (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  tab_key                 TEXT NOT NULL,
+  page_kind               TEXT NOT NULL DEFAULT '',
+  page_number             INTEGER DEFAULT 1,
+  request_url             TEXT NOT NULL,
+  final_url               TEXT,
+  raw_path                TEXT,
+  http_status             INTEGER,
+  content_hash            TEXT,
+  parse_status            TEXT,
+  parse_error             TEXT,
+  fetched_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, tab_key, page_kind, page_number, request_url),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_management_entities (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL,
+  entity_kind             TEXT,
+  entity_url              TEXT,
+  source_tab              TEXT NOT NULL DEFAULT 'management',
+  is_primary              INTEGER DEFAULT 0,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, source_tab),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_management_people (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  person_name             TEXT NOT NULL,
+  designation             TEXT,
+  role_type               TEXT,
+  committee_name          TEXT,
+  appointment_date        TEXT,
+  cessation_date          TEXT,
+  profile_text            TEXT,
+  connected_companies_json TEXT,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, person_name, designation),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_company_overview (
+  asset_id                TEXT PRIMARY KEY,
+  company_name            TEXT,
+  isin                    TEXT,
+  cin                     TEXT,
+  listing_date            TEXT,
+  phone                   TEXT,
+  email                   TEXT,
+  website_url             TEXT,
+  address_text            TEXT,
+  market_cap_text         TEXT,
+  face_value_text         TEXT,
+  book_value_text         TEXT,
+  pe_ttm_text             TEXT,
+  dividend_yield_text     TEXT,
+  auditors_json           TEXT,
+  overview_json           TEXT,
+  source_page_url         TEXT,
+  updated_at              TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_shareholding_summary (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  period_end_date         TEXT NOT NULL,
+  promoter_holding        REAL,
+  promoter_group_holding  REAL,
+  fii_holding             REAL,
+  dii_holding             REAL,
+  mutual_fund_holding     REAL,
+  insurance_holding       REAL,
+  government_holding      REAL,
+  public_holding          REAL,
+  non_institutional_holding REAL,
+  other_holding           REAL,
+  pledged_shares_pct      REAL,
+  total_holding_reported  REAL,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, period_end_date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_shareholding_categories (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  period_end_date         TEXT NOT NULL,
+  parent_category         TEXT,
+  category_name           TEXT NOT NULL,
+  holding_pct             REAL,
+  share_count             REAL,
+  change_qoq_pct          REAL,
+  row_order               INTEGER,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, period_end_date, category_name),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_bulk_deals (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  deal_date               TEXT,
+  exchange                TEXT,
+  buyer_name              TEXT,
+  seller_name             TEXT,
+  quantity                REAL,
+  price                   REAL,
+  deal_value              REAL,
+  percent_equity          REAL,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, deal_date, buyer_name, seller_name, quantity, price),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_block_deals (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  deal_date               TEXT,
+  exchange                TEXT,
+  buyer_name              TEXT,
+  seller_name             TEXT,
+  quantity                REAL,
+  price                   REAL,
+  deal_value              REAL,
+  percent_equity          REAL,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, deal_date, buyer_name, seller_name, quantity, price),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_insider_trades (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  disclosure_date         TEXT,
+  trade_date              TEXT,
+  insider_name            TEXT,
+  designation             TEXT,
+  relation_type           TEXT,
+  transaction_type        TEXT,
+  security_type           TEXT,
+  quantity                REAL,
+  price                   REAL,
+  trade_value             REAL,
+  pre_holding             REAL,
+  post_holding            REAL,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, disclosure_date, insider_name, transaction_type, quantity, price),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_sast_events (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  event_date              TEXT,
+  filing_date             TEXT,
+  acquirer_name           TEXT,
+  seller_name             TEXT,
+  event_type              TEXT,
+  trigger_type            TEXT,
+  pre_holding_pct         REAL,
+  post_holding_pct        REAL,
+  shares_acquired         REAL,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, event_date, acquirer_name, event_type),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_pledge_shares (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  period_end_date         TEXT,
+  promoter_name           TEXT,
+  pledged_shares          REAL,
+  released_shares         REAL,
+  promoter_holding_shares REAL,
+  pledged_pct_of_promoter REAL,
+  pledged_pct_of_total    REAL,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, period_end_date, promoter_name),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_capital_history (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  effective_date          TEXT,
+  event_type              TEXT,
+  ratio_text              TEXT,
+  face_value_from         REAL,
+  face_value_to           REAL,
+  quantity_before         REAL,
+  quantity_after          REAL,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, effective_date, event_type, ratio_text),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_filings (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  filing_type             TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  event_date              TEXT,
+  filing_date             TEXT,
+  headline                TEXT,
+  subcategory             TEXT,
+  exchange                TEXT,
+  reference_no            TEXT,
+  detail_text             TEXT,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, filing_type, entity_name, filing_date, headline, reference_no),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_filing_attachments (
+  id                      TEXT PRIMARY KEY,
+  filing_id               TEXT NOT NULL,
+  label                   TEXT,
+  attachment_url          TEXT NOT NULL,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (filing_id, attachment_url),
+  FOREIGN KEY (filing_id) REFERENCES src_cogencis_filings(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_corporate_actions (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  subcategory             TEXT NOT NULL DEFAULT 'ALL',
+  announcement_date       TEXT,
+  ex_date                 TEXT,
+  record_date             TEXT,
+  action_type             TEXT,
+  ratio_text              TEXT,
+  amount_text             TEXT,
+  notes_text              TEXT,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, subcategory, ex_date, action_type, ratio_text, amount_text),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_cogencis_due_diligence_entries (
+  id                      TEXT PRIMARY KEY,
+  asset_id                TEXT NOT NULL,
+  entity_name             TEXT NOT NULL DEFAULT '',
+  table_name              TEXT NOT NULL,
+  row_label               TEXT,
+  column_name             TEXT NOT NULL,
+  column_value            TEXT,
+  row_order               INTEGER,
+  col_order               INTEGER,
+  source_page_url         TEXT,
+  raw_json                TEXT,
+  created_at              TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, entity_name, table_name, row_label, column_name, row_order, col_order),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cogencis_fetch_asset_tab ON src_cogencis_page_fetches(asset_id, tab_key, page_kind, page_number);
+CREATE INDEX IF NOT EXISTS idx_cogencis_mgmt_asset ON src_cogencis_management_people(asset_id, entity_name);
+CREATE INDEX IF NOT EXISTS idx_cogencis_overview_asset ON src_cogencis_company_overview(asset_id);
+CREATE INDEX IF NOT EXISTS idx_cogencis_sh_summary_asset ON src_cogencis_shareholding_summary(asset_id, period_end_date DESC);
+CREATE INDEX IF NOT EXISTS idx_cogencis_sh_cat_asset ON src_cogencis_shareholding_categories(asset_id, period_end_date DESC);
+CREATE INDEX IF NOT EXISTS idx_cogencis_filings_asset ON src_cogencis_filings(asset_id, filing_type, filing_date DESC);
+CREATE INDEX IF NOT EXISTS idx_cogencis_ca_asset ON src_cogencis_corporate_actions(asset_id, ex_date DESC);
+CREATE INDEX IF NOT EXISTS idx_cogencis_dd_asset ON src_cogencis_due_diligence_entries(asset_id, table_name);
+
 CREATE TABLE IF NOT EXISTS fundamental_conflicts (
   id                TEXT PRIMARY KEY,
   asset_id          TEXT NOT NULL,

@@ -7,6 +7,7 @@ individual source ingesters don't duplicate header boilerplate.
 from __future__ import annotations
 
 import logging
+import os
 import time
 import requests
 from typing import Optional
@@ -100,4 +101,32 @@ def create_amfi_session() -> requests.Session:
         "User-Agent": CHROME_UA,
         "Accept": "text/plain, */*",
     })
+    return session
+
+
+def create_cogencis_session(prime: bool = False) -> requests.Session:
+    session = requests.Session()
+    session.headers.update({
+        **_DEFAULT_HEADERS,
+        "Referer": os.getenv("COGENCIS_REFERER", "https://iinvest.cogencis.com/"),
+    })
+    cookie_header = os.getenv("COGENCIS_COOKIE", "").strip()
+    if cookie_header:
+        session.headers["Cookie"] = cookie_header
+    bearer_token = os.getenv("COGENCIS_BEARER_TOKEN", "").strip()
+    if not bearer_token and cookie_header:
+        for cookie_part in cookie_header.split(";"):
+            name, _, value = cookie_part.strip().partition("=")
+            if name == "next-auth.token" and value:
+                bearer_token = value.strip()
+                break
+    if bearer_token:
+        session.headers["Authorization"] = f"Bearer {bearer_token}"
+    session.headers.setdefault("Origin", "https://iinvest.cogencis.com")
+    if prime:
+        prime_url = os.getenv("COGENCIS_PRIME_URL", "https://iinvest.cogencis.com/")
+        try:
+            session.get(prime_url, timeout=15)
+        except Exception as exc:
+            logger.warning("Cogencis session prime failed: %s", exc)
     return session

@@ -18,7 +18,8 @@ class FundamentalsRepository(Repository[QuarterlyResult]):
 
     Source-specific tables:
       - msi_fundamentals_quarterly, msi_balance_sheets, msi_cash_flows, msi_shareholding
-      - screener_quarterly, screener_balance_sheet, screener_cashflow, screener_shareholding
+      - src_screener_quarterly, src_screener_balance_sheet, src_screener_cashflow, src_screener_shareholding
+      - src_cogencis_shareholding_summary for ownership/governance fallback
 
     Golden layer:
       - fundamentals (merged from all sources, with conflict detection)
@@ -61,7 +62,7 @@ class FundamentalsRepository(Repository[QuarterlyResult]):
 
         # Fallback to Screener
         return self._conn.fetchall(
-            """SELECT * FROM screener_quarterly
+            """SELECT * FROM src_screener_quarterly
                WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT ?""",
             (asset_id, limit),
         )
@@ -79,7 +80,7 @@ class FundamentalsRepository(Repository[QuarterlyResult]):
                 return rows
 
         return self._conn.fetchall(
-            """SELECT * FROM screener_balance_sheet
+            """SELECT * FROM src_screener_balance_sheet
                WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT ?""",
             (asset_id, limit),
         )
@@ -97,7 +98,7 @@ class FundamentalsRepository(Repository[QuarterlyResult]):
                 return rows
 
         return self._conn.fetchall(
-            """SELECT * FROM screener_cashflow
+            """SELECT * FROM src_screener_cashflow
                WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT ?""",
             (asset_id, limit),
         )
@@ -114,8 +115,17 @@ class FundamentalsRepository(Repository[QuarterlyResult]):
             if rows:
                 return rows
 
+        if source in {"MSI", "COGENCIS"}:
+            rows = self._conn.fetchall(
+                """SELECT * FROM src_cogencis_shareholding_summary
+                   WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT ?""",
+                (asset_id, limit),
+            )
+            if rows:
+                return rows
+
         return self._conn.fetchall(
-            """SELECT * FROM screener_shareholding
+            """SELECT * FROM src_screener_shareholding
                WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT ?""",
             (asset_id, limit),
         )
