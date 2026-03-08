@@ -15,6 +15,9 @@ from core.db import get_db, generate_id
 logger = logging.getLogger(__name__)
 
 SCREENER_BASE = "https://www.screener.in"
+SCREENER_MODE_CACHE_ONLY = "cache_only"
+SCREENER_MODE_DEFAULT = "default"
+SCREENER_MODE_FORCE_REFETCH = "force_refetch"
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 }
@@ -67,27 +70,54 @@ def _screener_cache_path(identifier: str) -> Path:
     return SCREENER_CACHE_DIR / f"{identifier}.html"
 
 
-def fetch_screener_data(identifier: str) -> Dict[str, List[Dict]]:
-    """
-    Parse Screener.in HTML for a company.
-    Reads from raw_data/SCREENER/{identifier}.html if available (pre-fetched),
-    otherwise falls back to a live HTTP request and caches the result.
-    """
+def _download_screener_html(identifier: str) -> Optional[str]:
+    urls = [
+        f"{SCREENER_BASE}/company/{identifier}/consolidated/",
+        f"{SCREENER_BASE}/company/{identifier}/",
+    ]
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    last_error = None
+    for url in urls:
+        for attempt in range(1, 4):
+            try:
+                resp = session.get(url, timeout=30)
+                resp.raise_for_status()
+                return resp.text
+            except requests.RequestException as e:
+                last_error = e
+                logger.warning(f"{identifier} attempt {attempt}/3 ({url}): {e}")
+                if attempt < 3:
+                    time.sleep(min(3 * attempt, 10))
+    if last_error:
+        logger.warning(f"[SCREENER] fetch failed for {identifier}: {last_error}")
+    return None
+
+
+def fetch_screener_data(identifier: str, mode: str = SCREENER_MODE_DEFAULT) -> tuple[Dict[str, List[Dict]], bool]:
     SCREENER_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     cache_path = _screener_cache_path(identifier)
 
     html = None
+    was_cached = False
 
-    # 1. Try cache first
-    if cache_path.exists() and cache_path.stat().st_size > 5000:
+    if mode not in {SCREENER_MODE_CACHE_ONLY, SCREENER_MODE_DEFAULT, SCREENER_MODE_FORCE_REFETCH}:
+        raise ValueError(f"Unsupported Screener mode: {mode}")
+
+    if mode != SCREENER_MODE_FORCE_REFETCH and cache_path.exists() and cache_path.stat().st_size > 5000:
         logger.debug(f"[SCREENER] Loading {identifier} from cache")
         html = cache_path.read_text(encoding="utf-8")
+        was_cached = True
 
-    # 2. Skip live fetch for now (to avoid IP blocks)
-    # We only process if it was pre-fetched
     if not html:
-        logger.debug(f"[SCREENER] {identifier} not in cache, skipping")
-        return {}
+        if mode == SCREENER_MODE_CACHE_ONLY:
+            logger.debug(f"[SCREENER] {identifier} not in cache, skipping")
+            return {}, False
+        html = _download_screener_html(identifier)
+        if not html:
+            return {}, False
+        cache_path.write_text(html, encoding="utf-8")
+        was_cached = False
 
     try:
         soup = BeautifulSoup(html, "html.parser")
@@ -98,10 +128,10 @@ def fetch_screener_data(identifier: str) -> Dict[str, List[Dict]]:
             "cash_flow":    _parse_screener_table(soup, "#cash-flow"),
             "ratios":       _parse_screener_table(soup, "#ratios"),
             "shareholding": _parse_screener_table(soup, "#shareholding"),
-        }
+        }, was_cached
     except Exception as e:
         logger.warning(f"[SCREENER] parse failed for {identifier}: {e}")
-        return {}
+        return {}, False
 
 def _period_to_iso(period_str: str) -> Optional[str]:
      try:
@@ -113,8 +143,8 @@ def _period_to_iso(period_str: str) -> Optional[str]:
      except:
         return None
 
-def run_screener_fundamentals(trade_date: date):
-    logger.info("[SCREENER] Starting fundamentals scrape...")
+def run_screener_fundamentals(trade_date: date, mode: str = SCREENER_MODE_DEFAULT):
+    logger.info(f"[SCREENER] Starting fundamentals scrape (mode={mode})...")
     # Import classification scraper for inline enrichment
     try:
         from scripts.scrape_screener_classification import fetch_classification, update_asset_classification
@@ -128,17 +158,16 @@ def run_screener_fundamentals(trade_date: date):
     for asset in assets:
         identifier = asset["nse_symbol"] or asset["bse_code"]
         if not identifier: continue
-        
+
         logger.info(f"[SCREENER] Fetching {identifier}...")
-        data = fetch_screener_data(identifier)
+        data, was_cached = fetch_screener_data(identifier, mode=mode)
         if not data: continue
 
-        # Opportunistically update 4-level classification while we have the page
-        if do_classification:
+        if do_classification and mode != SCREENER_MODE_CACHE_ONLY:
             cls = fetch_classification(identifier)
             if cls:
                 update_asset_classification(asset["id"], cls)
-        
+
         # 1. Quarterly Results
         for row in data.get("quarters", []):
             period_date = _period_to_iso(row["period"])
@@ -187,4 +216,5 @@ def run_screener_fundamentals(trade_date: date):
                 ))
 
         logger.info(f"[SCREENER] Updated {identifier}")
-        time.sleep(1)
+        if not was_cached:
+            time.sleep(1)
