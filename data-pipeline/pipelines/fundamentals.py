@@ -135,9 +135,9 @@ def refresh_unified_view():
     """Merge source tables into unified fundamentals with conflict detection."""
     logger.info("[FUNDAMENTALS] Refreshing unified view...")
     with get_db() as conn:
-        msi_q_table = _resolve_table_name(conn, ['msi_fundamentals_quarterly', 'src_msi_quarterly'])
-        msi_bs_table = _resolve_table_name(conn, ['msi_balance_sheets', 'src_msi_balance_sheet'])
-        msi_cf_table = _resolve_table_name(conn, ['msi_cash_flows', 'src_msi_cash_flows'])
+        msi_q_table = _resolve_table_name(conn, ['src_msi_quarterly', 'msi_fundamentals_quarterly'])
+        msi_bs_table = _resolve_table_name(conn, ['src_msi_balance_sheet', 'msi_balance_sheets'])
+        msi_cf_table = _resolve_table_name(conn, ['src_msi_cashflow', 'msi_cash_flows'])
         scr_q_table = _resolve_table_name(conn, ['src_screener_quarterly', 'screener_quarterly'])
         scr_bs_table = _resolve_table_name(conn, ['src_screener_balance_sheet', 'screener_balance_sheet'])
         scr_cf_table = _resolve_table_name(conn, ['src_screener_cashflow', 'screener_cashflow'])
