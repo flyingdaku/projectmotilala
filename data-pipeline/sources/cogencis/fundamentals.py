@@ -91,6 +91,10 @@ def _parse_date(value: Any) -> Optional[str]:
     text = _clean_text(value)
     if not text or text in {"-", "--"}:
         return None
+    # Strip ISO datetime suffix before format matching
+    iso_match = re.match(r"^(\d{4}-\d{2}-\d{2})T", text)
+    if iso_match:
+        return iso_match.group(1)
     formats = [
         "%Y-%m-%d",
         "%d-%m-%Y",
@@ -103,6 +107,8 @@ def _parse_date(value: Any) -> Optional[str]:
         "%B %d, %Y",
         "%d-%b-%Y",
         "%d-%B-%Y",
+        "%d-%b-%y",
+        "%d-%B-%y",
     ]
     for fmt in formats:
         try:
@@ -502,13 +508,11 @@ class CogencisFundamentalsIngester(SourceIngester):
             elif tab_key == "management":
                 inserted += self._ingest_management(asset_id, current_entity, entities, tables, final_url, conn)
             elif tab_key == "ownership-data":
-                inserted += self._ingest_ownership(asset_id, current_entity, tables, final_url, conn)
-            elif tab_key == "market-data" and page_kind == "corporate-action":
-                inserted += self._ingest_corporate_actions(asset_id, current_entity, page_kind, tables, final_url, conn)
+                pass
             elif tab_key == "market-data":
-                inserted += self._ingest_filings(asset_id, current_entity, page_kind, tables, final_url, conn)
+                pass
             elif tab_key == "due-diligence":
-                inserted += self._ingest_due_diligence(asset_id, current_entity, tables, final_url, conn)
+                pass
             for entity in entities:
                 entity_url = entity.get("url") or ""
                 if not entity_url:
@@ -552,7 +556,10 @@ class CogencisFundamentalsIngester(SourceIngester):
         ).strip("/")
         isin = parsed_company_url.get("isin_token", "")
         base_url = parsed_company_url.get("company_url", "")
-        inserted += self._ingest_auditors(asset_id, isin, base_url, crawl_date, conn)
+        # Resolve entity name from assets table for use in all ingest calls
+        asset_row = conn.fetchone("SELECT name FROM assets WHERE id = ?", (asset_id,))
+        entity_name = _clean_text(asset_row["name"]) if asset_row else ""
+        inserted += self._ingest_auditors(asset_id, isin, entity_name, base_url, crawl_date, conn)
         keyshareholders_payloads = self._fetch_api_payload_pages(
             asset_id,
             "keyshareholders",
@@ -563,13 +570,13 @@ class CogencisFundamentalsIngester(SourceIngester):
             conn,
         )
         if keyshareholders_payloads:
-            inserted += self._ingest_keyshareholders(asset_id, "", keyshareholders_payloads, base_url, conn)
+            inserted += self._ingest_keyshareholders(asset_id, entity_name, keyshareholders_payloads, base_url, conn)
         ownership_specs = [
-            ("blockdeals", "Bulk Deals", {"path": path, "type": 1}, self._ingest_trade_table, "src_cogencis_bulk_deals"),
-            ("blockdeals", "Block Deals", {"path": path, "type": 2}, self._ingest_trade_table, "src_cogencis_block_deals"),
+            ("blockdeals", "Bulk Deals", {"path": path, "type": "1"}, self._ingest_trade_table, "src_cogencis_bulk_deals"),
+            ("blockdeals", "Block Deals", {"path": path, "type": "2"}, self._ingest_trade_table, "src_cogencis_block_deals"),
             ("insidertrading", "Insider Trading", {"path": path}, self._ingest_insider_trades, None),
-            ("sast", "SAST", {"path": path, "actionType": "undefined"}, self._ingest_sast, None),
-            ("pledgedshares", "Pledged Shares", {"path": path, "actionType": "undefined"}, self._ingest_pledge, None),
+            ("sast", "SAST", {"path": path}, self._ingest_sast, None),
+            ("pledgedshares", "Pledged Shares", {"path": path}, self._ingest_pledge, None),
             ("capitalhistory", "Capital History", {"path": path}, self._ingest_capital_history, None),
         ]
         for endpoint, title, params, handler, table_name in ownership_specs:
@@ -577,9 +584,9 @@ class CogencisFundamentalsIngester(SourceIngester):
             if not table:
                 continue
             if table_name:
-                inserted += handler(table_name, asset_id, "", table, base_url, conn)
+                inserted += handler(table_name, asset_id, entity_name, table, base_url, conn)
             else:
-                inserted += handler(asset_id, "", table, base_url, conn)
+                inserted += handler(asset_id, entity_name, table, base_url, conn)
         market_specs = [
             ("announcements", "Announcements", {"path": path}, self._ingest_filings, "announcements"),
             ("boardmeetings", "Board Meetings", {"path": path}, self._ingest_filings, "board-meetings"),
@@ -587,7 +594,7 @@ class CogencisFundamentalsIngester(SourceIngester):
         for endpoint, title, params, handler, page_kind in market_specs:
             table = self._fetch_api_table_pages(asset_id, endpoint, params, "market-data", page_kind, title, crawl_date, conn)
             if table:
-                inserted += handler(asset_id, "", page_kind, [table], base_url, conn)
+                inserted += handler(asset_id, entity_name, page_kind, [table], base_url, conn)
         for action_type, title in [
             ("undefined", "Corporate Actions"),
             ("Dividend", "Corporate Actions - Dividend"),
@@ -606,7 +613,7 @@ class CogencisFundamentalsIngester(SourceIngester):
                 conn,
             )
             if table:
-                inserted += self._ingest_corporate_actions(asset_id, "", title, [table], base_url, conn)
+                inserted += self._ingest_corporate_actions(asset_id, entity_name, title, [table], base_url, conn)
         due_diligence_tables: List[Dict[str, Any]] = []
         for endpoint, title in [
             ("legalcases", "Legal Cases"),
@@ -626,7 +633,7 @@ class CogencisFundamentalsIngester(SourceIngester):
             if table:
                 due_diligence_tables.append(table)
         if due_diligence_tables:
-            inserted += self._ingest_due_diligence(asset_id, "", due_diligence_tables, base_url, conn)
+            inserted += self._ingest_due_diligence(asset_id, entity_name, due_diligence_tables, base_url, conn)
         return inserted
 
     def _fetch_api_table_pages(
@@ -860,7 +867,7 @@ class CogencisFundamentalsIngester(SourceIngester):
         )
         return 1
 
-    def _ingest_auditors(self, asset_id: str, isin: str, base_url: str, crawl_date: date, conn: DatabaseConnection) -> int:
+    def _ingest_auditors(self, asset_id: str, isin: str, entity_name: str, base_url: str, crawl_date: date, conn: DatabaseConnection) -> int:
         payload = self._fetch_api_json(
             asset_id,
             "auditors",
@@ -873,10 +880,19 @@ class CogencisFundamentalsIngester(SourceIngester):
         )
         if not payload or not isinstance(payload, dict):
             return 0
-        table = _api_table_from_response("Auditors", payload, f"https://data.cogencis.com/api/v1/auditors")
-        auditors_data = payload.get("data")
-        if not auditors_data:
+        # Real API: columns=[{field:f_120,displayName:Appointment Date},{field:f_121,displayName:Auditor Personnel}]
+        # data=[{f_120: '28 Feb 2026', f_121: 'Firm Name or empty'}]
+        data_rows = payload.get("data") or []
+        if not data_rows:
             return 0
+        auditors_parsed = []
+        for item in data_rows:
+            if not isinstance(item, dict):
+                continue
+            auditors_parsed.append({
+                "appointment_date": _parse_date(_clean_text(item.get("f_120", ""))),
+                "auditor_name": _clean_text(item.get("f_121", "")),
+            })
         existing = conn.fetchone("SELECT * FROM src_cogencis_company_overview WHERE asset_id = ?", (asset_id,))
         conn.execute(
             """INSERT OR REPLACE INTO src_cogencis_company_overview
@@ -884,7 +900,7 @@ class CogencisFundamentalsIngester(SourceIngester):
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))""",
             (
                 asset_id,
-                existing["company_name"] if existing else None,
+                existing["company_name"] if existing else entity_name or None,
                 existing["isin"] if existing else isin,
                 existing["cin"] if existing else None,
                 existing["listing_date"] if existing else None,
@@ -897,12 +913,12 @@ class CogencisFundamentalsIngester(SourceIngester):
                 existing["book_value_text"] if existing else None,
                 existing["pe_ttm_text"] if existing else None,
                 existing["dividend_yield_text"] if existing else None,
-                _json_dumps(table["rows"] if table else auditors_data),
+                _json_dumps(auditors_parsed),
                 existing["overview_json"] if existing else None,
                 base_url,
             ),
         )
-        return len(auditors_data) if isinstance(auditors_data, list) else 1
+        return len(auditors_parsed)
 
     def _enrich_connected_companies(self, asset_id: str, crawl_date: date, conn: DatabaseConnection) -> int:
         rows = conn.execute(
@@ -1182,7 +1198,13 @@ class CogencisFundamentalsIngester(SourceIngester):
         # period -> summary dict, accumulated across all pages
         period_summaries: Dict[str, Dict[str, Any]] = {}
 
-        for payload in payloads:
+        # Per-period set of holding_pct values already counted under promoter group
+        # (used to skip cross-listed public rows with identical percentages)
+        _promoter_period_pcts: Dict[str, set] = {}
+
+        # Keyshareholders API returns identical rows on every page (pagination is redundant).
+        # Only process page 1 to avoid double-counting in summary accumulation.
+        for payload in payloads[:1]:
             periods = _extract_keyshareholders_periods(payload)
             rows = _extract_keyshareholders_rows(payload)
             if not periods or not rows:
@@ -1197,6 +1219,14 @@ class CogencisFundamentalsIngester(SourceIngester):
                 description = _clean_text(row[3]) if row[3] else ""
                 if parent_id is None and description:
                     id_to_group[row_id] = description
+
+            # Collect promoter child row IDs to detect cross-listed public rows
+            promoter_group_ids = {gid for gid, gname in id_to_group.items() if "promoter" in _norm_key(gname)}
+            promoter_child_row_ids = {
+                row[0]
+                for row in rows
+                if isinstance(row, list) and len(row) >= 4 and row[1] in promoter_group_ids
+            }
 
             for row_index, row in enumerate(rows):
                 if not isinstance(row, list) or len(row) < 4:
@@ -1266,8 +1296,18 @@ class CogencisFundamentalsIngester(SourceIngester):
                         norm_parent = _norm_key(parent_category)
                         if "promoter" in norm_parent:
                             key = "promoter_holding"
+                            # Track (period, pct) already counted under promoter to skip public duplicates
+                            if period_end_date not in _promoter_period_pcts:
+                                _promoter_period_pcts[period_end_date] = set()
+                            _promoter_period_pcts[period_end_date].add(holding_pct)
                         elif "public" in norm_parent:
-                            key = "public_holding"
+                            # Skip row if it's a known promoter child ID (same row, different group)
+                            # or if its exact holding_pct was already counted under promoter
+                            already_promoter = row_id in promoter_child_row_ids or (
+                                period_end_date in _promoter_period_pcts
+                                and holding_pct in _promoter_period_pcts[period_end_date]
+                            )
+                            key = None if already_promoter else "public_holding"
                         else:
                             key = None
                         if key:
@@ -1475,10 +1515,16 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
+        # Real API fields: f_32=ClientName, f_33=Type(BUY/SELL), f_34=Quantity, f_36=WeightedAvgPrice, f_35=Date
+        conn.execute(f"DELETE FROM {table_name} WHERE asset_id = ?", (asset_id,))
         inserted = 0
         headers = table["headers"]
         for row in table["rows"]:
             data = _row_to_dict(headers, row["cells"])
+            trade_type = _clean_text(_pick_value(data, ["type_", "type"]))
+            client_name = _clean_text(_pick_value(data, ["client_name", "client"]))
+            buyer_name = client_name if trade_type.upper() == "BUY" else ""
+            seller_name = client_name if trade_type.upper() == "SELL" else ""
             conn.execute(
                 f"""INSERT OR REPLACE INTO {table_name}
                     (id, asset_id, entity_name, deal_date, exchange, buyer_name, seller_name, quantity, price, deal_value, percent_equity, source_page_url, raw_json)
@@ -1487,14 +1533,14 @@ class CogencisFundamentalsIngester(SourceIngester):
                     generate_id(),
                     asset_id,
                     entity_name,
-                    _parse_date(_pick_value(data, ["date", "deal_date"], 0, row["cells"])),
+                    _parse_date(_pick_value(data, ["date"])),
                     _clean_text(_pick_value(data, ["exchange"])),
-                    _clean_text(_pick_value(data, ["buyer"])),
-                    _clean_text(_pick_value(data, ["seller"])),
-                    _parse_number(_pick_value(data, ["qty", "quantity", "shares"])),
-                    _parse_number(_pick_value(data, ["price"])),
-                    _parse_number(_pick_value(data, ["value", "deal_value"])),
-                    _parse_number(_pick_value(data, ["equity", "holding", "percent"])),
+                    buyer_name,
+                    seller_name,
+                    _parse_number(_pick_value(data, ["quantity", "qty"])),
+                    _parse_number(_pick_value(data, ["weighted_avg_price", "price"])),
+                    None,
+                    None,
                     page_url,
                     json.dumps({"title": table["title"], "data": data}),
                 ),
@@ -1510,6 +1556,10 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
+        # Real API fields:
+        # f_28=Date, f_4=Acquirer/DisposerName, f_5=Category, f_7=SharesPrev, f_8=PctPrev,
+        # f_10=Quantity, f_12=Type(BUY/SELL), f_14=SharesPost, f_15=PctPost, f_19=AcquisitionMode
+        conn.execute("DELETE FROM src_cogencis_insider_trades WHERE asset_id = ?", (asset_id,))
         inserted = 0
         headers = table["headers"]
         for row in table["rows"]:
@@ -1522,18 +1572,18 @@ class CogencisFundamentalsIngester(SourceIngester):
                     generate_id(),
                     asset_id,
                     entity_name,
-                    _parse_date(_pick_value(data, ["disclosure", "filing", "reported"])),
-                    _parse_date(_pick_value(data, ["trade", "transaction", "date"], 0, row["cells"])),
-                    _clean_text(_pick_value(data, ["name", "insider", "person"], 1, row["cells"])),
-                    _clean_text(_pick_value(data, ["designation", "role"])),
-                    _clean_text(_pick_value(data, ["relation", "category"])),
-                    _clean_text(_pick_value(data, ["transaction", "type", "trade_type"])),
-                    _clean_text(_pick_value(data, ["security", "instrument"])),
-                    _parse_number(_pick_value(data, ["qty", "quantity", "shares"])),
-                    _parse_number(_pick_value(data, ["price"])),
-                    _parse_number(_pick_value(data, ["value"])),
-                    _parse_number(_pick_value(data, ["pre_holding", "before"])),
-                    _parse_number(_pick_value(data, ["post_holding", "after"])),
+                    None,
+                    _parse_date(_pick_value(data, ["date"])),
+                    _clean_text(_pick_value(data, ["acquirer_disposer_name", "acquirer", "name"])),
+                    None,
+                    _clean_text(_pick_value(data, ["category"])),
+                    _clean_text(_pick_value(data, ["type"])),
+                    _clean_text(_pick_value(data, ["acquisition_mode", "mode"])),
+                    _parse_number(_pick_value(data, ["quantity_nos", "quantity"])),
+                    None,
+                    None,
+                    _parse_number(_pick_value(data, ["shareholding_prev", "no_of_shares_prev"])),
+                    _parse_number(_pick_value(data, ["shareholding_post", "no_of_shares_post"])),
                     page_url,
                     json.dumps({"title": table["title"], "data": data}),
                 ),
@@ -1549,10 +1599,16 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
+        # Real API fields:
+        # f_162=DATE, f_48=Acquirer/SellerName, f_57=Type(Acquisition/Disposal),
+        # f_52=Quantity, f_53=NoOfSharesPost, f_58=ModeOfAcquisition, f_59=AcquisitionType
+        conn.execute("DELETE FROM src_cogencis_sast_events WHERE asset_id = ?", (asset_id,))
         inserted = 0
         headers = table["headers"]
         for row in table["rows"]:
             data = _row_to_dict(headers, row["cells"])
+            event_type = _clean_text(_pick_value(data, ["type"]))
+            acq_name = _clean_text(_pick_value(data, ["acquirer_seller_name", "acquirer"]))
             conn.execute(
                 """INSERT OR REPLACE INTO src_cogencis_sast_events
                    (id, asset_id, entity_name, event_date, filing_date, acquirer_name, seller_name, event_type, trigger_type, pre_holding_pct, post_holding_pct, shares_acquired, source_page_url, raw_json)
@@ -1561,15 +1617,15 @@ class CogencisFundamentalsIngester(SourceIngester):
                     generate_id(),
                     asset_id,
                     entity_name,
-                    _parse_date(_pick_value(data, ["event", "transaction", "date"], 0, row["cells"])),
-                    _parse_date(_pick_value(data, ["filing", "disclosure"])),
-                    _clean_text(_pick_value(data, ["acquirer", "buyer", "name"], 1, row["cells"])),
-                    _clean_text(_pick_value(data, ["seller", "disposer"])),
-                    _clean_text(_pick_value(data, ["type", "event_type"])),
-                    _clean_text(_pick_value(data, ["trigger"])),
-                    _parse_number(_pick_value(data, ["pre_holding", "before", "pre"])),
-                    _parse_number(_pick_value(data, ["post_holding", "after", "post"])),
-                    _parse_number(_pick_value(data, ["acquired", "shares"])),
+                    _parse_date(_pick_value(data, ["date"])),
+                    None,
+                    acq_name if "acqui" in event_type.lower() else "",
+                    acq_name if "dispos" in event_type.lower() or "sell" in event_type.lower() else "",
+                    event_type,
+                    _clean_text(_pick_value(data, ["acquisition_type"])),
+                    None,
+                    None,
+                    _parse_number(_pick_value(data, ["quantity"])),
                     page_url,
                     json.dumps({"title": table["title"], "data": data}),
                 ),
@@ -1585,10 +1641,15 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
+        # Real API fields:
+        # f_88=Promoters/Names, f_89=PromoterHoldingShares, f_90=PromoterHoldingPct,
+        # f_93=Type(Pledge/Release), f_100=PostEncumberedShares, f_101=EncumberedPct, f_103=Date
+        conn.execute("DELETE FROM src_cogencis_pledge_shares WHERE asset_id = ?", (asset_id,))
         inserted = 0
         headers = table["headers"]
         for row in table["rows"]:
             data = _row_to_dict(headers, row["cells"])
+            event_type = _clean_text(_pick_value(data, ["type"]))
             conn.execute(
                 """INSERT OR REPLACE INTO src_cogencis_pledge_shares
                    (id, asset_id, entity_name, period_end_date, promoter_name, pledged_shares, released_shares, promoter_holding_shares, pledged_pct_of_promoter, pledged_pct_of_total, source_page_url, raw_json)
@@ -1597,13 +1658,13 @@ class CogencisFundamentalsIngester(SourceIngester):
                     generate_id(),
                     asset_id,
                     entity_name,
-                    _parse_date(_pick_value(data, ["period", "quarter", "date"], 0, row["cells"])),
-                    _clean_text(_pick_value(data, ["promoter", "name"], 1, row["cells"])),
-                    _parse_number(_pick_value(data, ["pledged", "shares_pledged"])),
-                    _parse_number(_pick_value(data, ["released"])),
-                    _parse_number(_pick_value(data, ["holding", "promoter_holding"])),
-                    _parse_number(_pick_value(data, ["promoter_pct", "pledged_pct_of_promoter"])),
-                    _parse_number(_pick_value(data, ["total_pct", "pledged_pct_of_total"])),
+                    _parse_date(_pick_value(data, ["date"])),
+                    _clean_text(_pick_value(data, ["promoters_names", "promoter"])),
+                    _parse_number(_pick_value(data, ["post_event_holding_of_encumbered_shares"])) if "pledge" in event_type.lower() else None,
+                    _parse_number(_pick_value(data, ["post_event_holding_of_encumbered_shares"])) if "release" in event_type.lower() else None,
+                    _parse_number(_pick_value(data, ["promoter_holding_no_of_shares"])),
+                    _parse_number(_pick_value(data, ["promoter_holding_of_encumbered_shares_post"])),
+                    None,
                     page_url,
                     json.dumps({"title": table["title"], "data": data}),
                 ),
@@ -1619,6 +1680,10 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
+        # Real API fields:
+        # f_139=Date, f_140=Type(SHP/Bonus/Split/etc), f_141=NoOfSharesCurrent,
+        # f_142=FaceValueOld, f_143=FaceValueNew, f_144=ChangeInShares, f_145=OutstandingShares
+        conn.execute("DELETE FROM src_cogencis_capital_history WHERE asset_id = ?", (asset_id,))
         inserted = 0
         headers = table["headers"]
         for row in table["rows"]:
@@ -1631,13 +1696,13 @@ class CogencisFundamentalsIngester(SourceIngester):
                     generate_id(),
                     asset_id,
                     entity_name,
-                    _parse_date(_pick_value(data, ["date", "effective"])),
-                    _clean_text(_pick_value(data, ["event", "type"], 1, row["cells"])),
-                    _clean_text(_pick_value(data, ["ratio"])),
-                    _parse_number(_pick_value(data, ["face_value_from", "from"])),
-                    _parse_number(_pick_value(data, ["face_value_to", "to"])),
-                    _parse_number(_pick_value(data, ["before"])),
-                    _parse_number(_pick_value(data, ["after"])),
+                    _parse_date(_pick_value(data, ["date"])),
+                    _clean_text(_pick_value(data, ["type"])),
+                    None,
+                    _parse_number(_pick_value(data, ["face_value_old"])),
+                    _parse_number(_pick_value(data, ["face_value_new"])),
+                    _parse_number(_pick_value(data, ["change_in_shares_nos"])),
+                    _parse_number(_pick_value(data, ["outstanding_shares_nos"])),
                     page_url,
                     json.dumps({"title": table["title"], "data": data}),
                 ),
@@ -1654,13 +1719,29 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
-        inserted = 0
+        # Announcements: f_156=DateTime, f_158=Details, f_159=PDFUrl(action=pdf)
+        # BoardMeetings: f_41=Purpose, f_43=MeetingDate(ISO), f_45=AnnouncementDate(ISO), f_44=PDFUrl(action=pdf)
         filing_type = "BOARD_MEETING" if page_kind == "board-meetings" else "ANNOUNCEMENT"
+        conn.execute(
+            "DELETE FROM src_cogencis_filings WHERE asset_id = ? AND filing_type = ?",
+            (asset_id, filing_type),
+        )
+        inserted = 0
         for table in tables:
             headers = table["headers"]
             for row in table["rows"]:
                 data = _row_to_dict(headers, row["cells"])
                 filing_id = generate_id()
+                if filing_type == "BOARD_MEETING":
+                    event_date = _parse_date(_pick_value(data, ["meeting_date"]))
+                    filing_date = _parse_date(_pick_value(data, ["announcement_date"]))
+                    headline = _clean_text(_pick_value(data, ["purpose"]))
+                    pdf_url = _clean_text(_pick_value(data, ["pdf"]))
+                else:
+                    event_date = _parse_date(_pick_value(data, ["date_time"]))
+                    filing_date = None
+                    headline = _clean_text(_pick_value(data, ["details"]))
+                    pdf_url = _clean_text(_pick_value(data, ["pdf"]))
                 conn.execute(
                     """INSERT OR REPLACE INTO src_cogencis_filings
                        (id, asset_id, filing_type, entity_name, event_date, filing_date, headline, subcategory, exchange, reference_no, detail_text, source_page_url, raw_json)
@@ -1670,17 +1751,25 @@ class CogencisFundamentalsIngester(SourceIngester):
                         asset_id,
                         filing_type,
                         entity_name,
-                        _parse_date(_pick_value(data, ["event", "meeting", "date"], 0, row["cells"])),
-                        _parse_date(_pick_value(data, ["filing", "announcement", "reported"])),
-                        _clean_text(_pick_value(data, ["headline", "subject", "title", "details"], 1, row["cells"])),
+                        event_date,
+                        filing_date,
+                        headline,
                         _clean_text(table["title"] or page_kind),
-                        _clean_text(_pick_value(data, ["exchange"])),
-                        _clean_text(_pick_value(data, ["reference", "ref_no", "reference_no"])),
-                        _clean_text(_pick_value(data, ["details", "summary", "notes"], None, row["cells"])),
+                        None,
+                        None,
+                        None,
                         page_url,
                         json.dumps({"title": table["title"], "data": data, "links": row["links"]}),
                     ),
                 )
+                inserted += 1
+                if pdf_url:
+                    conn.execute(
+                        """INSERT OR REPLACE INTO src_cogencis_filing_attachments
+                           (id, filing_id, label, attachment_url)
+                           VALUES (?, ?, ?, ?)""",
+                        (generate_id(), filing_id, "PDF", _safe_url(page_url, pdf_url)),
+                    )
                 for link in row["links"]:
                     attachment_url = _safe_url(page_url, link.get("url", ""))
                     if not attachment_url:
@@ -1696,8 +1785,6 @@ class CogencisFundamentalsIngester(SourceIngester):
                             attachment_url,
                         ),
                     )
-                    inserted += 1
-                inserted += 1
         return inserted
 
     def _ingest_corporate_actions(
@@ -1709,12 +1796,23 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
+        # Real API fields: f_79=Purpose, f_81=ExDate(ISO datetime), f_80=FaceValue, f_82=RecordDate(ISO datetime)
+        # Extra fields in data rows: f_25008=path, isin
+        subcategory = _clean_text(page_kind or "ALL").upper()
+        conn.execute(
+            "DELETE FROM src_cogencis_corporate_actions WHERE asset_id = ? AND subcategory = ?",
+            (asset_id, subcategory),
+        )
         inserted = 0
         for table in tables:
             headers = table["headers"]
             subcategory = _clean_text(table["title"] or page_kind or "ALL").upper()
             for row in table["rows"]:
                 data = _row_to_dict(headers, row["cells"])
+                purpose = _clean_text(_pick_value(data, ["purpose"]))
+                ex_date_raw = _clean_text(_pick_value(data, ["ex_date"]))
+                record_date_raw = _clean_text(_pick_value(data, ["record_date"]))
+                face_value = _clean_text(_pick_value(data, ["face_value"]))
                 conn.execute(
                     """INSERT OR REPLACE INTO src_cogencis_corporate_actions
                        (id, asset_id, entity_name, subcategory, announcement_date, ex_date, record_date, action_type, ratio_text, amount_text, notes_text, source_page_url, raw_json)
@@ -1724,13 +1822,13 @@ class CogencisFundamentalsIngester(SourceIngester):
                         asset_id,
                         entity_name,
                         subcategory,
-                        _parse_date(_pick_value(data, ["announcement", "declared", "date"], 0, row["cells"])),
-                        _parse_date(_pick_value(data, ["ex_date", "ex", "exdate"])),
-                        _parse_date(_pick_value(data, ["record"])),
-                        _clean_text(_pick_value(data, ["action", "type", "purpose"], 1, row["cells"])),
-                        _clean_text(_pick_value(data, ["ratio"])),
-                        _clean_text(_pick_value(data, ["amount", "dividend", "value"])),
-                        _clean_text(_pick_value(data, ["note", "remarks", "details"], None, row["cells"])),
+                        None,
+                        _parse_date(ex_date_raw),
+                        _parse_date(record_date_raw),
+                        purpose,
+                        None,
+                        face_value or None,
+                        None,
                         page_url,
                         json.dumps({"title": table["title"], "data": data, "links": row["links"]}),
                     ),
@@ -1746,31 +1844,35 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
+        # Tables:
+        # legalcases: f_163=Title, f_164=Source, f_165=PublishedDate, f_166=DocumentText
+        # tribunals: f_108=Date, f_110=TribunalName, f_111=Bench, f_112=OrderType, f_113=CaseType, f_114=Title, f_116=Link(url)
+        # indexofcharges: f_123=ChargeID, f_125=CreationDate, f_126=ModDate, f_127=ChargeHolder, f_128=Amount(Mln)
+        # Store each row as one record: row_label=first cell, column_name=table_name, column_value=JSON of all fields
+        conn.execute("DELETE FROM src_cogencis_due_diligence_entries WHERE asset_id = ?", (asset_id,))
         inserted = 0
         for table in tables:
             headers = table["headers"]
+            table_name_str = _clean_text(table["title"] or "Due Diligence")
             for row in table["rows"]:
-                row_label = row["cells"][0] if row["cells"] else ""
-                for col_index, header in enumerate(headers[1:], start=1):
-                    if col_index >= len(row["cells"]):
-                        continue
-                    conn.execute(
-                        """INSERT OR REPLACE INTO src_cogencis_due_diligence_entries
-                           (id, asset_id, entity_name, table_name, row_label, column_name, column_value, row_order, col_order, source_page_url, raw_json)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (
-                            generate_id(),
-                            asset_id,
-                            entity_name,
-                            _clean_text(table["title"] or "Due Diligence"),
-                            _clean_text(row_label),
-                            _clean_text(header),
-                            _clean_text(row["cells"][col_index]),
-                            row["row_order"],
-                            col_index,
-                            page_url,
-                            json.dumps({"title": table["title"], "headers": headers, "row": row["cells"]}),
-                        ),
-                    )
-                    inserted += 1
+                data = _row_to_dict(headers, row["cells"])
+                conn.execute(
+                    """INSERT OR REPLACE INTO src_cogencis_due_diligence_entries
+                       (id, asset_id, entity_name, table_name, row_label, column_name, column_value, row_order, col_order, source_page_url, raw_json)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        generate_id(),
+                        asset_id,
+                        entity_name,
+                        table_name_str,
+                        _clean_text(row["cells"][0]) if row["cells"] else "",
+                        table_name_str,
+                        _json_dumps(data),
+                        row["row_order"],
+                        0,
+                        page_url,
+                        json.dumps({"title": table["title"], "headers": headers, "row": row["cells"], "links": row["links"]}),
+                    ),
+                )
+                inserted += 1
         return inserted
