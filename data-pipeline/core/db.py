@@ -110,11 +110,12 @@ class SqliteConnection(DatabaseConnection):
     - Configurable path (defaults to db/market_data.db)
     """
 
-    def __init__(self, db_path: Optional[str] = None, timeout: float = 30.0):
+    def __init__(self, db_path: Optional[str] = None, timeout: float = 120.0):
         self._db_path = db_path or DEFAULT_DB_PATH
         self._conn = sqlite3.connect(self._db_path, timeout=timeout)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL;")
+        self._conn.execute("PRAGMA busy_timeout=90000;")  # 90s busy wait
         self._conn.execute("PRAGMA foreign_keys=ON;")
 
     def execute(self, sql: str, params: tuple = ()) -> sqlite3.Cursor:

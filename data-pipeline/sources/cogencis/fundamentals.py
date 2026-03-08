@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import pathlib
 import re
 import time
 from collections import deque
@@ -480,6 +481,7 @@ class CogencisFundamentalsIngester(SourceIngester):
         crawl_date = date.today()
         base_url = parsed["company_url"]
         inserted = self._ingest_api_sources(asset_id, parsed, crawl_date, conn)
+        conn.commit()  # release write lock during crawl
         queue = deque([
             (base_url, "overview", "root", 1),
             (f"{base_url}?tab=management", "management", "", 1),
@@ -513,6 +515,7 @@ class CogencisFundamentalsIngester(SourceIngester):
                 pass
             elif tab_key == "due-diligence":
                 pass
+            conn.commit()  # release write lock before next network fetch
             for entity in entities:
                 entity_url = entity.get("url") or ""
                 if not entity_url:
@@ -600,7 +603,10 @@ class CogencisFundamentalsIngester(SourceIngester):
             ("Dividend", "Corporate Actions - Dividend"),
             ("Splits", "Corporate Actions - Splits"),
             ("Bonus", "Corporate Actions - Bonus"),
+            ("Rights", "Corporate Actions - Rights"),
+            ("Buyback", "Corporate Actions - Buyback"),
             ("Others", "Corporate Actions - Others"),
+            ("Other", "Corporate Actions - Other"),
         ]:
             table = self._fetch_api_table_pages(
                 asset_id,
@@ -689,8 +695,10 @@ class CogencisFundamentalsIngester(SourceIngester):
             paging_info = payload.get("pagingInfo") or {}
             record_count = paging_info.get("recordCount")
             no_of_pages = paging_info.get("noOfPages")
+            total_records = paging_info.get("totalRecords")
             if isinstance(record_count, int) and record_count < page_size:
-                break
+                if not (isinstance(total_records, int) and total_records > page_no * page_size):
+                    break
             if isinstance(no_of_pages, int) and no_of_pages > 0 and page_no >= no_of_pages:
                 break
         if not headers or not all_rows:
@@ -739,11 +747,50 @@ class CogencisFundamentalsIngester(SourceIngester):
             paging_info = payload.get("pagingInfo") or {}
             record_count = paging_info.get("recordCount")
             no_of_pages = paging_info.get("noOfPages")
+            total_records = paging_info.get("totalRecords")
             if isinstance(record_count, int) and record_count < page_size:
-                break
+                if not (isinstance(total_records, int) and total_records > page_no * page_size):
+                    break
             if isinstance(no_of_pages, int) and no_of_pages > 0 and page_no >= no_of_pages:
                 break
         return payloads
+
+    def _best_cached_api_json(
+        self,
+        asset_id: str,
+        tab_key: str,
+        page_kind: str,
+        page_number: int,
+        crawl_date: date,
+    ) -> Optional[Dict[str, Any]]:
+        """Return the best cached JSON payload for this page (highest totalRecords), or None."""
+        from utils.storage import RAW_DATA_DIR
+        raw_dir = pathlib.Path(RAW_DATA_DIR) / "COGENCIS" / str(crawl_date.year) / f"{crawl_date.month:02d}"
+        prefix = f"{asset_id}_{tab_key}_{page_kind or ''}_{page_number}_"
+        best_payload = None
+        best_total = -1
+        try:
+            for f in pathlib.Path(raw_dir).glob(f"{prefix}*.json"):
+                try:
+                    raw = f.read_bytes()
+                    if not raw:
+                        continue
+                    p = json.loads(raw)
+                    inner = p.get("response", p) if isinstance(p, dict) else None
+                    if not isinstance(inner, dict):
+                        continue
+                    # Must have actual data rows
+                    if not inner.get("data") and not inner.get("columns"):
+                        continue
+                    total = (inner.get("pagingInfo") or {}).get("totalRecords") or 0
+                    if total > best_total:
+                        best_total = total
+                        best_payload = inner
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return best_payload
 
     def _fetch_api_json(
         self,
@@ -756,6 +803,10 @@ class CogencisFundamentalsIngester(SourceIngester):
         crawl_date: date,
         conn: DatabaseConnection,
     ) -> Optional[Dict[str, Any]]:
+        # Use best cached file if available (avoids token-dependent result variations)
+        cached = self._best_cached_api_json(asset_id, tab_key, page_kind, page_number, crawl_date)
+        if cached is not None:
+            return cached
         fetch_id = generate_id()
         request_url = f"https://data.cogencis.com/api/v1/{endpoint}"
         last_error = None
@@ -1192,6 +1243,8 @@ class CogencisFundamentalsIngester(SourceIngester):
         page_url: str,
         conn: DatabaseConnection,
     ) -> int:
+        conn.execute("DELETE FROM src_cogencis_shareholding_categories WHERE asset_id = ?", (asset_id,))
+        conn.execute("DELETE FROM src_cogencis_shareholding_summary WHERE asset_id = ?", (asset_id,))
         inserted = 0
         # Dedup by (row_id, period_end_date) — row IDs are stable identifiers across pages
         seen_row_period: set = set()
@@ -1619,8 +1672,8 @@ class CogencisFundamentalsIngester(SourceIngester):
                     entity_name,
                     _parse_date(_pick_value(data, ["date"])),
                     None,
-                    acq_name if "acqui" in event_type.lower() else "",
-                    acq_name if "dispos" in event_type.lower() or "sell" in event_type.lower() else "",
+                    acq_name,
+                    acq_name,
                     event_type,
                     _clean_text(_pick_value(data, ["acquisition_type"])),
                     None,
@@ -1652,14 +1705,15 @@ class CogencisFundamentalsIngester(SourceIngester):
             event_type = _clean_text(_pick_value(data, ["type"]))
             conn.execute(
                 """INSERT OR REPLACE INTO src_cogencis_pledge_shares
-                   (id, asset_id, entity_name, period_end_date, promoter_name, pledged_shares, released_shares, promoter_holding_shares, pledged_pct_of_promoter, pledged_pct_of_total, source_page_url, raw_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (id, asset_id, entity_name, period_end_date, promoter_name, event_type, pledged_shares, released_shares, promoter_holding_shares, pledged_pct_of_promoter, pledged_pct_of_total, source_page_url, raw_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     generate_id(),
                     asset_id,
                     entity_name,
                     _parse_date(_pick_value(data, ["date"])),
                     _clean_text(_pick_value(data, ["promoters_names", "promoter"])),
+                    event_type,
                     _parse_number(_pick_value(data, ["post_event_holding_of_encumbered_shares"])) if "pledge" in event_type.lower() else None,
                     _parse_number(_pick_value(data, ["post_event_holding_of_encumbered_shares"])) if "release" in event_type.lower() else None,
                     _parse_number(_pick_value(data, ["promoter_holding_no_of_shares"])),

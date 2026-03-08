@@ -433,6 +433,7 @@ CREATE TABLE IF NOT EXISTS src_cogencis_pledge_shares (
   entity_name             TEXT NOT NULL DEFAULT '',
   period_end_date         TEXT,
   promoter_name           TEXT,
+  event_type              TEXT,
   pledged_shares          REAL,
   released_shares         REAL,
   promoter_holding_shares REAL,
@@ -441,7 +442,7 @@ CREATE TABLE IF NOT EXISTS src_cogencis_pledge_shares (
   source_page_url         TEXT,
   raw_json                TEXT,
   created_at              TEXT DEFAULT (datetime('now')),
-  UNIQUE (asset_id, entity_name, period_end_date, promoter_name),
+  UNIQUE (asset_id, entity_name, period_end_date, promoter_name, event_type),
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
