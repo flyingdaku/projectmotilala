@@ -89,6 +89,17 @@ def setup_db(db_path):
     );
     ''')
     conn.execute('''
+    CREATE TABLE IF NOT EXISTS msi_fundamentals_annual_standalone (
+        asset_id TEXT,
+        period_end_date TEXT,
+        revenue_ops REAL, total_revenue REAL, materials_consumed REAL,
+        employee_benefits REAL, depreciation REAL, finance_costs REAL,
+        profit_before_tax REAL, net_profit REAL,
+        basic_eps REAL, diluted_eps REAL, dividend_rate REAL,
+        PRIMARY KEY (asset_id, period_end_date)
+    );
+    ''')
+    conn.execute('''
     CREATE TABLE IF NOT EXISTS src_msi_quarterly (
         asset_id TEXT,
         period_end_date TEXT,
@@ -100,7 +111,30 @@ def setup_db(db_path):
     );
     ''')
     conn.execute('''
+    CREATE TABLE IF NOT EXISTS src_msi_quarterly_standalone (
+        asset_id TEXT,
+        period_end_date TEXT,
+        revenue_ops REAL, total_revenue REAL, materials_consumed REAL,
+        employee_benefits REAL, depreciation REAL, finance_costs REAL,
+        profit_before_tax REAL, net_profit REAL,
+        basic_eps REAL, diluted_eps REAL,
+        PRIMARY KEY (asset_id, period_end_date)
+    );
+    ''')
+    conn.execute('''
     CREATE TABLE IF NOT EXISTS src_msi_balance_sheet (
+        asset_id TEXT,
+        period_end_date TEXT,
+        equity_capital REAL, reserves REAL,
+        long_term_borrowings REAL, short_term_borrowings REAL,
+        total_liabilities REAL, fixed_assets REAL, cwip REAL,
+        investments REAL, inventories REAL, trade_receivables REAL,
+        cash_equivalents REAL, total_assets REAL,
+        PRIMARY KEY (asset_id, period_end_date)
+    );
+    ''')
+    conn.execute('''
+    CREATE TABLE IF NOT EXISTS src_msi_balance_sheet_standalone (
         asset_id TEXT,
         period_end_date TEXT,
         equity_capital REAL, reserves REAL,
@@ -124,6 +158,17 @@ def setup_db(db_path):
     ''')
     conn.execute('''
     CREATE TABLE IF NOT EXISTS msi_ratios_annual (
+        asset_id TEXT,
+        period_end_date TEXT,
+        ebit_margin REAL, pre_tax_margin REAL, net_profit_margin REAL,
+        roe REAL, roce REAL, debt_equity REAL,
+        asset_turnover REAL, inventory_turnover REAL,
+        debtor_days REAL, creditor_days REAL,
+        PRIMARY KEY (asset_id, period_end_date)
+    );
+    ''')
+    conn.execute('''
+    CREATE TABLE IF NOT EXISTS msi_ratios_annual_standalone (
         asset_id TEXT,
         period_end_date TEXT,
         ebit_margin REAL, pre_tax_margin REAL, net_profit_margin REAL,
@@ -195,7 +240,36 @@ def setup_db(db_path):
     );
     ''')
     conn.execute('''
+    CREATE TABLE IF NOT EXISTS src_msi_cashflow_standalone (
+        asset_id TEXT,
+        period_end_date TEXT,
+        ops_profit_before_wc REAL, wc_changes REAL,
+        net_cash_operating REAL, capex REAL, free_cash_flow REAL,
+        net_cash_investing REAL, net_cash_financing REAL,
+        dividend_paid REAL, net_change_in_cash REAL,
+        PRIMARY KEY (asset_id, period_end_date)
+    );
+    ''')
+    conn.execute('''
     CREATE TABLE IF NOT EXISTS src_msi_ratios (
+        asset_id TEXT,
+        period_end_date TEXT,
+        ebit_margin REAL, pre_tax_margin REAL, net_profit_margin REAL,
+        roe REAL, roa REAL, roce REAL,
+        debt_equity REAL, current_ratio REAL, quick_ratio REAL, interest_coverage REAL,
+        asset_turnover REAL, inventory_turnover REAL,
+        debtor_days REAL, creditor_days REAL,
+        sales REAL, sales_growth_yoy REAL, net_income REAL, net_income_growth_yoy REAL,
+        basic_eps REAL, basic_eps_growth_yoy REAL,
+        book_value_per_share REAL, ebit REAL, ev_ebitda REAL,
+        dividend_payout REAL, earnings_retention REAL, cash_earnings_retention REAL,
+        pbdit_margin REAL, ebit_growth_yoy REAL, pre_tax_income REAL,
+        pre_tax_income_growth_yoy REAL, total_sales REAL,
+        PRIMARY KEY (asset_id, period_end_date)
+    );
+    ''')
+    conn.execute('''
+    CREATE TABLE IF NOT EXISTS src_msi_ratios_standalone (
         asset_id TEXT,
         period_end_date TEXT,
         ebit_margin REAL, pre_tax_margin REAL, net_profit_margin REAL,
@@ -294,6 +368,16 @@ def setup_db(db_path):
         'pat_growth_yoy': 'REAL',
         'eps_growth_yoy': 'REAL',
     })
+    _ensure_table_columns(conn, 'msi_fundamentals_annual_standalone', {
+        'other_income': 'REAL',
+        'operating_profit': 'REAL',
+        'ebit': 'REAL',
+        'ebitda': 'REAL',
+        'tax_amount': 'REAL',
+        'sales_growth_yoy': 'REAL',
+        'pat_growth_yoy': 'REAL',
+        'eps_growth_yoy': 'REAL',
+    })
     _ensure_table_columns(conn, 'src_msi_quarterly', {
         'other_income': 'REAL',
         'operating_profit': 'REAL',
@@ -304,6 +388,21 @@ def setup_db(db_path):
         'pat_growth_yoy': 'REAL',
         'eps_growth_yoy': 'REAL',
     })
+    _ensure_table_columns(conn, 'src_msi_quarterly_standalone', {
+        'other_income': 'REAL',
+        'operating_profit': 'REAL',
+        'ebit': 'REAL',
+        'ebitda': 'REAL',
+        'tax_amount': 'REAL',
+        'sales_growth_yoy': 'REAL',
+        'pat_growth_yoy': 'REAL',
+        'eps_growth_yoy': 'REAL',
+        'traded_goods': 'REAL',
+        'power_fuel': 'REAL',
+        'admin_selling': 'REAL',
+        'research_dev': 'REAL',
+        'other_expenses': 'REAL',
+    })
     _ensure_table_columns(conn, 'src_msi_balance_sheet', {
         'equity_shares_number': 'REAL',
         'shareholders_funds_total': 'REAL',
@@ -311,10 +410,34 @@ def setup_db(db_path):
         'intangible_assets': 'REAL',
         'goodwill': 'REAL',
         'other_assets': 'REAL',
+        'trade_payables': 'REAL',
+        'other_current_liabilities': 'REAL',
+        'total_current_liabilities': 'REAL',
+        'total_current_assets': 'REAL',
+    })
+    _ensure_table_columns(conn, 'src_msi_balance_sheet_standalone', {
+        'equity_shares_number': 'REAL',
+        'shareholders_funds_total': 'REAL',
+        'tangible_assets': 'REAL',
+        'intangible_assets': 'REAL',
+        'goodwill': 'REAL',
+        'other_assets': 'REAL',
+        'trade_payables': 'REAL',
+        'other_current_liabilities': 'REAL',
+        'total_current_liabilities': 'REAL',
+        'total_current_assets': 'REAL',
     })
     _ensure_table_columns(conn, 'src_msi_cashflow', {
         'free_cash_flow': 'REAL',
         'dividend_paid': 'REAL',
+        'cash_begin_of_year': 'REAL',
+        'cash_end_of_year': 'REAL',
+    })
+    _ensure_table_columns(conn, 'src_msi_cashflow_standalone', {
+        'free_cash_flow': 'REAL',
+        'dividend_paid': 'REAL',
+        'cash_begin_of_year': 'REAL',
+        'cash_end_of_year': 'REAL',
     })
     _ensure_table_columns(conn, 'msi_ratios_annual', {
         'roa': 'REAL',
@@ -335,7 +458,49 @@ def setup_db(db_path):
         'cash_earnings_retention': 'REAL',
         'pbdit_margin': 'REAL',
     })
+    _ensure_table_columns(conn, 'msi_ratios_annual_standalone', {
+        'roa': 'REAL',
+        'current_ratio': 'REAL',
+        'quick_ratio': 'REAL',
+        'interest_coverage': 'REAL',
+        'sales': 'REAL',
+        'sales_growth_yoy': 'REAL',
+        'net_income': 'REAL',
+        'net_income_growth_yoy': 'REAL',
+        'basic_eps': 'REAL',
+        'basic_eps_growth_yoy': 'REAL',
+        'book_value_per_share': 'REAL',
+        'ebit': 'REAL',
+        'ev_ebitda': 'REAL',
+        'dividend_payout': 'REAL',
+        'earnings_retention': 'REAL',
+        'cash_earnings_retention': 'REAL',
+        'pbdit_margin': 'REAL',
+    })
     _ensure_table_columns(conn, 'src_msi_ratios', {
+        'roa': 'REAL',
+        'current_ratio': 'REAL',
+        'quick_ratio': 'REAL',
+        'interest_coverage': 'REAL',
+        'sales': 'REAL',
+        'sales_growth_yoy': 'REAL',
+        'net_income': 'REAL',
+        'net_income_growth_yoy': 'REAL',
+        'basic_eps': 'REAL',
+        'basic_eps_growth_yoy': 'REAL',
+        'book_value_per_share': 'REAL',
+        'ebit': 'REAL',
+        'ev_ebitda': 'REAL',
+        'dividend_payout': 'REAL',
+        'earnings_retention': 'REAL',
+        'cash_earnings_retention': 'REAL',
+        'pbdit_margin': 'REAL',
+        'ebit_growth_yoy': 'REAL',
+        'pre_tax_income': 'REAL',
+        'pre_tax_income_growth_yoy': 'REAL',
+        'total_sales': 'REAL',
+    })
+    _ensure_table_columns(conn, 'src_msi_ratios_standalone', {
         'roa': 'REAL',
         'current_ratio': 'REAL',
         'quick_ratio': 'REAL',
@@ -556,6 +721,26 @@ def _period_sort_key(period_label):
         except ValueError:
             continue
     return datetime.min
+
+
+def _income_table(is_quarterly, is_consolidated):
+    if is_quarterly:
+        return 'src_msi_quarterly' if is_consolidated else 'src_msi_quarterly_standalone'
+    return 'msi_fundamentals_annual' if is_consolidated else 'msi_fundamentals_annual_standalone'
+
+
+def _balance_sheet_table(is_consolidated):
+    return 'src_msi_balance_sheet' if is_consolidated else 'src_msi_balance_sheet_standalone'
+
+
+def _cashflow_table(is_consolidated):
+    return 'src_msi_cashflow' if is_consolidated else 'src_msi_cashflow_standalone'
+
+
+def _ratios_table(is_quarterly, is_consolidated):
+    if is_quarterly:
+        return 'src_msi_ratios' if is_consolidated else 'src_msi_ratios_standalone'
+    return 'msi_ratios_annual' if is_consolidated else 'msi_ratios_annual_standalone'
 
 
 # ---------------------------------------------------------------------------
@@ -995,8 +1180,8 @@ def _safe_float(val):
 # DB upsert helpers
 # ---------------------------------------------------------------------------
 
-def _upsert_income(conn, records, is_quarterly=False):
-    table = 'src_msi_quarterly' if is_quarterly else 'msi_fundamentals_annual'
+def _upsert_income(conn, records, is_quarterly=False, is_consolidated=True):
+    table = _income_table(is_quarterly, is_consolidated)
     for r in records:
         if is_quarterly:
             conn.execute(f'''
@@ -1050,10 +1235,11 @@ def _upsert_income(conn, records, is_quarterly=False):
                   r['pat_growth_yoy'], r['eps_growth_yoy']))
 
 
-def _upsert_balance_sheet(conn, records):
+def _upsert_balance_sheet(conn, records, is_consolidated=True):
+    table = _balance_sheet_table(is_consolidated)
     for r in records:
-        conn.execute('''
-            INSERT INTO src_msi_balance_sheet
+        conn.execute(f'''
+            INSERT INTO {table}
               (asset_id, period_end_date, equity_shares_number, equity_capital, reserves,
                shareholders_funds_total, long_term_borrowings, short_term_borrowings,
                total_liabilities, fixed_assets, tangible_assets, intangible_assets,
@@ -1082,10 +1268,11 @@ def _upsert_balance_sheet(conn, records):
               r.get('total_current_liabilities'), r.get('total_current_assets'), r['total_assets']))
 
 
-def _upsert_cash_flows(conn, records):
+def _upsert_cash_flows(conn, records, is_consolidated=True):
+    table = _cashflow_table(is_consolidated)
     for r in records:
-        conn.execute('''
-            INSERT INTO src_msi_cashflow
+        conn.execute(f'''
+            INSERT INTO {table}
               (asset_id, period_end_date, ops_profit_before_wc, wc_changes, net_cash_operating,
                capex, free_cash_flow, net_cash_investing, net_cash_financing, dividend_paid,
                net_change_in_cash, cash_begin_of_year, cash_end_of_year)
@@ -1103,8 +1290,8 @@ def _upsert_cash_flows(conn, records):
               r.get('cash_begin_of_year'), r.get('cash_end_of_year')))
 
 
-def _upsert_ratios(conn, records, is_quarterly=False):
-    table = 'src_msi_ratios' if is_quarterly else 'msi_ratios_annual'
+def _upsert_ratios(conn, records, is_quarterly=False, is_consolidated=True):
+    table = _ratios_table(is_quarterly, is_consolidated)
     for r in records:
         if is_quarterly:
             conn.execute(f'''
@@ -1250,11 +1437,14 @@ def _insert_news(conn, asset_id, news_items):
 # Main per-company processor
 # ---------------------------------------------------------------------------
 
-def process_company(conn, asset_id, nse_symbol, auth_token):
+def process_company(conn, asset_id, nse_symbol, auth_token, refresh=False):
     log.info(f"Processing {nse_symbol}...")
     
     raw_file = Path(RAW_BASE_DIR) / f"{nse_symbol}.json"
     mega_data = {}
+
+    if refresh and raw_file.exists():
+        raw_file.unlink()
     
     if raw_file.exists():
         log.info(f"  -> Loading {nse_symbol} from raw data on disk (skipping scraping)")
@@ -1287,7 +1477,10 @@ def process_company(conn, asset_id, nse_symbol, auth_token):
         time.sleep(RATIONAL_DELAY)
 
         # Finance
-        fin_extracted, fin_raw = fetch_finance_details(inst_id, auth_token, consolidated=True)
+        fin_consolidated_extracted, fin_consolidated_raw = fetch_finance_details(inst_id, auth_token, consolidated=True)
+        time.sleep(RATIONAL_DELAY)
+
+        fin_standalone_extracted, fin_standalone_raw = fetch_finance_details(inst_id, auth_token, consolidated=False)
         time.sleep(RATIONAL_DELAY)
 
         # Symbol Details (for sector/industry/rank info)
@@ -1310,7 +1503,9 @@ def process_company(conn, asset_id, nse_symbol, auth_token):
             'canslim': canslim_raw,
             'red_flags': red_flags_raw,
             'ai_report': ai_report_raw,
-            'finance_details': fin_raw,
+            'finance_details': fin_consolidated_raw,
+            'finance_details_consolidated': fin_consolidated_raw,
+            'finance_details_standalone': fin_standalone_raw,
             'symboldetails': sd_raw,
             'block_deals': deals_raw,
             'news': news_raw,
@@ -1321,6 +1516,37 @@ def process_company(conn, asset_id, nse_symbol, auth_token):
         with open(raw_file, 'w') as f:
             json.dump(mega_data, f, indent=2)
         log.info(f"  -> Saved aggregated raw data to disk: {raw_file.name}")
+
+    inst_id = mega_data.get('msi_instrument_id')
+    cache_updated = False
+
+    if mega_data.get('finance_details') and not mega_data.get('finance_details_consolidated'):
+        mega_data['finance_details_consolidated'] = mega_data.get('finance_details')
+        cache_updated = True
+
+    if not mega_data.get('finance_details_consolidated') or not mega_data.get('finance_details_standalone'):
+        if not inst_id:
+            basics_raw = mega_data.get('instrument_basics') or get_msi_instrument_id(nse_symbol, auth_token)
+            inst_id = basics_raw.get('instrumentId') if basics_raw else None
+            if basics_raw and not mega_data.get('instrument_basics'):
+                mega_data['instrument_basics'] = basics_raw
+                mega_data['msi_instrument_id'] = inst_id
+                cache_updated = True
+        if inst_id and not mega_data.get('finance_details_consolidated'):
+            _, fin_consolidated_raw = fetch_finance_details(inst_id, auth_token, consolidated=True)
+            mega_data['finance_details_consolidated'] = fin_consolidated_raw
+            mega_data['finance_details'] = fin_consolidated_raw
+            cache_updated = True
+            time.sleep(RATIONAL_DELAY)
+        if inst_id and not mega_data.get('finance_details_standalone'):
+            _, fin_standalone_raw = fetch_finance_details(inst_id, auth_token, consolidated=False)
+            mega_data['finance_details_standalone'] = fin_standalone_raw
+            cache_updated = True
+            time.sleep(RATIONAL_DELAY)
+        if cache_updated:
+            with open(raw_file, 'w') as f:
+                json.dump(mega_data, f, indent=2)
+            log.info(f"  -> Refreshed raw finance payloads on disk: {raw_file.name}")
 
     # --- Database Sync (from mega_data bundle) ---
     inst_id = mega_data.get('msi_instrument_id')
@@ -1360,37 +1586,52 @@ def process_company(conn, asset_id, nse_symbol, auth_token):
     ai_raw = mega_data.get('ai_report') or {}
     ai_text = ai_raw.get('response', {}).get('reportText') or ai_raw.get('response', {}).get('data', '') if 'response' in ai_raw else ''
 
-    # Finance
-    f_raw = mega_data.get('finance_details') or {}
-    fin_extracted = f_raw.get('response') if 'response' in f_raw else f_raw
-    annual_income_records = []
-    quarterly_income_records = []
-    balance_sheet_records = []
-    cashflow_records = []
-    annual_ratio_records = []
-    quarterly_ratio_records = []
+    fin_consolidated_raw = mega_data.get('finance_details_consolidated') or mega_data.get('finance_details') or {}
+    fin_standalone_raw = mega_data.get('finance_details_standalone') or {}
+    fin_views = [
+        (True, fin_consolidated_raw.get('response') if 'response' in fin_consolidated_raw else fin_consolidated_raw),
+        (False, fin_standalone_raw.get('response') if 'response' in fin_standalone_raw else fin_standalone_raw),
+    ]
+    consolidated_annual_ratio_records = []
+    consolidated_balance_sheet_records = []
+    consolidated_cashflow_records = []
     shareholding_records = []
     top_owner_records = []
     management_records = []
-    if fin_extracted:
+    for is_consolidated, fin_extracted in fin_views:
+        if not fin_extracted:
+            continue
         annual_income_records = _parse_income(fin_extracted, asset_id, is_quarterly=False)
         quarterly_income_records = _parse_income(fin_extracted, asset_id, is_quarterly=True)
         balance_sheet_records = _parse_balance_sheet(fin_extracted, asset_id)
         cashflow_records = _parse_cash_flows(fin_extracted, asset_id)
         annual_ratio_records = _parse_ratios(fin_extracted, asset_id, is_quarterly=False)
         quarterly_ratio_records = _parse_ratios(fin_extracted, asset_id, is_quarterly=True)
-        shareholding_records = _parse_shareholding(fin_extracted, asset_id)
-        top_owner_records = _parse_top_owners(fin_extracted, asset_id)
-        management_records = _parse_management(fin_extracted, asset_id)
 
-        _upsert_income(conn, annual_income_records, is_quarterly=False)
-        _upsert_income(conn, quarterly_income_records, is_quarterly=True)
-        _upsert_balance_sheet(conn, balance_sheet_records)
-        _upsert_cash_flows(conn, cashflow_records)
-        _upsert_ratios(conn, annual_ratio_records, is_quarterly=False)
-        _upsert_ratios(conn, quarterly_ratio_records, is_quarterly=True)
+        _upsert_income(conn, annual_income_records, is_quarterly=False, is_consolidated=is_consolidated)
+        _upsert_income(conn, quarterly_income_records, is_quarterly=True, is_consolidated=is_consolidated)
+        _upsert_balance_sheet(conn, balance_sheet_records, is_consolidated=is_consolidated)
+        _upsert_cash_flows(conn, cashflow_records, is_consolidated=is_consolidated)
+        _upsert_ratios(conn, annual_ratio_records, is_quarterly=False, is_consolidated=is_consolidated)
+        _upsert_ratios(conn, quarterly_ratio_records, is_quarterly=True, is_consolidated=is_consolidated)
+
+        if is_consolidated:
+            consolidated_annual_ratio_records = annual_ratio_records
+            consolidated_balance_sheet_records = balance_sheet_records
+            consolidated_cashflow_records = cashflow_records
+            shareholding_records = _parse_shareholding(fin_extracted, asset_id)
+            top_owner_records = _parse_top_owners(fin_extracted, asset_id)
+            management_records = _parse_management(fin_extracted, asset_id)
+        elif not shareholding_records:
+            shareholding_records = _parse_shareholding(fin_extracted, asset_id)
+            top_owner_records = _parse_top_owners(fin_extracted, asset_id)
+            management_records = _parse_management(fin_extracted, asset_id)
+
+    if shareholding_records:
         _upsert_shareholding(conn, shareholding_records)
+    if top_owner_records:
         _insert_top_owners(conn, asset_id, top_owner_records)
+    if management_records:
         _insert_management(conn, asset_id, management_records)
 
     # Block Deals
@@ -1436,9 +1677,9 @@ def process_company(conn, asset_id, nse_symbol, auth_token):
         if not industry_group_rank_str and id_block.get('industryGroupRank'):
              industry_group_rank_str = f"{id_block.get('industryGroupRank')} of 197"
 
-    latest_annual_ratio = max(annual_ratio_records, key=lambda r: _period_sort_key(r['period_end_date']), default=None)
-    latest_balance_sheet = max(balance_sheet_records, key=lambda r: _period_sort_key(r['period_end_date']), default=None)
-    latest_cashflow = max(cashflow_records, key=lambda r: _period_sort_key(r['period_end_date']), default=None)
+    latest_annual_ratio = max(consolidated_annual_ratio_records, key=lambda r: _period_sort_key(r['period_end_date']), default=None)
+    latest_balance_sheet = max(consolidated_balance_sheet_records, key=lambda r: _period_sort_key(r['period_end_date']), default=None)
+    latest_cashflow = max(consolidated_cashflow_records, key=lambda r: _period_sort_key(r['period_end_date']), default=None)
     market_cap = _safe_float(id_block.get('marketCapitalization') or id_block.get('marketCap'))
     pe_ratio = _safe_float(id_block.get('peRatio') or id_block.get('pe'))
     roe_ttm = _first_number(_safe_float(id_block.get('returnOnEquity') or id_block.get('roe')), latest_annual_ratio.get('roe') if latest_annual_ratio else None)
@@ -1550,6 +1791,7 @@ if __name__ == "__main__":
     parser.add_argument('--limit', type=int, default=10, help='Max companies to process')
     parser.add_argument('--symbol', help='Process a single NSE symbol (overrides --limit)')
     parser.add_argument('--workers', type=int, default=8, help='Number of parallel workers')
+    parser.add_argument('--refresh', action='store_true', help='Delete MSI raw cache for each processed symbol before refetching')
     args = parser.parse_args()
 
     setup_conn = setup_db(args.db)
@@ -1580,7 +1822,7 @@ if __name__ == "__main__":
         thread_conn.execute("PRAGMA foreign_keys = ON")
         
         try:
-            ok = process_company(thread_conn, asset_id, nse_symbol, args.auth)
+            ok = process_company(thread_conn, asset_id, nse_symbol, args.auth, refresh=args.refresh)
             return ok, nse_symbol
         except Exception as e:
             log.error(f"  -> Error for {nse_symbol}: {e}")

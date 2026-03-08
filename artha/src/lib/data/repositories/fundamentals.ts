@@ -375,6 +375,7 @@ export class FundamentalsRepository extends BaseRepository {
             earnings_retention: number | null;
             ev_ebitda: number | null;
         };
+        const ratioTable = isConsolidated ? "src_msi_ratios" : "src_msi_ratios_standalone";
         const msiRows = this.db.queryAll<MsiRatioRow>(
             `SELECT period_end_date, ebit_margin, pre_tax_margin, net_profit_margin,
                     roe, roa, roce, debt_equity, current_ratio, quick_ratio,
@@ -383,7 +384,7 @@ export class FundamentalsRepository extends BaseRepository {
                     basic_eps_growth_yoy, book_value_per_share, ebit_growth_yoy,
                     pre_tax_income_growth_yoy, pbdit_margin, dividend_payout,
                     earnings_retention, ev_ebitda
-             FROM src_msi_ratios WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 12`,
+             FROM ${ratioTable} WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 12`,
             [assetId]
         );
         const msiByPeriod = new Map(msiRows.map((r) => [r.period_end_date, r]));

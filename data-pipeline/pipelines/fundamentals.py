@@ -226,6 +226,13 @@ def _load_rows_by_period(conn, table_name: Optional[str], default_is_consolidate
         indexed[(record['asset_id'], normalized_date, is_consolidated)] = record
     return indexed
 
+
+def _load_rows_by_period_multi(conn, tables: List[tuple[str, int]]) -> Dict[tuple, Dict[str, Any]]:
+    indexed: Dict[tuple, Dict[str, Any]] = {}
+    for table_name, default_is_consolidated in tables:
+        indexed.update(_load_rows_by_period(conn, table_name, default_is_consolidated))
+    return indexed
+
 def upsert_unified(conn, p, merged):
     merged_clean = {k: v for k, v in merged.items() if v is not None}
     merged_clean['id'] = generate_id()
@@ -244,24 +251,28 @@ def refresh_unified_view():
     with get_db() as conn:
         _ensure_fundamentals_columns(conn)
         msi_q_table = _resolve_table_name(conn, ['src_msi_quarterly', 'msi_fundamentals_quarterly'])
+        msi_q_table_standalone = _resolve_table_name(conn, ['src_msi_quarterly_standalone'])
         msi_bs_table = _resolve_table_name(conn, ['src_msi_balance_sheet', 'msi_balance_sheets'])
+        msi_bs_table_standalone = _resolve_table_name(conn, ['src_msi_balance_sheet_standalone'])
         msi_cf_table = _resolve_table_name(conn, ['src_msi_cashflow', 'msi_cash_flows'])
+        msi_cf_table_standalone = _resolve_table_name(conn, ['src_msi_cashflow_standalone'])
         msi_ratio_table = _resolve_table_name(conn, ['src_msi_ratios', 'msi_ratios_quarterly'])
+        msi_ratio_table_standalone = _resolve_table_name(conn, ['src_msi_ratios_standalone'])
         scr_q_table = _resolve_table_name(conn, ['src_screener_quarterly', 'screener_quarterly'])
         scr_bs_table = _resolve_table_name(conn, ['src_screener_balance_sheet', 'screener_balance_sheet'])
         scr_cf_table = _resolve_table_name(conn, ['src_screener_cashflow', 'screener_cashflow'])
 
-        if not msi_q_table and not scr_q_table:
+        if not msi_q_table and not msi_q_table_standalone and not scr_q_table:
             logger.warning("[FUNDAMENTALS] No MSI or Screener quarterly tables available for unified merge")
             return
 
         conn.execute("DELETE FROM fundamentals")
         conn.execute("DELETE FROM fundamental_conflicts")
 
-        msi_q_rows = _load_rows_by_period(conn, msi_q_table, 1)
-        msi_bs_rows = _load_rows_by_period(conn, msi_bs_table, 1)
-        msi_cf_rows = _load_rows_by_period(conn, msi_cf_table, 1)
-        msi_ratio_rows = _load_rows_by_period(conn, msi_ratio_table, 1)
+        msi_q_rows = _load_rows_by_period_multi(conn, [(t, d) for t, d in [(msi_q_table, 1), (msi_q_table_standalone, 0)] if t])
+        msi_bs_rows = _load_rows_by_period_multi(conn, [(t, d) for t, d in [(msi_bs_table, 1), (msi_bs_table_standalone, 0)] if t])
+        msi_cf_rows = _load_rows_by_period_multi(conn, [(t, d) for t, d in [(msi_cf_table, 1), (msi_cf_table_standalone, 0)] if t])
+        msi_ratio_rows = _load_rows_by_period_multi(conn, [(t, d) for t, d in [(msi_ratio_table, 1), (msi_ratio_table_standalone, 0)] if t])
         scr_q_rows = _load_rows_by_period(conn, scr_q_table, 1)
         scr_bs_rows = _load_rows_by_period(conn, scr_bs_table, 1)
         scr_cf_rows = _load_rows_by_period(conn, scr_cf_table, 1)

@@ -286,7 +286,101 @@ CREATE TABLE IF NOT EXISTS msi_fundamentals_annual (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
+CREATE TABLE IF NOT EXISTS src_msi_ratios_standalone (
+  asset_id                TEXT NOT NULL,
+  period_end_date         TEXT NOT NULL,
+  ebit_margin             REAL,
+  pre_tax_margin          REAL,
+  net_profit_margin       REAL,
+  roe                     REAL,
+  roa                     REAL,
+  roce                    REAL,
+  debt_equity             REAL,
+  current_ratio           REAL,
+  quick_ratio             REAL,
+  interest_coverage       REAL,
+  asset_turnover          REAL,
+  inventory_turnover      REAL,
+  debtor_days             REAL,
+  creditor_days           REAL,
+  sales                   REAL,
+  sales_growth_yoy        REAL,
+  net_income              REAL,
+  net_income_growth_yoy   REAL,
+  basic_eps               REAL,
+  basic_eps_growth_yoy    REAL,
+  book_value_per_share    REAL,
+  ebit                    REAL,
+  ev_ebitda               REAL,
+  dividend_payout         REAL,
+  earnings_retention      REAL,
+  cash_earnings_retention REAL,
+  pbdit_margin            REAL,
+  ebit_growth_yoy         REAL,
+  pre_tax_income          REAL,
+  pre_tax_income_growth_yoy REAL,
+  total_sales             REAL,
+  PRIMARY KEY (asset_id, period_end_date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS msi_fundamentals_annual_standalone (
+  asset_id                TEXT NOT NULL,
+  period_end_date         TEXT NOT NULL,
+  revenue_ops             REAL,
+  total_revenue           REAL,
+  other_income            REAL,
+  operating_profit        REAL,
+  ebit                    REAL,
+  materials_consumed      REAL,
+  employee_benefits       REAL,
+  depreciation            REAL,
+  ebitda                  REAL,
+  finance_costs           REAL,
+  profit_before_tax       REAL,
+  tax_amount              REAL,
+  net_profit              REAL,
+  basic_eps               REAL,
+  diluted_eps             REAL,
+  dividend_rate           REAL,
+  sales_growth_yoy        REAL,
+  pat_growth_yoy          REAL,
+  eps_growth_yoy          REAL,
+  PRIMARY KEY (asset_id, period_end_date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
 CREATE TABLE IF NOT EXISTS src_msi_quarterly (
+  asset_id                TEXT NOT NULL,
+  period_end_date         TEXT NOT NULL,
+  revenue_ops             REAL,
+  total_revenue           REAL,
+  other_income            REAL,
+  operating_profit        REAL,
+  ebit                    REAL,
+  materials_consumed      REAL,
+  employee_benefits       REAL,
+  depreciation            REAL,
+  ebitda                  REAL,
+  finance_costs           REAL,
+  profit_before_tax       REAL,
+  tax_amount              REAL,
+  net_profit              REAL,
+  basic_eps               REAL,
+  diluted_eps             REAL,
+  traded_goods            REAL,
+  power_fuel              REAL,
+  admin_selling           REAL,
+  research_dev            REAL,
+  other_expenses          REAL,
+  sales_growth_yoy        REAL,
+  pat_growth_yoy          REAL,
+  eps_growth_yoy          REAL,
+  PRIMARY KEY (asset_id, period_end_date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS src_msi_quarterly_standalone (
   asset_id                TEXT NOT NULL,
   period_end_date         TEXT NOT NULL,
   revenue_ops             REAL,
@@ -345,6 +439,35 @@ CREATE TABLE IF NOT EXISTS src_msi_balance_sheet (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
+CREATE TABLE IF NOT EXISTS src_msi_balance_sheet_standalone (
+  asset_id                TEXT NOT NULL,
+  period_end_date         TEXT NOT NULL,
+  equity_shares_number    REAL,
+  equity_capital          REAL,
+  reserves                REAL,
+  shareholders_funds_total REAL,
+  long_term_borrowings    REAL,
+  short_term_borrowings   REAL,
+  total_liabilities       REAL,
+  fixed_assets            REAL,
+  tangible_assets         REAL,
+  intangible_assets       REAL,
+  goodwill                REAL,
+  cwip                    REAL,
+  investments             REAL,
+  inventories             REAL,
+  trade_receivables       REAL,
+  cash_equivalents        REAL,
+  other_assets            REAL,
+  trade_payables          REAL,
+  other_current_liabilities REAL,
+  total_current_liabilities REAL,
+  total_current_assets    REAL,
+  total_assets            REAL,
+  PRIMARY KEY (asset_id, period_end_date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
 CREATE TABLE IF NOT EXISTS src_msi_cashflow (
   asset_id                TEXT NOT NULL,
   period_end_date         TEXT NOT NULL,
@@ -363,7 +486,59 @@ CREATE TABLE IF NOT EXISTS src_msi_cashflow (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
+CREATE TABLE IF NOT EXISTS src_msi_cashflow_standalone (
+  asset_id                TEXT NOT NULL,
+  period_end_date         TEXT NOT NULL,
+  ops_profit_before_wc    REAL,
+  wc_changes              REAL,
+  net_cash_operating      REAL,
+  capex                   REAL,
+  free_cash_flow          REAL,
+  net_cash_investing      REAL,
+  net_cash_financing      REAL,
+  dividend_paid           REAL,
+  net_change_in_cash      REAL,
+  cash_begin_of_year      REAL,
+  cash_end_of_year        REAL,
+  PRIMARY KEY (asset_id, period_end_date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
 CREATE TABLE IF NOT EXISTS msi_ratios_annual (
+  asset_id                TEXT NOT NULL,
+  period_end_date         TEXT NOT NULL,
+  ebit_margin             REAL,
+  pre_tax_margin          REAL,
+  net_profit_margin       REAL,
+  roe                     REAL,
+  roa                     REAL,
+  roce                    REAL,
+  debt_equity             REAL,
+  current_ratio           REAL,
+  quick_ratio             REAL,
+  interest_coverage       REAL,
+  asset_turnover          REAL,
+  inventory_turnover      REAL,
+  debtor_days             REAL,
+  creditor_days           REAL,
+  sales                   REAL,
+  sales_growth_yoy        REAL,
+  net_income              REAL,
+  net_income_growth_yoy   REAL,
+  basic_eps               REAL,
+  basic_eps_growth_yoy    REAL,
+  book_value_per_share    REAL,
+  ebit                    REAL,
+  ev_ebitda               REAL,
+  dividend_payout         REAL,
+  earnings_retention      REAL,
+  cash_earnings_retention REAL,
+  pbdit_margin            REAL,
+  PRIMARY KEY (asset_id, period_end_date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE TABLE IF NOT EXISTS msi_ratios_annual_standalone (
   asset_id                TEXT NOT NULL,
   period_end_date         TEXT NOT NULL,
   ebit_margin             REAL,
