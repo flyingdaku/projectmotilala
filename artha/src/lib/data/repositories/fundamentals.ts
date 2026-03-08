@@ -18,7 +18,10 @@ import type { QuarterlyResult, BalanceSheet, CashFlow, ShareholdingPattern } fro
      total_equity: number | null;
      total_debt: number | null;
      cash_equivalents: number | null;
+     trade_receivables: number | null;
      cfo: number | null;
+     cash_from_investing: number | null;
+     cash_from_financing: number | null;
      capex: number | null;
      fcf: number | null;
      book_value_per_share: number | null;
@@ -41,7 +44,10 @@ import type { QuarterlyResult, BalanceSheet, CashFlow, ShareholdingPattern } fro
      total_equity: number | null;
      total_debt: number | null;
      cash_equivalents: number | null;
+     trade_receivables: number | null;
      cfo: number | null;
+     cash_from_investing: number | null;
+     cash_from_financing: number | null;
      capex: number | null;
      fcf: number | null;
      shares_outstanding: number | null;
@@ -104,8 +110,8 @@ export class FundamentalsRepository extends BaseRepository {
         const rows = this.db.queryAll<FundamentalRow>(
             `SELECT period_end_date, fiscal_quarter, fiscal_year, is_consolidated,
                     revenue, operating_profit, ebit, interest, pbt, tax, pat, eps,
-                    total_assets, total_equity, total_debt, cash_equivalents,
-                    cfo, capex, fcf, book_value_per_share, shares_outstanding, source
+                    total_assets, total_equity, total_debt, cash_equivalents, trade_receivables,
+                    cfo, cash_from_investing, cash_from_financing, capex, fcf, book_value_per_share, shares_outstanding, source
              FROM fundamentals
              WHERE asset_id = ? AND is_consolidated = ?`,
             [assetId, isConsolidated ? 1 : 0]
@@ -143,7 +149,10 @@ export class FundamentalsRepository extends BaseRepository {
                     total_equity: row.total_equity,
                     total_debt: row.total_debt,
                     cash_equivalents: row.cash_equivalents,
+                    trade_receivables: row.trade_receivables,
                     cfo: row.cfo ?? 0,
+                    cash_from_investing: row.cash_from_investing ?? 0,
+                    cash_from_financing: row.cash_from_financing ?? 0,
                     capex: row.capex ?? 0,
                     fcf: row.fcf ?? 0,
                     shares_outstanding: row.shares_outstanding,
@@ -151,6 +160,10 @@ export class FundamentalsRepository extends BaseRepository {
                 });
                 continue;
             }
+            existing.total_debt = existing.total_debt ?? row.total_debt;
+            existing.cash_equivalents = existing.cash_equivalents ?? row.cash_equivalents;
+            existing.trade_receivables = existing.trade_receivables ?? row.trade_receivables;
+            existing.shares_outstanding = existing.shares_outstanding ?? row.shares_outstanding;
             existing.revenue = (existing.revenue ?? 0) + (row.revenue ?? 0);
             existing.operating_profit = (existing.operating_profit ?? 0) + (row.operating_profit ?? 0);
             existing.ebit = (existing.ebit ?? 0) + (row.ebit ?? 0);
@@ -160,6 +173,8 @@ export class FundamentalsRepository extends BaseRepository {
             existing.pat = (existing.pat ?? 0) + (row.pat ?? 0);
             existing.eps = (existing.eps ?? 0) + (row.eps ?? 0);
             existing.cfo = (existing.cfo ?? 0) + (row.cfo ?? 0);
+            existing.cash_from_investing = (existing.cash_from_investing ?? 0) + (row.cash_from_investing ?? 0);
+            existing.cash_from_financing = (existing.cash_from_financing ?? 0) + (row.cash_from_financing ?? 0);
             existing.capex = (existing.capex ?? 0) + (row.capex ?? 0);
             existing.fcf = (existing.fcf ?? 0) + (row.fcf ?? 0);
         }
@@ -198,7 +213,7 @@ export class FundamentalsRepository extends BaseRepository {
         const ttmEps = trailing.reduce((sum, row) => sum + (row.eps ?? 0), 0);
         const ttmRev = trailing.reduce((sum, row) => sum + (row.revenue ?? 0), 0);
         const ttmOperatingProfit = trailing.reduce((sum, row) => sum + (row.operating_profit ?? 0), 0);
-        const ttmEbit = trailing.reduce((sum, row) => sum + (row.ebit ?? 0), 0);
+        const ttmEbit = trailing.reduce((sum, row) => sum + (row.ebit ?? row.operating_profit ?? 0), 0);
         const equity = latest.total_equity ?? null;
         const debt = latest.total_debt ?? null;
         const totalAssets = latest.total_assets ?? null;
@@ -238,6 +253,10 @@ export class FundamentalsRepository extends BaseRepository {
                 revenue: r.revenue,
                 operatingProfit: r.operating_profit,
                 ebitda: r.operating_profit,
+                ebit: r.ebit,
+                interest: r.interest,
+                pbt: r.pbt,
+                tax: r.tax,
                 pat: r.pat,
                 netProfit: r.pat,
                 eps: r.eps,
@@ -259,6 +278,10 @@ export class FundamentalsRepository extends BaseRepository {
                 revenue: r.revenue,
                 operatingProfit: r.operating_profit,
                 ebitda: r.operating_profit,
+                ebit: r.ebit,
+                interest: r.interest,
+                pbt: r.pbt,
+                tax: r.tax,
                 pat: r.pat,
                 netProfit: r.pat,
                 cfo: r.cfo,
@@ -288,7 +311,7 @@ export class FundamentalsRepository extends BaseRepository {
                 reserves: equityCapital != null && equity != null ? +(equity - equityCapital).toFixed(2) : null,
                 cash: r.cash_equivalents ?? null,
                 cashEquivalents: r.cash_equivalents ?? null,
-                tradeReceivables: null,
+                tradeReceivables: r.trade_receivables ?? null,
                 borrowings: debt || null,
                 bookValue: r.shares_outstanding && r.shares_outstanding > 0 && equity != null
                     ? +((equity * 1e7) / r.shares_outstanding).toFixed(2)
@@ -304,8 +327,8 @@ export class FundamentalsRepository extends BaseRepository {
         return rows.map((r) => {
             const opCF = r.cfo ?? null;
             const capex = r.capex ?? null;
-            const invCF = capex != null ? -Math.abs(capex) : null;
-            const finCF = null;
+            const invCF = r.cash_from_investing ?? (capex != null ? -Math.abs(capex) : null);
+            const finCF = r.cash_from_financing ?? null;
 
             return {
                 periodEnd: r.period_end_date,
@@ -325,21 +348,82 @@ export class FundamentalsRepository extends BaseRepository {
     }
 
     public getFinancialRatios(assetId: string, isConsolidated: boolean = true) {
-        const rows = this.getFundamentalRows(assetId, isConsolidated).slice(0, 12);
-        return rows.map((row) => {
-            const operatingMargin = row.revenue && row.operating_profit != null ? +((row.operating_profit / row.revenue) * 100).toFixed(2) : null;
-            const patMargin = row.revenue && row.pat != null ? +((row.pat / row.revenue) * 100).toFixed(2) : null;
-            const roce = row.ebit != null && row.total_equity != null
-                ? +((row.ebit / Math.max((row.total_equity ?? 0) + (row.total_debt ?? 0), 1)) * 100).toFixed(2)
+        type MsiRatioRow = {
+            period_end_date: string;
+            ebit_margin: number | null;
+            pre_tax_margin: number | null;
+            net_profit_margin: number | null;
+            roe: number | null;
+            roa: number | null;
+            roce: number | null;
+            debt_equity: number | null;
+            current_ratio: number | null;
+            quick_ratio: number | null;
+            interest_coverage: number | null;
+            asset_turnover: number | null;
+            inventory_turnover: number | null;
+            debtor_days: number | null;
+            creditor_days: number | null;
+            sales_growth_yoy: number | null;
+            net_income_growth_yoy: number | null;
+            basic_eps_growth_yoy: number | null;
+            book_value_per_share: number | null;
+            ebit_growth_yoy: number | null;
+            pre_tax_income_growth_yoy: number | null;
+            pbdit_margin: number | null;
+            dividend_payout: number | null;
+            earnings_retention: number | null;
+            ev_ebitda: number | null;
+        };
+        const msiRows = this.db.queryAll<MsiRatioRow>(
+            `SELECT period_end_date, ebit_margin, pre_tax_margin, net_profit_margin,
+                    roe, roa, roce, debt_equity, current_ratio, quick_ratio,
+                    interest_coverage, asset_turnover, inventory_turnover,
+                    debtor_days, creditor_days, sales_growth_yoy, net_income_growth_yoy,
+                    basic_eps_growth_yoy, book_value_per_share, ebit_growth_yoy,
+                    pre_tax_income_growth_yoy, pbdit_margin, dividend_payout,
+                    earnings_retention, ev_ebitda
+             FROM src_msi_ratios WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 12`,
+            [assetId]
+        );
+        const msiByPeriod = new Map(msiRows.map((r) => [r.period_end_date, r]));
+
+        const fundRows = this.getFundamentalRows(assetId, isConsolidated).slice(0, 12);
+        return fundRows.map((row) => {
+            const msi = msiByPeriod.get(row.period_end_date);
+            const operatingMargin = msi?.ebit_margin ?? (row.revenue && row.operating_profit != null ? +((row.operating_profit / row.revenue) * 100).toFixed(2) : null);
+            const patMargin = msi?.net_profit_margin ?? (row.revenue && row.pat != null ? +((row.pat / row.revenue) * 100).toFixed(2) : null);
+            const returnBase = row.ebit ?? row.operating_profit;
+            const computedRoce = returnBase != null && row.total_equity != null
+                ? +((returnBase / Math.max((row.total_equity ?? 0) + (row.total_debt ?? 0), 1)) * 100).toFixed(2)
                 : null;
             return {
                 periodEndDate: row.period_end_date,
-                debtorDays: null,
-                inventoryDays: null,
-                daysPayable: null,
-                roce,
+                debtorDays: msi?.debtor_days ?? null,
+                inventoryDays: msi ? (msi.inventory_turnover && msi.inventory_turnover > 0 ? +(365 / msi.inventory_turnover).toFixed(1) : null) : null,
+                daysPayable: msi?.creditor_days ?? null,
+                roce: msi?.roce ?? computedRoce,
+                roe: msi?.roe ?? null,
+                roa: msi?.roa ?? null,
                 operatingMargin,
                 patMargin,
+                ebitMargin: msi?.ebit_margin ?? null,
+                preTaxMargin: msi?.pre_tax_margin ?? null,
+                debtEquity: msi?.debt_equity ?? null,
+                currentRatio: msi?.current_ratio ?? null,
+                quickRatio: msi?.quick_ratio ?? null,
+                interestCoverage: msi?.interest_coverage ?? null,
+                assetTurnover: msi?.asset_turnover ?? null,
+                inventoryTurnover: msi?.inventory_turnover ?? null,
+                salesGrowthYoy: msi?.sales_growth_yoy ?? null,
+                netIncomeGrowthYoy: msi?.net_income_growth_yoy ?? null,
+                epsGrowthYoy: msi?.basic_eps_growth_yoy ?? null,
+                bookValuePerShare: msi?.book_value_per_share ?? row.book_value_per_share ?? null,
+                ebitGrowthYoy: msi?.ebit_growth_yoy ?? null,
+                pbditMargin: msi?.pbdit_margin ?? null,
+                dividendPayout: msi?.dividend_payout ?? null,
+                earningsRetention: msi?.earnings_retention ?? null,
+                evEbitda: msi?.ev_ebitda ?? null,
             };
         });
     }
@@ -372,7 +456,7 @@ export class FundamentalsRepository extends BaseRepository {
         );
 
         const useMsi = scrSH.length === 0 && msiSH.length > 0;
-        type AnyShRow = { period_end_date: string; promoter_holding?: number | null; fii_holding?: number | null; dii_holding?: number | null; public_holding?: number | null; pledged_shares?: number | null; promoters_pct?: number | null; fii_pct?: number | null; dii_pct?: number | null; public_pct?: number | null };
+        type AnyShRow = { period_end_date: string; promoter_holding?: number | null; promoter_change_qoq?: number | null; fii_holding?: number | null; fii_change_qoq?: number | null; dii_holding?: number | null; dii_change_qoq?: number | null; public_holding?: number | null; pledged_shares?: number | null; promoters_pct?: number | null; fii_pct?: number | null; dii_pct?: number | null; public_pct?: number | null };
         const typedShRows: AnyShRow[] = scrSH.length > 0 ? scrSH as AnyShRow[] : msiSH as AnyShRow[];
         return typedShRows.map((r) => {
             const n = (v: number | null | undefined) => v ?? undefined;
@@ -381,10 +465,13 @@ export class FundamentalsRepository extends BaseRepository {
                 quarter: this.periodToQuarter(r.period_end_date),
                 promoter: n(useMsi ? r.promoter_holding : r.promoters_pct),
                 promoterPct: n(useMsi ? r.promoter_holding : r.promoters_pct),
+                promoterChangeQoq: n(useMsi ? r.promoter_change_qoq : undefined),
                 fii: n(useMsi ? r.fii_holding : r.fii_pct),
                 fiiPct: n(useMsi ? r.fii_holding : r.fii_pct),
+                fiiChangeQoq: n(useMsi ? r.fii_change_qoq : undefined),
                 dii: n(useMsi ? r.dii_holding : r.dii_pct),
                 diiPct: n(useMsi ? r.dii_holding : r.dii_pct),
+                diiChangeQoq: n(useMsi ? r.dii_change_qoq : undefined),
                 retail: n(useMsi ? r.public_holding : r.public_pct),
                 publicPct: n(useMsi ? r.public_holding : r.public_pct),
                 pledged: n(useMsi ? r.pledged_shares : undefined),

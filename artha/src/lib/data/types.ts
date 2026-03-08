@@ -130,6 +130,10 @@ export interface QuarterlyResult {
   revenue: number | null;
   ebitda?: number | null;
   operatingProfit?: number | null;
+  ebit?: number | null;
+  interest?: number | null;
+  pbt?: number | null;
+  tax?: number | null;
   pat?: number | null;
   netProfit?: number | null;
   cfo?: number | null;
@@ -202,10 +206,13 @@ export interface ShareholdingPattern {
   quarterEnd?: string;
   promoter?: number;
   promoterPct?: number;
+  promoterChangeQoq?: number;
   fii?: number;
   fiiPct?: number;
+  fiiChangeQoq?: number;
   dii?: number;
   diiPct?: number;
+  diiChangeQoq?: number;
   mfPct?: number;
   retail?: number;
   publicPct?: number;
@@ -279,10 +286,12 @@ export interface PeerComparison {
   marketCapCr?: number | null;
   peTtm?: number | null;
   pb?: number | null;
+  evEbitda?: number | null;
   roce?: number | null;
   roe?: number | null;
   debtEquity?: number | null;
   patMargin?: number | null;
+  operatingMargin?: number | null;
   revenueGrowth1y?: number | null;
   patGrowth1y?: number | null;
   dividendYield?: number | null;

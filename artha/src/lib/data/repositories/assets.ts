@@ -95,18 +95,20 @@ export class AssetRepository extends BaseRepository {
             { field: "msi_sector", value: asset.msi_sector },
         ];
 
-        const selected = candidates.find((candidate) => candidate.value && String(candidate.value).trim().length > 0) ?? null;
-        if (!selected) return [];
+        for (const candidate of candidates) {
+            if (!candidate.value || String(candidate.value).trim().length === 0) continue;
+            const peers = this.db.queryAll<{
+                id: string; nse_symbol: string | null; bse_code: string | null; name: string;
+                face_value: number | null;
+            }>(
+                `SELECT id, nse_symbol, bse_code, name, face_value FROM assets
+                 WHERE ${candidate.field} = ? AND id != ? AND is_active = 1
+                 ORDER BY name LIMIT 20`,
+                [candidate.value, asset.id]
+            );
+            if (peers.length > 0) return peers;
+        }
 
-        const peers = this.db.queryAll<{
-            id: string; nse_symbol: string | null; bse_code: string | null; name: string;
-            face_value: number | null;
-        }>(
-            `SELECT id, nse_symbol, bse_code, name, face_value FROM assets
-             WHERE ${selected.field} = ? AND id != ? AND is_active = 1
-             ORDER BY name LIMIT 20`,
-            [selected.value, asset.id]
-        );
-        return peers;
+        return [];
     }
 }

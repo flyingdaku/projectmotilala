@@ -4,7 +4,8 @@ Merges source-specific tables into a unified fundamentals view with conflict res
 """
 import logging
 import time
-from datetime import date
+import calendar
+from datetime import date, datetime
 from typing import Dict, Any, Optional, List
 
 from core.db import get_db, generate_id
@@ -44,26 +45,43 @@ def map_bse_field(row: Dict, field: str) -> Optional[float]:
     }
     return row.get(mapping.get(field))
 
-def map_msi_field(q: Dict, bs: Dict, cf: Dict, field: str) -> Optional[float]:
-    if not any([q, bs, cf]): return None
+def map_msi_field(q: Dict, bs: Dict, cf: Dict, ratios: Dict, field: str) -> Optional[float]:
+    if not any([q, bs, cf, ratios]): return None
     if field == 'revenue':
         if not q:
             return None
-        return q.get('revenue_ops') if q.get('revenue_ops') is not None else q.get('total_revenue')
+        return q.get('total_revenue') if q.get('total_revenue') is not None else q.get('revenue_ops')
+    if field == 'operating_profit':
+        if not q:
+            return None
+        if q.get('operating_profit') is not None:
+            return q.get('operating_profit')
+        if q.get('ebit') is not None and q.get('other_income') is not None:
+            return q['ebit'] - q['other_income']
+        return q.get('ebit')
     if field == 'interest': return q.get('finance_costs') if q else None
     if field == 'pbt': return q.get('profit_before_tax') if q else None
     if field == 'pat': return q.get('net_profit') if q else None
-    if field == 'eps': return q.get('basic_eps') if q else None
+    if field == 'eps':
+        if q and q.get('basic_eps') is not None:
+            return q.get('basic_eps')
+        return ratios.get('basic_eps') if ratios else None
     if field == 'tax':
+        if q and q.get('tax_amount') is not None:
+            return q['tax_amount']
         if q and q.get('profit_before_tax') is not None and q.get('net_profit') is not None:
             return q['profit_before_tax'] - q['net_profit']
         return None
     if field == 'ebit':
+        if q and q.get('ebit') is not None:
+            return q['ebit']
         if q and q.get('profit_before_tax') is not None and q.get('finance_costs') is not None:
             return q['profit_before_tax'] + q['finance_costs']
         return None
     if field == 'total_assets': return bs.get('total_assets') if bs else None
     if field == 'total_equity':
+        if bs and bs.get('shareholders_funds_total') is not None:
+            return bs['shareholders_funds_total']
         if bs and bs.get('equity_capital') is not None and bs.get('reserves') is not None:
             return bs['equity_capital'] + bs['reserves']
         return None
@@ -87,11 +105,31 @@ def map_msi_field(q: Dict, bs: Dict, cf: Dict, field: str) -> Optional[float]:
             return abs(cf['net_cash_investing'])
         return None
     if field == 'fcf':
+        if cf and cf.get('free_cash_flow') is not None:
+            return cf['free_cash_flow']
         if cf and cf.get('net_cash_operating') is not None:
             if cf.get('capex') is not None:
                 return cf['net_cash_operating'] - abs(cf['capex'])
             if cf.get('net_cash_investing') is not None:
                 return cf['net_cash_operating'] + cf['net_cash_investing']
+        return None
+    if field == 'book_value_per_share':
+        if ratios and ratios.get('book_value_per_share') is not None:
+            return ratios.get('book_value_per_share')
+        if bs and bs.get('equity_shares_number') not in (None, 0):
+            total_equity = None
+            if bs.get('shareholders_funds_total') is not None:
+                total_equity = bs.get('shareholders_funds_total')
+            elif bs.get('equity_capital') is not None and bs.get('reserves') is not None:
+                total_equity = bs['equity_capital'] + bs['reserves']
+            if total_equity is not None:
+                return total_equity / bs['equity_shares_number']
+        return None
+    if field == 'shares_outstanding':
+        if bs and bs.get('equity_shares_number') is not None:
+            return bs.get('equity_shares_number')
+        if q and q.get('net_profit') is not None and q.get('basic_eps') not in (None, 0):
+            return q['net_profit'] / q['basic_eps']
         return None
     return None
 
@@ -160,6 +198,34 @@ def _resolve_table_name(conn, candidates: List[str]) -> Optional[str]:
             return candidate
     return None
 
+def _normalize_period_date(date_str: Optional[str]) -> Optional[str]:
+    if not date_str:
+        return None
+    if len(date_str) == 10 and date_str.count("-") == 2:
+        return date_str
+    for fmt in ("%b-%y", "%b %Y"):
+        try:
+            dt = datetime.strptime(date_str, fmt)
+            last_day = calendar.monthrange(dt.year, dt.month)[1]
+            return f"{dt.year}-{dt.month:02d}-{last_day:02d}"
+        except ValueError:
+            continue
+    return date_str
+
+def _load_rows_by_period(conn, table_name: Optional[str], default_is_consolidated: int) -> Dict[tuple, Dict[str, Any]]:
+    if not table_name:
+        return {}
+    rows = conn.execute(f"SELECT * FROM {table_name}").fetchall()
+    indexed: Dict[tuple, Dict[str, Any]] = {}
+    for row in rows:
+        record = dict(row)
+        normalized_date = _normalize_period_date(record.get('period_end_date'))
+        if not normalized_date:
+            continue
+        is_consolidated = record.get('is_consolidated', default_is_consolidated)
+        indexed[(record['asset_id'], normalized_date, is_consolidated)] = record
+    return indexed
+
 def upsert_unified(conn, p, merged):
     merged_clean = {k: v for k, v in merged.items() if v is not None}
     merged_clean['id'] = generate_id()
@@ -180,6 +246,7 @@ def refresh_unified_view():
         msi_q_table = _resolve_table_name(conn, ['src_msi_quarterly', 'msi_fundamentals_quarterly'])
         msi_bs_table = _resolve_table_name(conn, ['src_msi_balance_sheet', 'msi_balance_sheets'])
         msi_cf_table = _resolve_table_name(conn, ['src_msi_cashflow', 'msi_cash_flows'])
+        msi_ratio_table = _resolve_table_name(conn, ['src_msi_ratios', 'msi_ratios_quarterly'])
         scr_q_table = _resolve_table_name(conn, ['src_screener_quarterly', 'screener_quarterly'])
         scr_bs_table = _resolve_table_name(conn, ['src_screener_balance_sheet', 'screener_balance_sheet'])
         scr_cf_table = _resolve_table_name(conn, ['src_screener_cashflow', 'screener_cashflow'])
@@ -188,51 +255,45 @@ def refresh_unified_view():
             logger.warning("[FUNDAMENTALS] No MSI or Screener quarterly tables available for unified merge")
             return
 
-        period_queries = []
-        if msi_q_table:
-            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {msi_q_table}")
-        if msi_bs_table:
-            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {msi_bs_table}")
-        if msi_cf_table:
-            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {msi_cf_table}")
-        if scr_q_table:
-            period_queries.append(f"SELECT asset_id, period_end_date, is_consolidated FROM {scr_q_table}")
-        if scr_bs_table:
-            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {scr_bs_table}")
-        if scr_cf_table:
-            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {scr_cf_table}")
-        period_sql = " UNION ".join(period_queries)
-        periods = conn.execute("""
-            SELECT DISTINCT asset_id, period_end_date, is_consolidated FROM (
-        """ + period_sql + """
-            )
-        """).fetchall()
-        
-        for p in periods:
-            msi_q_row = conn.execute(f"SELECT * FROM {msi_q_table} WHERE asset_id = ? AND period_end_date = ?", 
-                                     (p['asset_id'], p['period_end_date'])).fetchone() if msi_q_table else None
-            msi_bs_row = conn.execute(f"SELECT * FROM {msi_bs_table} WHERE asset_id = ? AND period_end_date = ?", 
-                                      (p['asset_id'], p['period_end_date'])).fetchone() if msi_bs_table else None
-            msi_cf_row = conn.execute(f"SELECT * FROM {msi_cf_table} WHERE asset_id = ? AND period_end_date = ?", 
-                                      (p['asset_id'], p['period_end_date'])).fetchone() if msi_cf_table else None
+        conn.execute("DELETE FROM fundamentals")
+        conn.execute("DELETE FROM fundamental_conflicts")
 
-            scr_q_row = conn.execute(f"SELECT * FROM {scr_q_table} WHERE asset_id = ? AND period_end_date = ? AND is_consolidated = ?", 
-                                     (p['asset_id'], p['period_end_date'], p['is_consolidated'])).fetchone() if scr_q_table else None
-            scr_bs_row = conn.execute(f"SELECT * FROM {scr_bs_table} WHERE asset_id = ? AND period_end_date = ?", 
-                                      (p['asset_id'], p['period_end_date'])).fetchone() if scr_bs_table else None
-            scr_cf_row = conn.execute(f"SELECT * FROM {scr_cf_table} WHERE asset_id = ? AND period_end_date = ?", 
-                                      (p['asset_id'], p['period_end_date'])).fetchone() if scr_cf_table else None
+        msi_q_rows = _load_rows_by_period(conn, msi_q_table, 1)
+        msi_bs_rows = _load_rows_by_period(conn, msi_bs_table, 1)
+        msi_cf_rows = _load_rows_by_period(conn, msi_cf_table, 1)
+        msi_ratio_rows = _load_rows_by_period(conn, msi_ratio_table, 1)
+        scr_q_rows = _load_rows_by_period(conn, scr_q_table, 1)
+        scr_bs_rows = _load_rows_by_period(conn, scr_bs_table, 1)
+        scr_cf_rows = _load_rows_by_period(conn, scr_cf_table, 1)
 
-            msi_q = dict(msi_q_row) if msi_q_row else None
-            msi_bs = dict(msi_bs_row) if msi_bs_row else None
-            msi_cf = dict(msi_cf_row) if msi_cf_row else None
-            scr_q = dict(scr_q_row) if scr_q_row else None
-            scr_bs = dict(scr_bs_row) if scr_bs_row else None
-            scr_cf = dict(scr_cf_row) if scr_cf_row else None
+        periods = sorted(
+            set(msi_q_rows.keys())
+            .union(msi_bs_rows.keys())
+            .union(msi_cf_rows.keys())
+            .union(msi_ratio_rows.keys())
+            .union(scr_q_rows.keys())
+            .union(scr_bs_rows.keys())
+            .union(scr_cf_rows.keys())
+        )
+
+        for asset_id, normalized_period_end_date, is_consolidated in periods:
+            p = {
+                'asset_id': asset_id,
+                'period_end_date': normalized_period_end_date,
+                'is_consolidated': is_consolidated,
+            }
+
+            msi_q = msi_q_rows.get((asset_id, normalized_period_end_date, is_consolidated))
+            msi_bs = msi_bs_rows.get((asset_id, normalized_period_end_date, is_consolidated))
+            msi_cf = msi_cf_rows.get((asset_id, normalized_period_end_date, is_consolidated))
+            msi_ratio = msi_ratio_rows.get((asset_id, normalized_period_end_date, is_consolidated))
+            scr_q = scr_q_rows.get((asset_id, normalized_period_end_date, is_consolidated))
+            scr_bs = scr_bs_rows.get((asset_id, normalized_period_end_date, is_consolidated))
+            scr_cf = scr_cf_rows.get((asset_id, normalized_period_end_date, is_consolidated))
             
             merged = {}
             for field in UNIFIED_FIELDS:
-                msi_val = map_msi_field(msi_q, msi_bs, msi_cf, field)
+                msi_val = map_msi_field(msi_q, msi_bs, msi_cf, msi_ratio, field)
                 scr_val = map_screener_field(scr_q, scr_bs, scr_cf, field)
                 
                 values = {'MSI': msi_val, 'SCREENER': scr_val}
@@ -248,14 +309,15 @@ def refresh_unified_view():
                     continue
                 
                 vals = list(available.values())
-                max_v = max(abs(v) for v in vals if v != 0) or 1
+                non_zero_abs = [abs(v) for v in vals if v != 0]
+                max_v = max(non_zero_abs) if non_zero_abs else 1
                 pct_dev = (max(vals) - min(vals)) / max_v * 100
                 
                 merged[field] = available.get('MSI', available.get('SCREENER', vals[0]))
                 if pct_dev >= 2.0:
                     log_conflict(conn, p, field, values, merged[field], 'MSI', 'MATERIAL', pct_dev)
             
-            if msi_q or msi_bs or msi_cf:
+            if msi_q or msi_bs or msi_cf or msi_ratio:
                 merged['source'] = 'MSI'
             elif scr_q or scr_bs or scr_cf:
                 merged['source'] = 'SCREENER'

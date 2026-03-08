@@ -2,13 +2,12 @@
 Screener.in Fundamentals Fetcher.
 Parses HTML tables for Quarterly Results, Balance Sheet, Cash Flows, and Ratios.
 """
-import logging
-import requests
-from pathlib import Path
-import time
+import logging, time, random
 import calendar
+from pathlib import Path
 from datetime import date, datetime
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Iterable
+import requests
 from bs4 import BeautifulSoup
 from core.db import get_db, generate_id
 
@@ -134,16 +133,15 @@ def fetch_screener_data(identifier: str, mode: str = SCREENER_MODE_DEFAULT) -> t
         return {}, False
 
 def _period_to_iso(period_str: str) -> Optional[str]:
-     try:
-        # Handle "Mar 2023(C)" or other consolidated suffixes
+    try:
         clean_period = period_str.split("(")[0].strip()
         dt = datetime.strptime(clean_period, "%b %Y")
         last_day = calendar.monthrange(dt.year, dt.month)[1]
         return dt.replace(day=last_day).strftime("%Y-%m-%d")
-     except:
+    except Exception:
         return None
 
-def run_screener_fundamentals(trade_date: date, mode: str = SCREENER_MODE_DEFAULT):
+def run_screener_fundamentals(trade_date: date, mode: str = SCREENER_MODE_DEFAULT, symbols: Iterable[str] | None = None):
     logger.info(f"[SCREENER] Starting fundamentals scrape (mode={mode})...")
     # Import classification scraper for inline enrichment
     try:
@@ -152,8 +150,14 @@ def run_screener_fundamentals(trade_date: date, mode: str = SCREENER_MODE_DEFAUL
     except ImportError:
         do_classification = False
 
+    symbol_set = {str(symbol).upper() for symbol in symbols} if symbols else None
     with get_db() as conn:
         assets = conn.execute("SELECT id, nse_symbol, bse_code FROM assets WHERE is_active = 1").fetchall()
+    if symbol_set is not None:
+        assets = [
+            asset for asset in assets
+            if ((asset["nse_symbol"] or "").upper() in symbol_set) or ((asset["bse_code"] or "").upper() in symbol_set)
+        ]
         
     for asset in assets:
         identifier = asset["nse_symbol"] or asset["bse_code"]
@@ -213,6 +217,38 @@ def run_screener_fundamentals(trade_date: date, mode: str = SCREENER_MODE_DEFAUL
                     generate_id(), asset["id"], period_date,
                     row.get("cash from operating activity"), row.get("cash from investing activity"),
                     row.get("cash from financing activity"), row.get("net cash flow")
+                ))
+
+        # 4. Ratios
+        for row in data.get("ratios", []):
+            period_date = _period_to_iso(row["period"])
+            if not period_date: continue
+            with get_db() as dml_conn:
+                dml_conn.execute("""
+                    INSERT OR REPLACE INTO src_screener_ratios (
+                        id, asset_id, period_end_date, debtor_days, inventory_days, days_payable,
+                        cash_conversion_cycle, working_capital_days, roc_pct
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    generate_id(), asset["id"], period_date,
+                    row.get("debtor days"), row.get("inventory days"), row.get("days payable"),
+                    row.get("cash conversion cycle"), row.get("working capital days"), row.get("roc %")
+                ))
+
+        # 5. Shareholding
+        for row in data.get("shareholding", []):
+            period_date = _period_to_iso(row["period"])
+            if not period_date: continue
+            with get_db() as dml_conn:
+                dml_conn.execute("""
+                    INSERT OR REPLACE INTO src_screener_shareholding (
+                        id, asset_id, period_end_date, promoters_pct, fii_pct, dii_pct,
+                        government_pct, public_pct, num_shareholders
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    generate_id(), asset["id"], period_date,
+                    row.get("promoters"), row.get("fii"), row.get("dii"),
+                    row.get("government"), row.get("public"), row.get("no. of shareholders")
                 ))
 
         logger.info(f"[SCREENER] Updated {identifier}")

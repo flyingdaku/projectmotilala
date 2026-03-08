@@ -104,9 +104,15 @@ export function createSqliteAdapter() {
                     ? +((ttmRatios.ttmPat / equity) * 100).toFixed(2) : null;
 
                 const ebitApprox = ttmRatios?.ttmEbit ?? null;
+                const ebitdaApprox = ttmRatios?.ttmOperatingProfit ?? ebitApprox;
                 const capEmployed = equity ? equity + (debt ?? 0) : null;
                 const roce = ebitApprox && capEmployed && capEmployed > 0
                     ? +((ebitApprox / capEmployed) * 100).toFixed(2) : null;
+                const enterpriseValueCr = marketCapCr != null
+                    ? +(marketCapCr + ((debt ?? 0) - (ttmRatios?.cash ?? 0))).toFixed(2)
+                    : null;
+                void enterpriseValueCr;
+                void ebitdaApprox;
 
                 const volRow = pricesRepo.getRecentVolume(asset.id);
 
@@ -160,6 +166,7 @@ export function createSqliteAdapter() {
                         const debt = ttmR?.debt ?? null;
                         const roe = ttmR?.ttmPat && equity && equity > 0
                             ? +((ttmR.ttmPat / equity) * 100).toFixed(1) : null;
+                        const ebitdaApprox = ttmR?.ttmOperatingProfit ?? ttmR?.ttmEbit ?? null;
                         const roce = ttmR?.ttmEbit && equity != null
                             ? +((ttmR.ttmEbit / Math.max(equity + (debt ?? 0), 1)) * 100).toFixed(1)
                             : null;
@@ -169,6 +176,13 @@ export function createSqliteAdapter() {
                         const dividendYield = lastDiv?.dividend_amount && price > 0
                             ? +((lastDiv.dividend_amount / price) * 100).toFixed(2) : null;
                         const latestRatio = fundRepo.getFinancialRatios(p.id)[0];
+                        const peerMarketCapCr = marketCapCr ?? null;
+                        const enterpriseValueCr = peerMarketCapCr != null
+                            ? +(peerMarketCapCr + ((debt ?? 0) - (ttmR?.cash ?? 0))).toFixed(2)
+                            : null;
+                        const evEbitda = enterpriseValueCr != null && ebitdaApprox != null && ebitdaApprox > 0
+                            ? +(enterpriseValueCr / ebitdaApprox).toFixed(2)
+                            : null;
 
                         const revData = fundRepo.getQuarterly(p.id);
                         let revenueGrowth1y: number | null = null;
@@ -189,10 +203,12 @@ export function createSqliteAdapter() {
                             marketCapCr: marketCapCr ?? undefined,
                             peTtm: pe ?? undefined,
                             pb: pb ?? undefined,
+                            evEbitda: evEbitda ?? undefined,
                             roce: roce ?? undefined,
                             roe: roe ?? undefined,
                             debtEquity: debtEquity ?? undefined,
                             patMargin: latestRatio?.patMargin ?? undefined,
+                            operatingMargin: latestRatio?.operatingMargin ?? undefined,
                             price,
                             pctChange1d: latestPrice?.pct_change ?? undefined,
                             revenueGrowth1y: revenueGrowth1y ?? undefined,
@@ -326,8 +342,15 @@ export function createSqliteAdapter() {
                 const roe = ttmRatios?.ttmPat && equity && equity > 0 ? +((ttmRatios.ttmPat / equity) * 100).toFixed(2) : null;
 
                 const ebitApprox = ttmRatios?.ttmEbit ?? null;
+                const ebitdaApprox = ttmRatios?.ttmOperatingProfit ?? ebitApprox;
                 const capEmployed = equity ? equity + (debt ?? 0) : null;
                 const roce = ebitApprox && capEmployed && capEmployed > 0 ? +((ebitApprox / capEmployed) * 100).toFixed(2) : null;
+                const enterpriseValueCr = marketCapCr != null
+                    ? +(marketCapCr + ((debt ?? 0) - (ttmRatios?.cash ?? 0))).toFixed(2)
+                    : null;
+                const evEbitda = enterpriseValueCr != null && ebitdaApprox != null && ebitdaApprox > 0
+                    ? +(enterpriseValueCr / ebitdaApprox).toFixed(2)
+                    : null;
 
                 const lastDiv = corpRepo.getLatestDividend(assetId);
                 const dividendYield = lastDiv?.dividend_amount && price > 0 ? +((lastDiv.dividend_amount / price) * 100).toFixed(2) : null;
@@ -340,10 +363,14 @@ export function createSqliteAdapter() {
                     const histRoce = ratioSeries[index]?.roce ?? null;
                     const histPb = bsRow?.bookValue && price > 0 ? +(price / bsRow.bookValue).toFixed(2) : null;
                     const histPe = row.eps && row.eps > 0 ? +(price / row.eps).toFixed(2) : null;
+                    const histEvEbitda = enterpriseValueCr != null && row.operatingProfit != null && row.operatingProfit > 0
+                        ? +(enterpriseValueCr / row.operatingProfit).toFixed(2)
+                        : null;
                     return {
                         computedDate: row.periodEnd ?? null,
                         peTtm: histPe,
                         pb: histPb,
+                        evEbitda: histEvEbitda,
                         roce: histRoce,
                         roe: histRoe,
                         operatingMargin: opMargin,
@@ -376,6 +403,7 @@ export function createSqliteAdapter() {
                     ratios: {
                         peTtm: pe ?? undefined,
                         pb: pb ?? undefined,
+                        evEbitda: evEbitda ?? undefined,
                         marketCapCr: marketCapCr ?? undefined,
                         price,
                         pctChange1d: latestPrice?.pct_change ?? undefined,
