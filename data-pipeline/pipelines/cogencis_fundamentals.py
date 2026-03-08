@@ -1,10 +1,31 @@
 import argparse
 import logging
+import os
+import pathlib
 from datetime import date
 from typing import Optional
 
 from core.db import get_connection
 from sources.cogencis import CogencisFundamentalsIngester, upsert_cogencis_company_map
+
+
+def _load_dotenv() -> None:
+    env_path = pathlib.Path(__file__).parent.parent / ".env"
+    if not env_path.exists():
+        return
+    with env_path.open() as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+_load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +62,13 @@ def run_cogencis_fundamentals(
     company_url: Optional[str] = None,
     page_limit: int = 30,
     delay_seconds: float = 0.75,
+    bearer_token: Optional[str] = None,
+    cookie: Optional[str] = None,
 ):
+    if bearer_token:
+        os.environ["COGENCIS_BEARER_TOKEN"] = bearer_token
+    if cookie:
+        os.environ["COGENCIS_COOKIE"] = cookie
     with get_connection() as conn:
         target_asset_id = None
         if company_url or asset_id or symbol or isin:
@@ -68,6 +95,16 @@ if __name__ == "__main__":
     parser.add_argument("--company-url")
     parser.add_argument("--page-limit", type=int, default=30)
     parser.add_argument("--delay-seconds", type=float, default=0.75)
+    parser.add_argument(
+        "--bearer-token",
+        default=os.getenv("COGENCIS_BEARER_TOKEN", ""),
+        help="Bearer token for data.cogencis.com API (or set COGENCIS_BEARER_TOKEN env var)",
+    )
+    parser.add_argument(
+        "--cookie",
+        default=os.getenv("COGENCIS_COOKIE", ""),
+        help="Full Cookie header string (or set COGENCIS_COOKIE env var)",
+    )
     args = parser.parse_args()
     run_cogencis_fundamentals(
         trade_date=date.fromisoformat(args.date),
@@ -77,4 +114,6 @@ if __name__ == "__main__":
         company_url=args.company_url,
         page_limit=args.page_limit,
         delay_seconds=args.delay_seconds,
+        bearer_token=args.bearer_token or None,
+        cookie=args.cookie or None,
     )

@@ -121,6 +121,16 @@ def _parse_date(value: Any) -> Optional[str]:
         next_month = dt.replace(day=28) + timedelta(days=4)
         month_end = next_month.replace(day=1) - timedelta(days=1)
         return month_end.strftime("%Y-%m-%d")
+    # MMM-YY format (e.g. "Dec-25", "Sep-24") used by Cogencis keyshareholders
+    month_year_short = re.match(r"^([A-Za-z]{3})-(\d{2})$", text)
+    if month_year_short:
+        try:
+            dt = datetime.strptime(text, "%b-%y")
+            next_month = dt.replace(day=28) + timedelta(days=4)
+            month_end = next_month.replace(day=1) - timedelta(days=1)
+            return month_end.strftime("%Y-%m-%d")
+        except ValueError:
+            return None
     return None
 
 
@@ -386,62 +396,37 @@ def _api_table_from_response(title: str, response_payload: Dict[str, Any], sourc
 
 
 def _extract_keyshareholders_periods(payload: Any) -> List[str]:
-    candidates: List[List[str]] = []
-
-    def walk(node: Any):
-        if isinstance(node, dict):
-            for value in node.values():
-                if isinstance(value, list):
-                    labels: List[str] = []
-                    score = 0
-                    for item in value:
-                        text = ""
-                        if isinstance(item, str):
-                            text = _clean_text(item)
-                        elif isinstance(item, dict):
-                            text = _clean_text(
-                                item.get("displayName")
-                                or item.get("label")
-                                or item.get("name")
-                                or item.get("title")
-                                or item.get("quarter")
-                                or item.get("period")
-                            )
-                        labels.append(text)
-                        if text and (_looks_like_period_header(text) or _parse_date(text)):
-                            score += 1
-                    if score >= 2:
-                        candidates.append(labels)
-                walk(value)
-        elif isinstance(node, list):
-            for value in node:
-                walk(value)
-
-    walk(payload)
-    if not candidates:
+    """Extract period labels from keyshareholders response.
+    Real format: data[0] is header list ['ID','ParentID','IsExpanded','Description','Dec-25','Sep-25',...]
+    Periods start at index 4.
+    """
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list) or not data:
         return []
-    best = max(candidates, key=lambda items: sum(1 for item in items if item and (_looks_like_period_header(item) or _parse_date(item))))
-    return [item for item in best if item and (_looks_like_period_header(item) or _parse_date(item))]
+    header_row = data[0]
+    if not isinstance(header_row, list) or len(header_row) < 5:
+        return []
+    return [str(h) for h in header_row[4:] if h and (_looks_like_period_header(str(h)) or _parse_date(str(h)))]
 
 
 def _extract_keyshareholders_rows(payload: Any) -> List[List[Any]]:
-    candidates: List[List[List[Any]]] = []
-
-    def walk(node: Any):
-        if isinstance(node, dict):
-            for value in node.values():
-                walk(value)
-        elif isinstance(node, list):
-            row_like = [item for item in node if isinstance(item, list) and len(item) >= 4]
-            if row_like and len(row_like) >= max(1, len(node) // 2):
-                candidates.append(row_like)
-            for value in node:
-                walk(value)
-
-    walk(payload)
-    if not candidates:
+    """Extract data rows from keyshareholders response.
+    Real format: data[1+] are lists [ID, ParentID, IsExpanded, Description, {per,val}...]
+    Skip header row (data[0]) and group/summary rows (ParentID is None AND IsExpanded is True).
+    """
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list) or len(data) < 2:
         return []
-    return max(candidates, key=len)
+    result = []
+    for row in data[1:]:
+        if not isinstance(row, list) or len(row) < 4:
+            continue
+        parent_id = row[1]
+        description = row[3]
+        if not description:
+            continue
+        result.append(row)
+    return result
 
 
 @register_source
@@ -801,7 +786,16 @@ class CogencisFundamentalsIngester(SourceIngester):
                     ),
                 )
                 if response.ok and payload is not None:
-                    return payload.get("response") if isinstance(payload, dict) else None
+                    if isinstance(payload, dict):
+                        # Detect auth-error JSON responses like {"message": "A token is required..."}
+                        msg = payload.get("message", "")
+                        if isinstance(msg, str) and "token" in msg.lower():
+                            last_error = msg
+                            logger.warning("[COGENCIS] api fetch failed for %s: %s", request_url, msg)
+                            break
+                        # Support both {"response": <data>} wrapper and flat payloads
+                        return payload.get("response", payload)
+                    return None
                 last_error = parse_error if response.ok else response.text[:1000]
             except Exception as exc:
                 last_error = str(exc)[:2000]
@@ -877,10 +871,11 @@ class CogencisFundamentalsIngester(SourceIngester):
             crawl_date,
             conn,
         )
-        if not payload:
+        if not payload or not isinstance(payload, dict):
             return 0
-        auditors = payload.get("data") if isinstance(payload, dict) else None
-        if auditors is None:
+        table = _api_table_from_response("Auditors", payload, f"https://data.cogencis.com/api/v1/auditors")
+        auditors_data = payload.get("data")
+        if not auditors_data:
             return 0
         existing = conn.fetchone("SELECT * FROM src_cogencis_company_overview WHERE asset_id = ?", (asset_id,))
         conn.execute(
@@ -902,12 +897,12 @@ class CogencisFundamentalsIngester(SourceIngester):
                 existing["book_value_text"] if existing else None,
                 existing["pe_ttm_text"] if existing else None,
                 existing["dividend_yield_text"] if existing else None,
-                _json_dumps(auditors),
+                _json_dumps(table["rows"] if table else auditors_data),
                 existing["overview_json"] if existing else None,
                 base_url,
             ),
         )
-        return len(auditors) if isinstance(auditors, list) else 1
+        return len(auditors_data) if isinstance(auditors_data, list) else 1
 
     def _enrich_connected_companies(self, asset_id: str, crawl_date: date, conn: DatabaseConnection) -> int:
         rows = conn.execute(
@@ -1182,22 +1177,44 @@ class CogencisFundamentalsIngester(SourceIngester):
         conn: DatabaseConnection,
     ) -> int:
         inserted = 0
-        seen_records = set()
+        # Dedup by (row_id, period_end_date) — row IDs are stable identifiers across pages
+        seen_row_period: set = set()
+        # period -> summary dict, accumulated across all pages
+        period_summaries: Dict[str, Dict[str, Any]] = {}
+
         for payload in payloads:
             periods = _extract_keyshareholders_periods(payload)
             rows = _extract_keyshareholders_rows(payload)
             if not periods or not rows:
                 continue
+            # Build ID -> group_name map from group rows (ParentID is None)
+            id_to_group: Dict[int, str] = {}
+            for row in rows:
+                if not isinstance(row, list) or len(row) < 4:
+                    continue
+                row_id = row[0]
+                parent_id = row[1]
+                description = _clean_text(row[3]) if row[3] else ""
+                if parent_id is None and description:
+                    id_to_group[row_id] = description
+
             for row_index, row in enumerate(rows):
-                if not isinstance(row, list):
+                if not isinstance(row, list) or len(row) < 4:
                     continue
-                name_index = next((idx for idx, item in enumerate(row) if isinstance(item, str) and _clean_text(item)), None)
-                if name_index is None:
+                row_id = row[0]
+                parent_id = row[1]
+                description = _clean_text(row[3]) if row[3] else ""
+                if not description:
                     continue
-                shareholder_name = _clean_text(row[name_index])
-                if not shareholder_name:
-                    continue
-                period_cells = row[name_index + 1:name_index + 1 + len(periods)]
+                # Determine parent_category: use group name if child, else "Key Shareholders"
+                if parent_id is not None and parent_id in id_to_group:
+                    parent_category = id_to_group[parent_id]
+                elif parent_id is None:
+                    parent_category = "Key Shareholders"
+                else:
+                    parent_category = "Key Shareholders"
+
+                period_cells = row[4:4 + len(periods)]
                 for period_label, cell in zip(periods, period_cells):
                     period_end_date = _parse_date(period_label)
                     if not period_end_date or not isinstance(cell, dict):
@@ -1206,10 +1223,10 @@ class CogencisFundamentalsIngester(SourceIngester):
                     share_count = _parse_number(cell.get("val"))
                     if holding_pct is None and share_count is None:
                         continue
-                    dedupe_key = (asset_id, entity_name, period_end_date, shareholder_name, holding_pct, share_count)
-                    if dedupe_key in seen_records:
+                    dedupe_key = (row_id, period_end_date)
+                    if dedupe_key in seen_row_period:
                         continue
-                    seen_records.add(dedupe_key)
+                    seen_row_period.add(dedupe_key)
                     conn.execute(
                         """INSERT OR REPLACE INTO src_cogencis_shareholding_categories
                            (id, asset_id, entity_name, period_end_date, parent_category, category_name, holding_pct, share_count, change_qoq_pct, row_order, raw_json)
@@ -1219,16 +1236,74 @@ class CogencisFundamentalsIngester(SourceIngester):
                             asset_id,
                             entity_name,
                             period_end_date,
-                            "Key Shareholders",
-                            shareholder_name,
+                            parent_category,
+                            description,
                             holding_pct,
                             share_count,
                             None,
                             row_index,
-                            _json_dumps({"period": period_label, "cell": cell, "row": row}),
+                            _json_dumps({"period": period_label, "cell": cell}),
                         ),
                     )
                     inserted += 1
+                    # Accumulate into period summary using parent_category label
+                    if period_end_date not in period_summaries:
+                        period_summaries[period_end_date] = {
+                            "promoter_holding": None,
+                            "promoter_group_holding": None,
+                            "fii_holding": None,
+                            "dii_holding": None,
+                            "mutual_fund_holding": None,
+                            "insurance_holding": None,
+                            "government_holding": None,
+                            "public_holding": None,
+                            "non_institutional_holding": None,
+                            "other_holding": None,
+                            "pledged_shares_pct": None,
+                        }
+                    # Accumulate leaf rows (children) into group totals by summing
+                    if parent_id is not None and holding_pct is not None:
+                        norm_parent = _norm_key(parent_category)
+                        if "promoter" in norm_parent:
+                            key = "promoter_holding"
+                        elif "public" in norm_parent:
+                            key = "public_holding"
+                        else:
+                            key = None
+                        if key:
+                            prev = period_summaries[period_end_date].get(key) or 0.0
+                            period_summaries[period_end_date][key] = round(prev + holding_pct, 6)
+
+        # Write summary rows
+        for period_end_date, summary in period_summaries.items():
+            if not any(v is not None for v in summary.values()):
+                continue
+            total_holding_reported = sum(v for k, v in summary.items() if k.endswith("holding") and v is not None)
+            conn.execute(
+                """INSERT OR REPLACE INTO src_cogencis_shareholding_summary
+                   (id, asset_id, entity_name, period_end_date, promoter_holding, promoter_group_holding, fii_holding, dii_holding, mutual_fund_holding, insurance_holding, government_holding, public_holding, non_institutional_holding, other_holding, pledged_shares_pct, total_holding_reported, raw_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    generate_id(),
+                    asset_id,
+                    entity_name,
+                    period_end_date,
+                    summary["promoter_holding"],
+                    summary["promoter_group_holding"],
+                    summary["fii_holding"],
+                    summary["dii_holding"],
+                    summary["mutual_fund_holding"],
+                    summary["insurance_holding"],
+                    summary["government_holding"],
+                    summary["public_holding"],
+                    summary["non_institutional_holding"],
+                    summary["other_holding"],
+                    summary["pledged_shares_pct"],
+                    total_holding_reported,
+                    _json_dumps({"source": "keyshareholders", "period": period_end_date}),
+                ),
+            )
+            inserted += 1
         return inserted
 
     def _ingest_shareholding(

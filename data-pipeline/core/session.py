@@ -135,6 +135,19 @@ def create_cogencis_session(prime: bool = False) -> requests.Session:
         prime_url = os.getenv("COGENCIS_PRIME_URL", "https://iinvest.cogencis.com/")
         try:
             session.get(prime_url, timeout=15)
+            # Auto-extract bearer token from session cookies if not already set
+            if not bearer_token:
+                for cookie in session.cookies:
+                    if cookie.name in ("next-auth.token", "__Secure-next-auth.session-token"):
+                        bearer_token = cookie.value
+                        session.headers["Authorization"] = f"Bearer {bearer_token}"
+                        logger.debug("Cogencis: auto-extracted bearer token from cookie %s", cookie.name)
+                        break
         except Exception as exc:
             logger.warning("Cogencis session prime failed: %s", exc)
+    if not bearer_token:
+        logger.warning(
+            "[COGENCIS] No bearer token found. Set COGENCIS_BEARER_TOKEN env var or use "
+            "--bearer-token flag. API calls to data.cogencis.com will fail."
+        )
     return session
