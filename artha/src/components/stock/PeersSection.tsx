@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import type { PeerComparison } from "@/lib/data/types";
 
@@ -34,21 +34,32 @@ function DiffBadge({ val, base }: { val: number | null; base: number | null }) {
 
 interface Props {
   symbol: string;
-  currentRatios: { peTtm?: number | null; roce?: number | null; roe?: number | null; pb?: number | null } | null;
+  currentRatios: {
+    peTtm?: number | null;
+    roce?: number | null;
+    roe?: number | null;
+    pb?: number | null;
+    debtEquity?: number | null;
+    dividendYield?: number | null;
+    marketCapCr?: number | null;
+  } | null;
 }
 
 export function PeersSection({ symbol, currentRatios }: Props) {
   const [peers, setPeers] = useState<PeerComparison[]>([]);
-  const [loading, setLoading] = useState(true);
   const [chartMetric, setChartMetric] = useState<string>("peTtm");
+  const [loadedSymbol, setLoadedSymbol] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/stocks/${symbol}/peers`)
       .then((r) => r.json())
-      .then((d) => setPeers(d.peers ?? []))
-      .finally(() => setLoading(false));
+      .then((d) => {
+        setPeers(d.peers ?? []);
+        setLoadedSymbol(symbol);
+      });
   }, [symbol]);
+
+  const loading = loadedSymbol !== symbol;
 
   const chartMetricDef = METRICS.find((m) => m.key === chartMetric) ?? METRICS[0];
 

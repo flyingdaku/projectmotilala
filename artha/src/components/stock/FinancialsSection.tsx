@@ -24,6 +24,21 @@ function fmtPct(v: number | null | undefined) {
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
+function periodLabel(value: string | null | undefined, annual = false) {
+  if (!value) return "—";
+  const compactFy = /^([A-Za-z]{3})-(\d{2})$/.exec(value);
+  if (compactFy) return annual ? `FY${compactFy[2]}` : value;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const d = new Date(`${value}T00:00:00Z`);
+    if (!Number.isNaN(d.getTime())) {
+      return annual
+        ? `FY${String(d.getUTCMonth() < 3 ? d.getUTCFullYear() : d.getUTCFullYear() + 1).slice(2)}`
+        : `${d.toLocaleString("en-IN", { month: "short", timeZone: "UTC" })}-${String(d.getUTCFullYear()).slice(2)}`;
+    }
+  }
+  return value;
+}
+
 function Trend({ val }: { val: number | null | undefined }) {
   if (val == null) return <Minus size={12} className="text-muted-foreground" />;
   if (val > 0) return <TrendingUp size={12} className="text-green-400" />;
@@ -77,29 +92,38 @@ export function FinancialsSection({ symbol }: Props) {
     cashFlows: CashFlow[];
     ratios: Array<{ periodEndDate: string; debtorDays: number | null; inventoryDays: number | null; daysPayable: number | null; roce: number | null }>;
   } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"quarterly" | "annual">("annual");
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const requestKey = `${symbol}-${isConsolidated ? "consolidated" : "standalone"}`;
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/stocks/${symbol}/financials?consolidated=${isConsolidated}`)
       .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false));
-  }, [symbol, isConsolidated]);
+      .then((payload) => {
+        setData(payload);
+        setLoadedKey(requestKey);
+      });
+  }, [requestKey, symbol, isConsolidated]);
+
+  const loading = loadedKey !== requestKey;
 
   const anomalies = useMemo(() => {
     if (!data) return [];
     return detectAnomalies(data.quarterly, data.balanceSheets);
   }, [data]);
 
+  const plRows = useMemo(() => {
+    if (!data) return [];
+    return viewMode === "quarterly" ? data.quarterly.slice(0, 8) : data.annual.slice(0, 8);
+  }, [data, viewMode]);
+
   const plData = useMemo(() => {
     if (!data) return [];
     const quarterly = data.quarterly || [];
     const annual = data.annual || [];
-    const src = viewMode === "quarterly" ? [...quarterly].reverse() : [...annual].filter(r => r.periodType === "annual").reverse();
+    const src = viewMode === "quarterly" ? [...quarterly].reverse() : [...annual].reverse();
     return src.map((r) => ({
-      period: (r.periodEnd ?? "").slice(0, 7),
+      period: viewMode === "quarterly" ? periodLabel(r.periodEnd ?? r.quarter) : (r.quarter ?? periodLabel(r.periodEnd, true)),
       Revenue: r.revenue ?? 0,
       "Op. Profit": r.operatingProfit ?? 0,
       "Net Profit": r.netProfit ?? 0,
@@ -110,7 +134,7 @@ export function FinancialsSection({ symbol }: Props) {
     if (!data) return [];
     const balanceSheets = data.balanceSheets || [];
     return [...balanceSheets].reverse().map((r) => ({
-      period: (r.periodEndDate ?? r.periodEnd ?? "").slice(0, 4),
+      period: r.year ?? periodLabel(r.periodEndDate ?? r.periodEnd, true),
       Equity: (r.equityCapital ?? 0) + (r.reserves ?? 0),
       Debt: r.borrowings ?? 0,
       "Total Assets": r.totalAssets ?? 0,
@@ -121,7 +145,7 @@ export function FinancialsSection({ symbol }: Props) {
     if (!data) return [];
     const cashFlows = data.cashFlows || [];
     return [...cashFlows].reverse().map((r) => ({
-      period: (r.periodEndDate ?? r.periodEnd ?? "").slice(0, 4),
+      period: r.year ?? periodLabel(r.periodEndDate ?? r.periodEnd, true),
       "From Ops": r.cashFromOperating ?? 0,
       "From Investing": r.cashFromInvesting ?? 0,
       "From Financing": r.cashFromFinancing ?? 0,
@@ -133,9 +157,9 @@ export function FinancialsSection({ symbol }: Props) {
     if (!data) return [];
     const ratios = data.ratios || [];
     return [...ratios].reverse().map((r) => ({
-      period: r.periodEndDate.slice(0, 4),
-      "Debtor Days": r.debtorDays ?? 0,
-      "Inventory Days": r.inventoryDays ?? 0,
+      period: periodLabel(r.periodEndDate, true),
+      "Operating Margin": r.operatingMargin ?? 0,
+      "PAT Margin": r.patMargin ?? 0,
       ROCE: r.roce ?? 0,
     }));
   }, [data]);
@@ -209,7 +233,7 @@ export function FinancialsSection({ symbol }: Props) {
                 Export CSV
               </button>
               {["quarterly", "annual"].map((m) => (
-                <button key={m} onClick={() => setViewMode(m as any)}
+                <button key={m} onClick={() => setViewMode(m)}
                   className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize ${viewMode === m ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}>
                   {m}
                 </button>
@@ -251,9 +275,9 @@ export function FinancialsSection({ symbol }: Props) {
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)" }}>
                     <th className="py-2 text-left pr-4 font-semibold min-w-[140px]" style={{ color: "var(--text-muted)" }}>Parameters</th>
-                    {data.quarterly.slice(0, 8).map((r, i) => (
+                    {plRows.map((r, i) => (
                       <th key={i} className="text-right py-2 px-3 font-semibold min-w-[80px]" style={{ color: "var(--text-muted)" }}>
-                        {(r.periodEnd ?? "").slice(0, 7)}
+                        {viewMode === "quarterly" ? periodLabel(r.periodEnd ?? r.quarter) : (r.quarter ?? periodLabel(r.periodEnd, true))}
                       </th>
                     ))}
                   </tr>
@@ -261,19 +285,19 @@ export function FinancialsSection({ symbol }: Props) {
                 <tbody className="divide-y divide-[var(--border)]">
                   <tr>
                     <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Revenue (Cr)</td>
-                    {data.quarterly.slice(0, 8).map((r, i) => (
+                    {plRows.map((r, i) => (
                       <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.revenue)}</td>
                     ))}
                   </tr>
                   <tr>
                     <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Operating Profit</td>
-                    {data.quarterly.slice(0, 8).map((r, i) => (
+                    {plRows.map((r, i) => (
                       <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.operatingProfit)}</td>
                     ))}
                   </tr>
                   <tr>
                     <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>OPM %</td>
-                    {data.quarterly.slice(0, 8).map((r, i) => {
+                    {plRows.map((r, i) => {
                       const opm = r.revenue && r.operatingProfit ? (r.operatingProfit / r.revenue * 100) : null;
                       return (
                         <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: opm && opm > 0 ? "#10B981" : "#EF4444" }}>{fmtPct(opm)}</td>
@@ -282,13 +306,13 @@ export function FinancialsSection({ symbol }: Props) {
                   </tr>
                   <tr>
                     <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Net Profit</td>
-                    {data.quarterly.slice(0, 8).map((r, i) => (
+                    {plRows.map((r, i) => (
                       <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.netProfit ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.netProfit)}</td>
                     ))}
                   </tr>
                   <tr>
                     <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>NPM %</td>
-                    {data.quarterly.slice(0, 8).map((r, i) => {
+                    {plRows.map((r, i) => {
                       const npm = r.revenue && r.netProfit ? (r.netProfit / r.revenue * 100) : null;
                       return (
                         <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: npm && npm > 0 ? "#10B981" : "#EF4444" }}>{fmtPct(npm)}</td>
@@ -297,7 +321,7 @@ export function FinancialsSection({ symbol }: Props) {
                   </tr>
                   <tr className="bg-muted/5 font-bold">
                     <td className="py-3 pr-4" style={{ color: "var(--text-primary)" }}>EPS</td>
-                    {data.quarterly.slice(0, 8).map((r, i) => (
+                    {plRows.map((r, i) => (
                       <td key={i} className="text-right py-3 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{r.eps?.toFixed(2) ?? "—"}</td>
                     ))}
                   </tr>
@@ -482,8 +506,8 @@ export function FinancialsSection({ symbol }: Props) {
                 <YAxis axisLine={false} tickLine={false} tick={axisStyle} width={40} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: "11px", paddingTop: "16px" }} />
-                <Line type="monotone" dataKey="Debtor Days" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="Inventory Days" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="Operating Margin" stroke="#3B82F6" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="PAT Margin" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} />
                 <Line type="monotone" dataKey="ROCE" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>

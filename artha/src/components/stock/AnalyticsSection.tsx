@@ -5,7 +5,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine, RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
-import { TrendingUp, BarChart2, Zap } from "lucide-react";
+import { TrendingUp, BarChart2 } from "lucide-react";
 import type { FactorExposure, EarningsQuality, ComputedRatios } from "@/lib/data/types";
 
 interface Props {
@@ -19,8 +19,8 @@ export function AnalyticsSection({ symbol }: Props) {
     ratioHistory: Partial<ComputedRatios>[];
     ratios: ComputedRatios | null;
   } | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeMetric, setActiveMetric] = useState<"peTtm" | "pb" | "evEbitda" | "roce" | "roe">("peTtm");
+  const [loadedSymbol, setLoadedSymbol] = useState<string | null>(null);
 
   const METRIC_LABELS: Record<string, string> = {
     peTtm: "P/E (TTM)",
@@ -31,12 +31,15 @@ export function AnalyticsSection({ symbol }: Props) {
   };
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/stocks/${symbol}/analytics`)
       .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false));
+      .then((payload) => {
+        setData(payload);
+        setLoadedSymbol(symbol);
+      });
   }, [symbol]);
+
+  const loading = loadedSymbol !== symbol;
 
   const historicalChart = useMemo(() => {
     if (!data?.ratioHistory) return [];

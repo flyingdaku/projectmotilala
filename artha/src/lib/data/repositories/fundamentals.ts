@@ -167,6 +167,7 @@ export class FundamentalsRepository extends BaseRepository {
     }
 
     public estimateMarketCap(assetId: string, price: number, _faceValue: number | null): number | null {
+        void _faceValue;
         const rows = this.getFundamentalRows(assetId, true);
         const shares = rows.map((row) => this.deriveShares(row)).find((value) => value != null) ?? null;
         if (!shares || price <= 0) return null;
@@ -174,6 +175,7 @@ export class FundamentalsRepository extends BaseRepository {
     }
 
     public getCompanyData(_assetId: string) {
+        void _assetId;
         // MSI ratings are deprecated; returning placeholder object to satisfy frontend types
         return {
             composite_rating: null,
@@ -218,6 +220,7 @@ export class FundamentalsRepository extends BaseRepository {
     }
 
     public getLatestShares(assetId: string, _faceValue: number): number | null {
+        void _faceValue;
         const rows = this.getFundamentalRows(assetId, true);
         return rows.map((row) => this.deriveShares(row)).find((value) => value != null) ?? null;
     }

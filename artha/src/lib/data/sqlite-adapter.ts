@@ -256,6 +256,8 @@ export function createSqliteAdapter() {
             },
 
             async getDocuments(_assetId: string, _docType?: string): Promise<CompanyDocument[]> {
+                void _assetId;
+                void _docType;
                 return [];
             },
 
@@ -394,6 +396,8 @@ export function createSqliteAdapter() {
 
         follow: {
             async getStatus(userId: string, symbol: string) {
+                void userId;
+                void symbol;
                 return { isFollowing: false, followerCount: 0, alertConfig: undefined, };
             },
             async follow() { },
@@ -401,9 +405,20 @@ export function createSqliteAdapter() {
         },
 
         feed: {
-            async getUserFeed(_userId: string, limit = 50, offset = 0): Promise<FeedItem[]> { return []; },
-            async getUnreadCount(_userId: string): Promise<number> { return 0; },
-            async markAsRead(_userId: string, _eventIds: string[]): Promise<void> { },
+            async getUserFeed(_userId: string, limit = 50, offset = 0): Promise<FeedItem[]> {
+                void _userId;
+                void limit;
+                void offset;
+                return [];
+            },
+            async getUnreadCount(_userId: string): Promise<number> {
+                void _userId;
+                return 0;
+            },
+            async markAsRead(_userId: string, _eventIds: string[]): Promise<void> {
+                void _userId;
+                void _eventIds;
+            },
         },
     };
 }
