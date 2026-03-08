@@ -1,11 +1,12 @@
 import { BaseRepository } from "./base";
-import type { StockSummary, PeerComparison } from "../types";
+import type { StockSummary } from "../types";
 
 export type DbAsset = {
     id: string; nse_symbol: string | null; bse_code: string | null;
     isin: string | null; name: string; sector: string | null;
     industry_group: string | null; industry: string | null;
     sub_industry: string | null; screener_sector_code: string | null;
+    screener_industry_group_code: string | null;
     screener_industry_code: string | null; screener_sub_industry_code: string | null;
     msi_sector: string | null; msi_industry_group: string | null;
     msi_group_rank: number | null; listing_date: string | null;
@@ -18,7 +19,7 @@ export class AssetRepository extends BaseRepository {
     public resolveAsset(symbol: string): DbAsset | null {
         const row = this.db.queryOne<DbAsset>(
             `SELECT id, nse_symbol, bse_code, isin, name, sector, industry_group,
-                industry, sub_industry, screener_sector_code, screener_industry_code,
+                industry, sub_industry, screener_sector_code, screener_industry_group_code, screener_industry_code,
                 screener_sub_industry_code, msi_sector, msi_industry_group, msi_group_rank,
                 listing_date, nse_listed, bse_listed, is_active,
                 website_url, face_value, management_json, description
@@ -81,29 +82,30 @@ export class AssetRepository extends BaseRepository {
     }
 
     public getPeersBase(asset: DbAsset): { id: string, nse_symbol: string | null, bse_code: string | null, name: string, face_value: number | null }[] {
-        // Use the most specific classification level available
-        const codeField = asset.screener_sub_industry_code
-            ? "screener_sub_industry_code"
-            : asset.screener_industry_code
-                ? "screener_industry_code"
-                : asset.sector
-                    ? "sector"
-                    : null;
-        const codeVal = asset.screener_sub_industry_code
-            ?? asset.screener_industry_code
-            ?? asset.sector
-            ?? null;
+        const candidates: Array<{ field: string; value: string | null }> = [
+            { field: "screener_sub_industry_code", value: asset.screener_sub_industry_code },
+            { field: "screener_industry_code", value: asset.screener_industry_code },
+            { field: "screener_industry_group_code", value: asset.screener_industry_group_code },
+            { field: "screener_sector_code", value: asset.screener_sector_code },
+            { field: "sub_industry", value: asset.sub_industry },
+            { field: "industry", value: asset.industry },
+            { field: "industry_group", value: asset.industry_group },
+            { field: "sector", value: asset.sector },
+            { field: "msi_industry_group", value: asset.msi_industry_group },
+            { field: "msi_sector", value: asset.msi_sector },
+        ];
 
-        if (!codeField || !codeVal) return [];
+        const selected = candidates.find((candidate) => candidate.value && String(candidate.value).trim().length > 0) ?? null;
+        if (!selected) return [];
 
         const peers = this.db.queryAll<{
             id: string; nse_symbol: string | null; bse_code: string | null; name: string;
             face_value: number | null;
         }>(
             `SELECT id, nse_symbol, bse_code, name, face_value FROM assets
-             WHERE ${codeField} = ? AND id != ? AND is_active = 1
+             WHERE ${selected.field} = ? AND id != ? AND is_active = 1
              ORDER BY name LIMIT 20`,
-            [codeVal, asset.id]
+            [selected.value, asset.id]
         );
         return peers;
     }

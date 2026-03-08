@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 
 UNIFIED_FIELDS = [
     'revenue', 'operating_profit', 'ebit', 'interest', 'pbt', 'tax', 'pat', 'eps',
-    'total_assets', 'total_equity', 'total_debt', 'cash_equivalents',
-    'cfo', 'capex', 'fcf', 'book_value_per_share', 'shares_outstanding'
+    'total_assets', 'total_equity', 'total_debt', 'cash_equivalents', 'trade_receivables',
+    'cfo', 'cash_from_investing', 'cash_from_financing', 'capex', 'fcf',
+    'book_value_per_share', 'shares_outstanding'
 ]
 
 def map_nse_field(row: Dict, field: str) -> Optional[float]:
@@ -45,11 +46,18 @@ def map_bse_field(row: Dict, field: str) -> Optional[float]:
 
 def map_msi_field(q: Dict, bs: Dict, cf: Dict, field: str) -> Optional[float]:
     if not any([q, bs, cf]): return None
-    if field == 'revenue': return q.get('revenue_ops') if q else None
+    if field == 'revenue':
+        if not q:
+            return None
+        return q.get('revenue_ops') if q.get('revenue_ops') is not None else q.get('total_revenue')
     if field == 'interest': return q.get('finance_costs') if q else None
     if field == 'pbt': return q.get('profit_before_tax') if q else None
     if field == 'pat': return q.get('net_profit') if q else None
     if field == 'eps': return q.get('basic_eps') if q else None
+    if field == 'tax':
+        if q and q.get('profit_before_tax') is not None and q.get('net_profit') is not None:
+            return q['profit_before_tax'] - q['net_profit']
+        return None
     if field == 'ebit':
         if q and q.get('profit_before_tax') is not None and q.get('finance_costs') is not None:
             return q['profit_before_tax'] + q['finance_costs']
@@ -66,9 +74,25 @@ def map_msi_field(q: Dict, bs: Dict, cf: Dict, field: str) -> Optional[float]:
             return long_term + short_term
         return None
     if field == 'cash_equivalents': return bs.get('cash_equivalents') if bs else None
+    if field == 'trade_receivables': return bs.get('trade_receivables') if bs else None
     if field == 'cfo': return cf.get('net_cash_operating') if cf else None
-    if field == 'capex': return cf.get('capex') if cf else None
-    if field == 'fcf': return cf.get('free_cash_flow') if cf else None
+    if field == 'cash_from_investing': return cf.get('net_cash_investing') if cf else None
+    if field == 'cash_from_financing': return cf.get('net_cash_financing') if cf else None
+    if field == 'capex':
+        if not cf:
+            return None
+        if cf.get('capex') is not None:
+            return abs(cf['capex'])
+        if cf.get('net_cash_investing') is not None:
+            return abs(cf['net_cash_investing'])
+        return None
+    if field == 'fcf':
+        if cf and cf.get('net_cash_operating') is not None:
+            if cf.get('capex') is not None:
+                return cf['net_cash_operating'] - abs(cf['capex'])
+            if cf.get('net_cash_investing') is not None:
+                return cf['net_cash_operating'] + cf['net_cash_investing']
+        return None
     return None
 
 def map_screener_field(q: Dict, bs: Dict, cf: Dict, field: str) -> Optional[float]:
@@ -90,13 +114,30 @@ def map_screener_field(q: Dict, bs: Dict, cf: Dict, field: str) -> Optional[floa
         return None
     if field == 'total_debt': return bs.get('borrowings') if bs else None
     if field == 'cash_equivalents': return bs.get('other_assets') if bs else None
+    if field == 'trade_receivables': return None
     if field == 'cfo': return cf.get('cash_from_operating') if cf else None
+    if field == 'cash_from_investing': return cf.get('cash_from_investing') if cf else None
+    if field == 'cash_from_financing': return cf.get('cash_from_financing') if cf else None
     if field == 'capex': return cf.get('cash_from_investing') if cf else None
     if field == 'fcf':
         if cf and cf.get('cash_from_operating') is not None and cf.get('cash_from_investing') is not None:
              return cf['cash_from_operating'] + cf['cash_from_investing']
         return None
     return None
+
+def _ensure_fundamentals_columns(conn):
+    existing = {
+        row[1]
+        for row in conn.execute("PRAGMA table_info(fundamentals)").fetchall()
+    }
+    wanted = {
+        'trade_receivables': 'REAL',
+        'cash_from_investing': 'REAL',
+        'cash_from_financing': 'REAL',
+    }
+    for column, col_type in wanted.items():
+        if column not in existing:
+            conn.execute(f"ALTER TABLE fundamentals ADD COLUMN {column} {col_type}")
 
 def log_conflict(conn, p, field, values, chosen_val, chosen_source, conflict_type, pct_dev):
     conn.execute("""
@@ -135,6 +176,7 @@ def refresh_unified_view():
     """Merge source tables into unified fundamentals with conflict detection."""
     logger.info("[FUNDAMENTALS] Refreshing unified view...")
     with get_db() as conn:
+        _ensure_fundamentals_columns(conn)
         msi_q_table = _resolve_table_name(conn, ['src_msi_quarterly', 'msi_fundamentals_quarterly'])
         msi_bs_table = _resolve_table_name(conn, ['src_msi_balance_sheet', 'msi_balance_sheets'])
         msi_cf_table = _resolve_table_name(conn, ['src_msi_cashflow', 'msi_cash_flows'])
@@ -149,8 +191,16 @@ def refresh_unified_view():
         period_queries = []
         if msi_q_table:
             period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {msi_q_table}")
+        if msi_bs_table:
+            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {msi_bs_table}")
+        if msi_cf_table:
+            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {msi_cf_table}")
         if scr_q_table:
             period_queries.append(f"SELECT asset_id, period_end_date, is_consolidated FROM {scr_q_table}")
+        if scr_bs_table:
+            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {scr_bs_table}")
+        if scr_cf_table:
+            period_queries.append(f"SELECT asset_id, period_end_date, 1 AS is_consolidated FROM {scr_cf_table}")
         period_sql = " UNION ".join(period_queries)
         periods = conn.execute("""
             SELECT DISTINCT asset_id, period_end_date, is_consolidated FROM (
@@ -205,9 +255,9 @@ def refresh_unified_view():
                 if pct_dev >= 2.0:
                     log_conflict(conn, p, field, values, merged[field], 'MSI', 'MATERIAL', pct_dev)
             
-            if msi_q:
+            if msi_q or msi_bs or msi_cf:
                 merged['source'] = 'MSI'
-            elif scr_q:
+            elif scr_q or scr_bs or scr_cf:
                 merged['source'] = 'SCREENER'
                 
             upsert_unified(conn, p, merged)
