@@ -222,8 +222,8 @@ export class FundamentalsRepository extends BaseRepository {
         return rows.map((row) => this.deriveShares(row)).find((value) => value != null) ?? null;
     }
 
-    public getQuarterly(assetId: string): QuarterlyResult[] {
-        const rows = this.getFundamentalRows(assetId, true).slice(0, 16);
+    public getQuarterly(assetId: string, isConsolidated: boolean = true): QuarterlyResult[] {
+        const rows = this.getFundamentalRows(assetId, isConsolidated).slice(0, 16);
 
         return rows.map((r) => {
             const patMargin = r.revenue && r.pat ? +((r.pat / r.revenue) * 100).toFixed(1) : null;
@@ -244,8 +244,8 @@ export class FundamentalsRepository extends BaseRepository {
         });
     }
 
-    public getAnnual(assetId: string): QuarterlyResult[] {
-        const rows = this.buildAnnualRows(this.getFundamentalRows(assetId, true)).slice(0, 10);
+    public getAnnual(assetId: string, isConsolidated: boolean = true): QuarterlyResult[] {
+        const rows = this.buildAnnualRows(this.getFundamentalRows(assetId, isConsolidated)).slice(0, 10);
         return rows.map((r) => {
             const patMargin = r.revenue && r.pat ? +((r.pat / r.revenue) * 100).toFixed(1) : null;
             const opMargin = r.revenue && r.operating_profit ? +((r.operating_profit / r.revenue) * 100).toFixed(1) : null;
@@ -266,8 +266,8 @@ export class FundamentalsRepository extends BaseRepository {
         });
     }
 
-    public getBalanceSheet(assetId: string): BalanceSheet[] {
-        const rows = this.buildAnnualRows(this.getFundamentalRows(assetId, true)).slice(0, 10);
+    public getBalanceSheet(assetId: string, isConsolidated: boolean = true): BalanceSheet[] {
+        const rows = this.buildAnnualRows(this.getFundamentalRows(assetId, isConsolidated)).slice(0, 10);
         return rows.map((r) => {
             const shares = this.deriveShares(r);
             const equityCapital = shares ? +((shares / 1e7) * 1).toFixed(2) : null;
@@ -295,8 +295,8 @@ export class FundamentalsRepository extends BaseRepository {
         });
     }
 
-    public getCashFlow(assetId: string): CashFlow[] {
-        const rows = this.buildAnnualRows(this.getFundamentalRows(assetId, true)).slice(0, 10);
+    public getCashFlow(assetId: string, isConsolidated: boolean = true): CashFlow[] {
+        const rows = this.buildAnnualRows(this.getFundamentalRows(assetId, isConsolidated)).slice(0, 10);
 
         return rows.map((r) => {
             const opCF = r.cfo ?? null;
@@ -321,8 +321,8 @@ export class FundamentalsRepository extends BaseRepository {
         });
     }
 
-    public getFinancialRatios(assetId: string) {
-        const rows = this.getFundamentalRows(assetId, true).slice(0, 12);
+    public getFinancialRatios(assetId: string, isConsolidated: boolean = true) {
+        const rows = this.getFundamentalRows(assetId, isConsolidated).slice(0, 12);
         return rows.map((row) => {
             const operatingMargin = row.revenue && row.operating_profit != null ? +((row.operating_profit / row.revenue) * 100).toFixed(2) : null;
             const patMargin = row.revenue && row.pat != null ? +((row.pat / row.revenue) * 100).toFixed(2) : null;

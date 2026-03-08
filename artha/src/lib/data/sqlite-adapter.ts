@@ -81,20 +81,17 @@ export function createSqliteAdapter() {
                 const price = latestPrice?.close ?? 0;
                 const marketCapCr = price > 0 ? fundRepo.estimateMarketCap(asset.id, price, fv) : null;
 
-                // PE (TTM)
                 const pe = ttmRatios?.ttmEps && ttmRatios.ttmEps > 0
                     ? +(price / ttmRatios.ttmEps).toFixed(1) : null;
 
-                // Book value per share (equity_capital + reserves) / shares
                 const equity = ttmRatios?.equity;
                 const shares = fv ? fundRepo.getLatestShares(asset.id, fv) : null;
 
-                const bookValuePerShare = equity && shares && shares > 0
-                    ? +((equity * 1e7) / shares).toFixed(2) : null;
+                const bookValuePerShare = ttmRatios?.bookValuePerShare ?? (equity && shares && shares > 0
+                    ? +((equity * 1e7) / shares).toFixed(2) : null);
                 const pb = bookValuePerShare && price > 0
                     ? +(price / bookValuePerShare).toFixed(2) : null;
 
-                // Dividend yield from latest corporate action
                 const lastDiv = corpRepo.getLatestDividend(asset.id);
                 const divYield = lastDiv?.dividend_amount && price > 0
                     ? +((lastDiv.dividend_amount / price) * 100).toFixed(2) : null;
@@ -106,14 +103,11 @@ export function createSqliteAdapter() {
                 const roe = ttmRatios?.ttmPat && equity && equity > 0
                     ? +((ttmRatios.ttmPat / equity) * 100).toFixed(2) : null;
 
-                // Approximate ROCE = EBIT / Capital Employed (Equity + Debt). 
-                // We use TTM PAT * 1.33 as a rough EBIT proxy if true EBIT isn't in ttmRatios.
-                const ebitApprox = ttmRatios?.ttmPat ? ttmRatios.ttmPat * 1.33 : null;
+                const ebitApprox = ttmRatios?.ttmEbit ?? null;
                 const capEmployed = equity ? equity + (debt ?? 0) : null;
                 const roce = ebitApprox && capEmployed && capEmployed > 0
                     ? +((ebitApprox / capEmployed) * 100).toFixed(2) : null;
 
-                // Recent volume from daily prices
                 const volRow = pricesRepo.getRecentVolume(asset.id);
 
                 return {
@@ -160,14 +154,32 @@ export function createSqliteAdapter() {
                         const marketCapCr = price > 0 ? fundRepo.estimateMarketCap(p.id, price, fv) : null;
                         const pe = ttmR?.ttmEps && ttmR.ttmEps > 0
                             ? +(price / ttmR.ttmEps).toFixed(1) : null;
+                        const pb = ttmR?.bookValuePerShare && price > 0
+                            ? +(price / ttmR.bookValuePerShare).toFixed(2) : null;
+                        const equity = ttmR?.equity ?? null;
+                        const debt = ttmR?.debt ?? null;
+                        const roe = ttmR?.ttmPat && equity && equity > 0
+                            ? +((ttmR.ttmPat / equity) * 100).toFixed(1) : null;
+                        const roce = ttmR?.ttmEbit && equity != null
+                            ? +((ttmR.ttmEbit / Math.max(equity + (debt ?? 0), 1)) * 100).toFixed(1)
+                            : null;
+                        const debtEquity = equity && debt != null && equity > 0
+                            ? +(debt / equity).toFixed(2) : null;
+                        const lastDiv = corpRepo.getLatestDividend(p.id);
+                        const dividendYield = lastDiv?.dividend_amount && price > 0
+                            ? +((lastDiv.dividend_amount / price) * 100).toFixed(2) : null;
+                        const latestRatio = fundRepo.getFinancialRatios(p.id)[0];
 
-                        // TTM revenue for growth calc (this could be optimized later)
                         const revData = fundRepo.getQuarterly(p.id);
                         let revenueGrowth1y: number | null = null;
+                        let patGrowth1y: number | null = null;
                         if (revData.length >= 8) {
                             const rev1 = revData.slice(0, 4).reduce((s, r) => s + (r.revenue ?? 0), 0);
                             const rev2 = revData.slice(4, 8).reduce((s, r) => s + (r.revenue ?? 0), 0);
                             if (rev2 > 0) revenueGrowth1y = +(((rev1 / rev2) - 1) * 100).toFixed(1);
+                            const pat1 = revData.slice(0, 4).reduce((s, r) => s + (r.netProfit ?? r.pat ?? 0), 0);
+                            const pat2 = revData.slice(4, 8).reduce((s, r) => s + (r.netProfit ?? r.pat ?? 0), 0);
+                            if (pat2 > 0) patGrowth1y = +(((pat1 / pat2) - 1) * 100).toFixed(1);
                         }
 
                         return {
@@ -176,9 +188,16 @@ export function createSqliteAdapter() {
                             name: p.name,
                             marketCapCr: marketCapCr ?? undefined,
                             peTtm: pe ?? undefined,
+                            pb: pb ?? undefined,
+                            roce: roce ?? undefined,
+                            roe: roe ?? undefined,
+                            debtEquity: debtEquity ?? undefined,
+                            patMargin: latestRatio?.patMargin ?? undefined,
                             price,
                             pctChange1d: latestPrice?.pct_change ?? undefined,
                             revenueGrowth1y: revenueGrowth1y ?? undefined,
+                            patGrowth1y: patGrowth1y ?? undefined,
+                            dividendYield: dividendYield ?? undefined,
                         } satisfies PeerComparison;
                     })
                 );
@@ -218,11 +237,13 @@ export function createSqliteAdapter() {
 
                 return {
                     description: r?.description ?? `${r?.name ?? 'Company'} is a leading company listed on the Indian stock exchanges.`,
+                    descriptionShort: r?.description ?? `${r?.name ?? 'Company'} is a listed Indian company with active market coverage and a fundamentals history in the golden dataset.`,
                     founded: r?.listing_date?.slice(0, 4) ?? "N/A",
+                    foundedYear: r?.listing_date ? Number(r.listing_date.slice(0, 4)) : null,
                     website: r?.website_url ?? `https://www.${(r?.nse_symbol ?? "company").toLowerCase()}.com`,
                     md: management.md ?? "N/A",
                     chairman: management.chairman ?? "N/A",
-                    indexMemberships: ["Nifty 50", "Nifty 500", "BSE Sensex"], // Mock index memberships for UI demo
+                    indexMemberships: [],
                 };
             },
 
@@ -238,16 +259,21 @@ export function createSqliteAdapter() {
                 return [];
             },
 
-            async getFinancials(assetId: string): Promise<{
+            async getFinancials(assetId: string, opts?: { consolidated?: boolean }): Promise<{
                 quarterly: QuarterlyResult[];
+                annual: QuarterlyResult[];
                 balanceSheet: BalanceSheet[];
                 cashFlow: CashFlow[];
+                ratios: Array<{ periodEndDate: string; debtorDays: number | null; inventoryDays: number | null; daysPayable: number | null; roce: number | null; operatingMargin?: number | null; patMargin?: number | null }>;
                 anomalies: AnomalyFlag[];
             }> {
+                const consolidated = opts?.consolidated ?? true;
                 return {
-                    quarterly: fundRepo.getQuarterly(assetId),
-                    balanceSheet: fundRepo.getBalanceSheet(assetId),
-                    cashFlow: fundRepo.getCashFlow(assetId),
+                    quarterly: fundRepo.getQuarterly(assetId, consolidated),
+                    annual: fundRepo.getAnnual(assetId, consolidated),
+                    balanceSheet: fundRepo.getBalanceSheet(assetId, consolidated),
+                    cashFlow: fundRepo.getCashFlow(assetId, consolidated),
+                    ratios: fundRepo.getFinancialRatios(assetId, consolidated),
                     anomalies: []
                 };
             },
@@ -276,13 +302,17 @@ export function createSqliteAdapter() {
 
                 const msiData = fundRepo.getCompanyData(assetId);
                 const ttmRatios = fundRepo.getTtmRatios(assetId);
+                const annual = fundRepo.getAnnual(assetId);
+                const balanceSheet = fundRepo.getBalanceSheet(assetId);
+                const ratioSeries = fundRepo.getFinancialRatios(assetId);
                 const marketCapCr = price > 0 ? fundRepo.estimateMarketCap(assetId, price, fv) : null;
                 const pe = ttmRatios?.ttmEps && ttmRatios.ttmEps > 0
                     ? +(price / ttmRatios.ttmEps).toFixed(1) : null;
+                const pb = ttmRatios?.bookValuePerShare && price > 0
+                    ? +(price / ttmRatios.bookValuePerShare).toFixed(2) : null;
 
                 const { ratioHistory, lastQuarter } = fundRepo.getLatestRollingPeHistory(assetId, price);
 
-                // CFO/PAT ratio (earnings quality)
                 const cfRow = fundRepo.getRecentCashFlow(assetId);
                 const lastPat = lastQuarter ? ttmRatios?.ttmPat : null;
                 const cfoPatRatio = cfRow?.net_cash_operating && lastPat && lastPat !== 0
@@ -293,23 +323,56 @@ export function createSqliteAdapter() {
                 const debtEquity = equity && debt && equity > 0 ? +(debt / equity).toFixed(2) : null;
                 const roe = ttmRatios?.ttmPat && equity && equity > 0 ? +((ttmRatios.ttmPat / equity) * 100).toFixed(2) : null;
 
-                const ebitApprox = ttmRatios?.ttmPat ? ttmRatios.ttmPat * 1.33 : null;
+                const ebitApprox = ttmRatios?.ttmEbit ?? null;
                 const capEmployed = equity ? equity + (debt ?? 0) : null;
                 const roce = ebitApprox && capEmployed && capEmployed > 0 ? +((ebitApprox / capEmployed) * 100).toFixed(2) : null;
 
                 const lastDiv = corpRepo.getLatestDividend(assetId);
                 const dividendYield = lastDiv?.dividend_amount && price > 0 ? +((lastDiv.dividend_amount / price) * 100).toFixed(2) : null;
 
+                const richRatioHistory = annual.map((row, index) => {
+                    const bsRow = balanceSheet[index];
+                    const opMargin = row.revenue && row.operatingProfit != null ? +((row.operatingProfit / row.revenue) * 100).toFixed(2) : null;
+                    const patMargin = row.revenue && row.netProfit != null ? +((row.netProfit / row.revenue) * 100).toFixed(2) : null;
+                    const histRoe = row.netProfit != null && bsRow?.totalEquity ? +((row.netProfit / bsRow.totalEquity) * 100).toFixed(2) : null;
+                    const histRoce = ratioSeries[index]?.roce ?? null;
+                    const histPb = bsRow?.bookValue && price > 0 ? +(price / bsRow.bookValue).toFixed(2) : null;
+                    const histPe = row.eps && row.eps > 0 ? +(price / row.eps).toFixed(2) : null;
+                    return {
+                        computedDate: row.periodEnd ?? null,
+                        peTtm: histPe,
+                        pb: histPb,
+                        roce: histRoce,
+                        roe: histRoe,
+                        operatingMargin: opMargin,
+                        patMargin,
+                    };
+                });
+
+                const latestRatio = ratioSeries[0];
+                const revenueGrowth1y = annual.length >= 2 && annual[1].revenue
+                    ? +((((annual[0].revenue ?? 0) / annual[1].revenue) - 1) * 100).toFixed(2)
+                    : undefined;
+                const patGrowth1y = annual.length >= 2 && annual[1].netProfit
+                    ? +((((annual[0].netProfit ?? annual[0].pat ?? 0) / annual[1].netProfit) - 1) * 100).toFixed(2)
+                    : undefined;
+                const qualityScore = [
+                    cfoPatRatio != null ? Math.min(Math.max(cfoPatRatio * 40, 0), 40) : 0,
+                    roe != null ? Math.min(Math.max(roe, 0), 30) : 0,
+                    debtEquity != null ? Math.max(0, 30 - debtEquity * 20) : 0,
+                ].reduce((sum, value) => sum + value, 0);
+
                 return {
-                    factorExposure: {}, // FF factors deferred
+                    factorExposure: {},
                     earningsQuality: {
-                        overallScore: msiData?.composite_rating ?? null,
+                        overallScore: qualityScore || msiData?.composite_rating ?? null,
                         cfoPatRatio: cfoPatRatio ?? null,
                         flags: [],
                     },
-                    ratioHistory,
+                    ratioHistory: richRatioHistory.length > 0 ? richRatioHistory : ratioHistory,
                     ratios: {
                         peTtm: pe ?? undefined,
+                        pb: pb ?? undefined,
                         marketCapCr: marketCapCr ?? undefined,
                         price,
                         pctChange1d: latestPrice?.pct_change ?? undefined,
@@ -318,6 +381,11 @@ export function createSqliteAdapter() {
                         roce: roce ?? undefined,
                         debtEquity: debtEquity ?? undefined,
                         dividendYield: dividendYield ?? undefined,
+                        patMargin: latestRatio?.patMargin ?? undefined,
+                        operatingMargin: latestRatio?.operatingMargin ?? undefined,
+                        revenueGrowth1y,
+                        patGrowth1y,
+                        qualityScore: qualityScore || undefined,
                     },
                 };
             },

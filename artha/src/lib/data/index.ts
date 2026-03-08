@@ -156,7 +156,22 @@ interface DataAdapter {
     getCorporateActions(assetId: string, limit?: number): Promise<CorporateAction[]>;
     getEvents(assetId: string, limit?: number): Promise<CompanyEvent[]>;
     getDocuments(assetId: string, type?: string): Promise<CompanyDocument[]>;
-    getFinancials(assetId: string): Promise<{ quarterly: QuarterlyResult[]; balanceSheet: BalanceSheet[]; cashFlow: CashFlow[]; anomalies: AnomalyFlag[] }>;
+    getFinancials(assetId: string, opts?: { consolidated?: boolean }): Promise<{
+      quarterly: QuarterlyResult[];
+      annual: QuarterlyResult[];
+      balanceSheet: BalanceSheet[];
+      cashFlow: CashFlow[];
+      ratios: Array<{
+        periodEndDate: string;
+        debtorDays: number | null;
+        inventoryDays: number | null;
+        daysPayable: number | null;
+        roce: number | null;
+        operatingMargin?: number | null;
+        patMargin?: number | null;
+      }>;
+      anomalies: AnomalyFlag[];
+    }>;
     getOwnership(assetId: string): Promise<{ shareholding: ShareholdingPattern[]; governance: GovernanceScore }>;
     getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }>;
   };
@@ -313,7 +328,14 @@ function createMockAdapter(): DataAdapter {
         ];
         return docType ? docs.filter(d => d.docType === docType) : docs;
       },
-      async getFinancials(assetId: string): Promise<{ quarterly: QuarterlyResult[]; balanceSheet: BalanceSheet[]; cashFlow: CashFlow[]; anomalies: AnomalyFlag[] }> {
+      async getFinancials(assetId: string): Promise<{
+        quarterly: QuarterlyResult[];
+        annual: QuarterlyResult[];
+        balanceSheet: BalanceSheet[];
+        cashFlow: CashFlow[];
+        ratios: Array<{ periodEndDate: string; debtorDays: number | null; inventoryDays: number | null; daysPayable: number | null; roce: number | null; operatingMargin?: number | null; patMargin?: number | null }>;
+        anomalies: AnomalyFlag[];
+      }> {
         const quarters = ["Q3 FY26", "Q2 FY26", "Q1 FY26", "Q4 FY25", "Q3 FY25", "Q2 FY25", "Q1 FY25", "Q4 FY24"];
         const base = 5000 + Number(assetId) * 1000;
         return {
@@ -327,6 +349,19 @@ function createMockAdapter(): DataAdapter {
             patGrowth: +((Math.random() * 25 - 3).toFixed(1)),
             ebitdaMargin: +(20 + Math.random() * 8).toFixed(1),
             patMargin: +(12 + Math.random() * 6).toFixed(1),
+          })),
+          annual: ["FY25", "FY24", "FY23", "FY22", "FY21"].map((y, i) => ({
+            quarter: y,
+            periodType: "annual",
+            revenue: +(base * 4.2 * (1 + i * 0.05)).toFixed(0),
+            ebitda: +(base * 1.05 * (1 + i * 0.04)).toFixed(0),
+            operatingProfit: +(base * 1.05 * (1 + i * 0.04)).toFixed(0),
+            pat: +(base * 0.58 * (1 + i * 0.05)).toFixed(0),
+            netProfit: +(base * 0.58 * (1 + i * 0.05)).toFixed(0),
+            cfo: +(base * 0.72 * (1 + i * 0.04)).toFixed(0),
+            eps: +(92 + i * 4).toFixed(2),
+            ebitdaMargin: +(22 + Math.random() * 6).toFixed(1),
+            patMargin: +(13 + Math.random() * 5).toFixed(1),
           })),
           balanceSheet: ["FY25", "FY24", "FY23", "FY22", "FY21"].map((y, i) => ({
             year: y,
@@ -344,6 +379,15 @@ function createMockAdapter(): DataAdapter {
             financingCF: -(+(base * 0.06).toFixed(0)),
             freeCF: +(base * 0.10 * (1 + i * 0.04)).toFixed(0),
             capex: +(base * 0.05).toFixed(0),
+          })),
+          ratios: ["FY25", "FY24", "FY23", "FY22", "FY21"].map((y, i) => ({
+            periodEndDate: `Mar-${String(25 - i).padStart(2, '0')}`,
+            debtorDays: null,
+            inventoryDays: null,
+            daysPayable: null,
+            roce: +(18 + Math.random() * 6).toFixed(1),
+            operatingMargin: +(20 + Math.random() * 5).toFixed(1),
+            patMargin: +(12 + Math.random() * 4).toFixed(1),
           })),
           anomalies: [
             { type: "REVENUE_CONSISTENCY", severity: "low", description: "Revenue recognition pattern is consistent with industry peers" },
