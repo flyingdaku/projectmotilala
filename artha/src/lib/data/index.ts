@@ -173,7 +173,7 @@ interface DataAdapter {
       anomalies: AnomalyFlag[];
     }>;
     getOwnership(assetId: string): Promise<{ shareholding: ShareholdingPattern[]; governance: GovernanceScore }>;
-    getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }>;
+    getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure | null; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }>;
   };
   follow: {
     getStatus(userId: string, symbol: string): Promise<{ isFollowing: boolean; followerCount: number; alertConfig?: Record<string, boolean> }>;
@@ -328,7 +328,7 @@ function createMockAdapter(): DataAdapter {
         ];
         return docType ? docs.filter(d => d.docType === docType) : docs;
       },
-      async getFinancials(assetId: string): Promise<{
+      async getFinancials(assetId: string, _opts?: { consolidated?: boolean }): Promise<{
         quarterly: QuarterlyResult[];
         annual: QuarterlyResult[];
         balanceSheet: BalanceSheet[];
@@ -407,7 +407,7 @@ function createMockAdapter(): DataAdapter {
           governance: { overall: 72, boardIndependence: 68, disclosure: 78, relatedParty: 65, auditQuality: 80 },
         };
       },
-      async getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }> {
+      async getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure | null; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }> {
         const months = Array.from({ length: 24 }, (_, i) => {
           const d = new Date();
           d.setMonth(d.getMonth() - (23 - i));

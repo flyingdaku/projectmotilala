@@ -281,6 +281,8 @@ export interface PeerComparison {
   pb?: number | null;
   roce?: number | null;
   roe?: number | null;
+  debtEquity?: number | null;
+  patMargin?: number | null;
   revenueGrowth1y?: number | null;
   patGrowth1y?: number | null;
   dividendYield?: number | null;

@@ -32,7 +32,7 @@ export class AssetRepository extends BaseRepository {
 
     public getById(id: string): Partial<DbAsset> | null {
         const row = this.db.queryOne<DbAsset>(
-            `SELECT id, nse_symbol, bse_code, name, sector, description, website_url, listing_date, management_json FROM assets WHERE id = ?`,
+            `SELECT id, nse_symbol, bse_code, name, sector, description, website_url, listing_date, management_json, face_value FROM assets WHERE id = ?`,
             [id]
         );
         return row ?? null;

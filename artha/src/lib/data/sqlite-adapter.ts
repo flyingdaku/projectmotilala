@@ -97,7 +97,7 @@ export function createSqliteAdapter() {
                     ? +((lastDiv.dividend_amount / price) * 100).toFixed(2) : null;
 
                 const debt = ttmRatios?.debt ?? null;
-                const debtEquity = equity && debt && equity > 0
+                const debtEquity = equity != null && debt != null && equity > 0
                     ? +(debt / equity).toFixed(2) : null;
 
                 const roe = ttmRatios?.ttmPat && equity && equity > 0
@@ -289,7 +289,7 @@ export function createSqliteAdapter() {
             },
 
             async getAnalytics(assetId: string): Promise<{
-                factorExposure: FactorExposure;
+                factorExposure: FactorExposure | null;
                 earningsQuality: EarningsQuality;
                 ratioHistory: Partial<ComputedRatios>[];
                 ratios: ComputedRatios;
@@ -320,7 +320,7 @@ export function createSqliteAdapter() {
 
                 const equity = ttmRatios?.equity;
                 const debt = ttmRatios?.debt;
-                const debtEquity = equity && debt && equity > 0 ? +(debt / equity).toFixed(2) : null;
+                const debtEquity = equity != null && debt != null && equity > 0 ? +(debt / equity).toFixed(2) : null;
                 const roe = ttmRatios?.ttmPat && equity && equity > 0 ? +((ttmRatios.ttmPat / equity) * 100).toFixed(2) : null;
 
                 const ebitApprox = ttmRatios?.ttmEbit ?? null;
@@ -361,11 +361,12 @@ export function createSqliteAdapter() {
                     roe != null ? Math.min(Math.max(roe, 0), 30) : 0,
                     debtEquity != null ? Math.max(0, 30 - debtEquity * 20) : 0,
                 ].reduce((sum, value) => sum + value, 0);
+                const earningsOverallScore = qualityScore > 0 ? qualityScore : (msiData?.composite_rating ?? null);
 
                 return {
-                    factorExposure: {},
+                    factorExposure: null,
                     earningsQuality: {
-                        overallScore: qualityScore || msiData?.composite_rating ?? null,
+                        overallScore: earningsOverallScore,
                         cfoPatRatio: cfoPatRatio ?? null,
                         flags: [],
                     },
@@ -385,7 +386,7 @@ export function createSqliteAdapter() {
                         operatingMargin: latestRatio?.operatingMargin ?? undefined,
                         revenueGrowth1y,
                         patGrowth1y,
-                        qualityScore: qualityScore || undefined,
+                        qualityScore: qualityScore > 0 ? qualityScore : undefined,
                     },
                 };
             },

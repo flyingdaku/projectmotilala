@@ -166,14 +166,14 @@ export class FundamentalsRepository extends BaseRepository {
         return this.sortByPeriodDesc(Array.from(grouped.values()));
     }
 
-    public estimateMarketCap(assetId: string, price: number, faceValue: number | null): number | null {
+    public estimateMarketCap(assetId: string, price: number, _faceValue: number | null): number | null {
         const rows = this.getFundamentalRows(assetId, true);
         const shares = rows.map((row) => this.deriveShares(row)).find((value) => value != null) ?? null;
         if (!shares || price <= 0) return null;
         return +((shares * price) / 1e7).toFixed(2);
     }
 
-    public getCompanyData(assetId: string) {
+    public getCompanyData(_assetId: string) {
         // MSI ratings are deprecated; returning placeholder object to satisfy frontend types
         return {
             composite_rating: null,
@@ -217,7 +217,7 @@ export class FundamentalsRepository extends BaseRepository {
         };
     }
 
-    public getLatestShares(assetId: string, faceValue: number): number | null {
+    public getLatestShares(assetId: string, _faceValue: number): number | null {
         const rows = this.getFundamentalRows(assetId, true);
         return rows.map((row) => this.deriveShares(row)).find((value) => value != null) ?? null;
     }
@@ -369,8 +369,6 @@ export class FundamentalsRepository extends BaseRepository {
         );
 
         const useMsi = scrSH.length === 0 && msiSH.length > 0;
-        const shRows = scrSH.length > 0 ? scrSH : msiSH;
-
         type AnyShRow = { period_end_date: string; promoter_holding?: number | null; fii_holding?: number | null; dii_holding?: number | null; public_holding?: number | null; pledged_shares?: number | null; promoters_pct?: number | null; fii_pct?: number | null; dii_pct?: number | null; public_pct?: number | null };
         const typedShRows: AnyShRow[] = scrSH.length > 0 ? scrSH as AnyShRow[] : msiSH as AnyShRow[];
         return typedShRows.map((r) => {
@@ -397,10 +395,9 @@ export class FundamentalsRepository extends BaseRepository {
             .slice(0, 8)
             .map((row) => ({ period_end_date: row.period_end_date, eps: row.eps }));
 
-        // TTM EPS for each quarter end (rolling sum of trailing 4)
-        const ratioHistory = qRows.slice(0, 5).map((_: any, i: number) => {
+        const ratioHistory = qRows.slice(0, 5).map((_, i: number) => {
             const slice = qRows.slice(i, i + 4);
-            const ttmEps = slice.reduce((s: number, r: any) => s + (r.eps ?? 0), 0);
+            const ttmEps = slice.reduce((sum, row) => sum + (row.eps ?? 0), 0);
             return {
                 computedDate: qRows[i]?.period_end_date,
                 peTtm: ttmEps > 0 ? +(price / ttmEps).toFixed(1) : null,
