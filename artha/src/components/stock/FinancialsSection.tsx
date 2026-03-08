@@ -90,7 +90,7 @@ export function FinancialsSection({ symbol }: Props) {
     annual: QuarterlyResult[];
     balanceSheets: BalanceSheet[];
     cashFlows: CashFlow[];
-    ratios: Array<{ periodEndDate: string; debtorDays: number | null; inventoryDays: number | null; daysPayable: number | null; roce: number | null }>;
+    ratios: Array<{ periodEndDate: string; debtorDays: number | null; inventoryDays: number | null; daysPayable: number | null; roce: number | null; operatingMargin?: number | null; patMargin?: number | null }>;
   } | null>(null);
   const [viewMode, setViewMode] = useState<"quarterly" | "annual">("annual");
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
@@ -232,7 +232,7 @@ export function FinancialsSection({ symbol }: Props) {
                 <Download size={14} />
                 Export CSV
               </button>
-              {["quarterly", "annual"].map((m) => (
+              {(["quarterly", "annual"] as const).map((m) => (
                 <button key={m} onClick={() => setViewMode(m)}
                   className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors capitalize ${viewMode === m ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}>
                   {m}
