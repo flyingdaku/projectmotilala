@@ -179,6 +179,29 @@ def backfill_corporate_actions(start: date, end: date, chunk_days: int = 30):
     return total_success, total_failed
 
 
+def backfill_iima_factors(run_date: date, skip_existing: bool = True):
+    """Refresh the latest delayed IIMA Fama-French snapshot once for the backfill run."""
+    if skip_existing:
+        existing = execute_one(
+            """SELECT 1 FROM pipeline_runs
+               WHERE source = 'IIMA_FF' AND run_date = ? AND status = 'SUCCESS'""",
+            (run_date.isoformat(),),
+        )
+        if existing:
+            logger.info("IIMA FF snapshot backfill skipped for %s (already successful)", run_date)
+            return True, "skipped"
+
+    try:
+        from pipelines.ff_iima_pipeline import run_iima_ff_pipeline
+
+        run_iima_ff_pipeline(trade_date=run_date)
+        logger.info("IIMA FF snapshot refreshed for %s ✅", run_date)
+        return True, None
+    except Exception as e:
+        logger.warning(f"IIMA FF snapshot refresh failed for {run_date} ❌ — {e}")
+        return False, str(e)
+
+
 def run_full_backfill(
     start: date = None,
     end: date = None,
@@ -222,6 +245,9 @@ def run_full_backfill(
     # Step 4: Corporate Actions
     ca_ok, ca_fail = backfill_corporate_actions(start, end)
 
+    # Step 4.5: IIMA delayed factor snapshot
+    iima_ok, iima_err = backfill_iima_factors(end, skip_existing)
+
     # Step 5: Recompute adj_close
     logger.info("Recomputing all adj_close values...")
     from pipelines.adjust_prices import compute_adj_close_for_all_assets
@@ -236,7 +262,8 @@ def run_full_backfill(
         f"Backfill complete: `{start}` → `{end}`\n"
         f"NSE: `{nse_ok}` ok, `{nse_fail}` failed, `{nse_skip}` skipped\n"
         f"BSE: `{bse_ok}` ok, `{bse_fail}` failed, `{bse_skip}` skipped\n"
-        f"Corp Actions: `{ca_ok}` chunks ok, `{ca_fail}` failed"
+        f"Corp Actions: `{ca_ok}` chunks ok, `{ca_fail}` failed\n"
+        f"IIMA FF: `{'ok' if iima_ok and not iima_err else 'skipped' if iima_err == 'skipped' else 'failed'}`"
     )
     logger.info(summary)
     send_telegram_alert(summary, level="SUCCESS" if nse_fail == 0 else "WARNING")

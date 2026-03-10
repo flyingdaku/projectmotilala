@@ -6,7 +6,7 @@ import {
   ResponsiveContainer, ReferenceLine, RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
 import { TrendingUp, BarChart2 } from "lucide-react";
-import type { FactorExposure, EarningsQuality, ComputedRatios } from "@/lib/data/types";
+import type { FactorExposure, FactorContext, EarningsQuality, ComputedRatios } from "@/lib/data/types";
 
 interface Props {
   symbol: string;
@@ -15,6 +15,7 @@ interface Props {
 export function AnalyticsSection({ symbol }: Props) {
   const [data, setData] = useState<{
     factorExposure: FactorExposure | null;
+    factorContext: FactorContext | null;
     earningsQuality: EarningsQuality | null;
     ratioHistory: Partial<ComputedRatios>[];
     ratios: ComputedRatios | null;
@@ -50,6 +51,8 @@ export function AnalyticsSection({ symbol }: Props) {
   }, [data, activeMetric]);
 
   const currentVal = data?.ratios?.[activeMetric] ?? null;
+  const factorSnapshots = data?.factorContext?.latestSnapshots ?? [];
+  const factorDrawdowns = data?.factorContext?.drawdowns ?? [];
 
   // Valuation band — ±1 σ of historical values
   const { mean, stddev } = useMemo(() => {
@@ -203,8 +206,134 @@ export function AnalyticsSection({ symbol }: Props) {
                   {data.factorExposure.rSquared != null ? (data.factorExposure.rSquared * 100).toFixed(1) + "%" : "—"}
                 </span>
               </div>
+              <div className="text-xs flex justify-between">
+                <span style={{ color: "var(--text-muted)" }}>Sample size</span>
+                <span className="font-mono font-medium" style={{ color: "var(--text-primary)" }}>
+                  {data.factorExposure.sampleSize != null ? data.factorExposure.sampleSize : "—"}
+                </span>
+              </div>
+              <div className="text-xs flex justify-between">
+                <span style={{ color: "var(--text-muted)" }}>Window</span>
+                <span className="font-mono font-medium" style={{ color: "var(--text-primary)" }}>
+                  {data.factorExposure.regressionStartDate && data.factorExposure.regressionEndDate
+                    ? `${data.factorExposure.regressionStartDate} → ${data.factorExposure.regressionEndDate}`
+                    : "—"}
+                </span>
+              </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {(factorSnapshots.length > 0 || factorDrawdowns.length > 0) && (
+        <div className="p-6 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+            <div>
+              <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>IIMA Factor Regime</h2>
+              <div className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {data?.factorContext?.releaseTag ? `Delayed release ${data.factorContext.releaseTag}` : "Delayed survivorship-bias-adjusted release"}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              {factorSnapshots.map((snapshot) => (
+                <div key={`${snapshot.frequency}-${snapshot.asOf}`} className="p-4 rounded-lg border" style={{ background: "var(--surface-elevated)", borderColor: "var(--border)" }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{snapshot.frequency}</div>
+                    <div className="text-xs font-mono" style={{ color: "var(--text-muted)" }}>{snapshot.asOf}</div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {[
+                      { label: "Market", value: snapshot.marketReturn },
+                      { label: "Mkt-RF", value: snapshot.marketPremium },
+                      { label: "SMB", value: snapshot.smb },
+                      { label: "HML", value: snapshot.hml },
+                      { label: "WML", value: snapshot.wml },
+                      { label: "RF", value: snapshot.rfRate },
+                    ].map((metric) => (
+                      <div key={metric.label}>
+                        <div className="text-xs" style={{ color: "var(--text-muted)" }}>{metric.label}</div>
+                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>
+                          {metric.value != null ? `${metric.value >= 0 ? "+" : ""}${metric.value.toFixed(2)}%` : "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3">
+              {factorDrawdowns.length === 0 ? (
+                <div className="h-full min-h-48 flex items-center justify-center text-sm" style={{ color: "var(--text-muted)" }}>
+                  No IIMA drawdown statistics available
+                </div>
+              ) : (
+                factorDrawdowns.map((drawdown) => (
+                  <div key={drawdown.factorCode} className="p-4 rounded-lg border" style={{ background: "var(--surface-elevated)", borderColor: "var(--border)" }}>
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.factorCode}</div>
+                        <div className="text-xs" style={{ color: "var(--text-muted)" }}>{drawdown.factorName}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <div className="text-xs" style={{ color: "var(--text-muted)" }}>Ann. return</div>
+                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.annualizedReturn != null ? `${drawdown.annualizedReturn.toFixed(1)}%` : "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs" style={{ color: "var(--text-muted)" }}>Ann. vol</div>
+                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.annualizedVolatility != null ? `${drawdown.annualizedVolatility.toFixed(1)}%` : "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs" style={{ color: "var(--text-muted)" }}>Worst drawdown</div>
+                        <div className="font-mono font-semibold text-red-400">{drawdown.worstDrawdown != null ? `${drawdown.worstDrawdown.toFixed(1)}%` : "—"}</div>
+                      </div>
+                      <div>
+                        <div className="text-xs" style={{ color: "var(--text-muted)" }}>Recovery window</div>
+                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.drawdownDurationYears != null ? `${drawdown.drawdownDurationYears.toFixed(1)}y` : "—"}</div>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Earnings Quality */}
+      {data?.earningsQuality && (
+        <div className="p-6 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+          <h2 className="text-base font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
+            <TrendingUp size={16} style={{ color: "var(--accent-brand)" }} />
+            Earnings Quality
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "Quality Score", val: data.earningsQuality.overallScore, suffix: "/100" },
+              { label: "CFO / PAT", val: data.earningsQuality.cfoPatRatio, suffix: "x" },
+              { label: "Accrual Ratio", val: data.earningsQuality.accrualRatio, suffix: "x" },
+              { label: "Revenue Consistency", val: data.earningsQuality.revenueConsistency, suffix: "/100" },
+            ].map((metric) => (
+              <div key={metric.label} className="p-3 rounded-lg" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
+                <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{metric.label}</div>
+                <div className="text-base font-bold font-mono" style={{ color: "var(--text-primary)" }}>
+                  {metric.val != null ? `${metric.val.toFixed(2)}${metric.suffix}` : "—"}
+                </div>
+              </div>
+            ))}
+          </div>
+          {data.earningsQuality.flags && data.earningsQuality.flags.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {data.earningsQuality.flags.map((flag) => (
+                <span key={flag} className="px-2 py-1 rounded-full text-xs" style={{ background: "var(--surface-elevated)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+                  {flag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -225,6 +354,8 @@ export function AnalyticsSection({ symbol }: Props) {
               { label: "ROE %", val: data.ratios.roe, suffix: "%" },
               { label: "OPM %", val: data.ratios.operatingMargin, suffix: "%" },
               { label: "Div. Yield", val: data.ratios.dividendYield, suffix: "%" },
+              { label: "% From 52W High", val: data.ratios.pctFrom52wHigh, suffix: "%" },
+              { label: "Quality Score", val: data.ratios.qualityScore, suffix: "/100" },
             ].map((m) => (
               <div key={m.label} className="p-3 rounded-lg" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
                 <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{m.label}</div>

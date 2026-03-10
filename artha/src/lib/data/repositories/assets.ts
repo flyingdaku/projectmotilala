@@ -103,10 +103,21 @@ export class AssetRepository extends BaseRepository {
             }>(
                 `SELECT id, nse_symbol, bse_code, name, face_value FROM assets
                  WHERE ${candidate.field} = ? AND id != ? AND is_active = 1
-                 ORDER BY name LIMIT 20`,
+                 ORDER BY CASE WHEN nse_symbol IS NOT NULL THEN 0 ELSE 1 END, name LIMIT 30`,
                 [candidate.value, asset.id]
             );
-            if (peers.length > 0) return peers;
+            if (peers.length > 0) {
+                const seen = new Set<string>();
+                const deduped = peers.filter((p) => {
+                    const key = p.nse_symbol ?? `name:${p.name}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                }).slice(0, 15);
+                if (deduped.some((p) => p.nse_symbol != null || p.bse_code != null)) {
+                    return deduped;
+                }
+            }
         }
 
         return [];

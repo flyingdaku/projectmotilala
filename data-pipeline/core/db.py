@@ -11,6 +11,7 @@ import os
 import sqlite3
 import uuid
 import logging
+from pathlib import Path
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -98,6 +99,8 @@ DEFAULT_DB_PATH = os.path.join(
     os.path.dirname(os.path.dirname(__file__)), "db", "market_data.db"
 )
 
+DB_PATH = DEFAULT_DB_PATH
+
 
 class SqliteConnection(DatabaseConnection):
     """
@@ -182,6 +185,31 @@ def generate_id() -> str:
 def now_iso() -> str:
     """Current UTC timestamp in ISO 8601 format."""
     return datetime.now(timezone.utc).replace(tzinfo=None).isoformat()
+
+
+def init_db(db_path: Optional[str] = None) -> str:
+    resolved_db_path = db_path or DEFAULT_DB_PATH
+    schema_path = Path(__file__).resolve().parents[1] / "db" / "schema.sql"
+    with sqlite3.connect(resolved_db_path, timeout=30.0) as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=WAL;")
+        conn.execute("PRAGMA foreign_keys=ON;")
+        conn.executescript(schema_path.read_text())
+        conn.commit()
+    return resolved_db_path
+
+
+def execute_query(sql: str, params: tuple = (), db_path: Optional[str] = None) -> List[Dict[str, Any]]:
+    with get_db(db_path) as conn:
+        cursor = conn.execute(sql, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def execute_one(sql: str, params: tuple = (), db_path: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    with get_db(db_path) as conn:
+        cursor = conn.execute(sql, params)
+        row = cursor.fetchone()
+        return dict(row) if row else None
 
 
 # Legacy alias — pipelines still import `get_db` from utils.db.

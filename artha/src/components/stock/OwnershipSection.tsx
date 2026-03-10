@@ -74,13 +74,13 @@ export function OwnershipSection({ symbol }: Props) {
   
   // Calculate QoQ changes for institutional holdings
   const promoterQoQ = data && data.shareholding.length >= 2
-    ? (data.shareholding[0].promoterPct ?? 0) - (data.shareholding[1].promoterPct ?? 0)
+    ? (data.shareholding[0].promoterChangeQoq ?? ((data.shareholding[0].promoterPct ?? 0) - (data.shareholding[1].promoterPct ?? 0)))
     : null;
   const fiiQoQ = data && data.shareholding.length >= 2
-    ? (data.shareholding[0].fiiPct ?? 0) - (data.shareholding[1].fiiPct ?? 0)
+    ? (data.shareholding[0].fiiChangeQoq ?? ((data.shareholding[0].fiiPct ?? 0) - (data.shareholding[1].fiiPct ?? 0)))
     : null;
   const diiQoQ = data && data.shareholding.length >= 2
-    ? (data.shareholding[0].diiPct ?? 0) - (data.shareholding[1].diiPct ?? 0)
+    ? (data.shareholding[0].diiChangeQoq ?? ((data.shareholding[0].diiPct ?? 0) - (data.shareholding[1].diiPct ?? 0)))
     : null;
   const mfQoQ = data && data.shareholding.length >= 2
     ? (data.shareholding[0].mfPct ?? 0) - (data.shareholding[1].mfPct ?? 0)
@@ -219,7 +219,7 @@ export function OwnershipSection({ symbol }: Props) {
               {[
                 { label: "Promoter", val: promoterQoQ, current: latestSh?.promoterPct },
                 { label: "FII", val: fiiQoQ, current: latestSh?.fiiPct },
-                { label: "DII", val: data && data.shareholding.length >= 2 ? (data.shareholding[0].diiPct ?? 0) - (data.shareholding[1].diiPct ?? 0) : null, current: latestSh?.diiPct },
+                { label: "DII", val: diiQoQ, current: latestSh?.diiPct },
                 { label: "Public", val: data && data.shareholding.length >= 2 ? (data.shareholding[0].publicPct ?? 0) - (data.shareholding[1].publicPct ?? 0) : null, current: latestSh?.publicPct },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between text-sm">

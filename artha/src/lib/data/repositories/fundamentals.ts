@@ -1,6 +1,20 @@
 import { BaseRepository } from "./base";
 import type { QuarterlyResult, BalanceSheet, CashFlow, ShareholdingPattern } from "../types";
 
+type CompanyDataRow = {
+    composite_rating: number | null;
+    eps_rating: number | null;
+    rs_rating: number | null;
+    smr_rating: string | null;
+    acc_dis_rating: string | null;
+    price_strength: number | null;
+    week_high_52: number | null;
+    week_low_52: number | null;
+    pct_from_high: number | null;
+    buyer_demand: string | null;
+    group_rank: number | null;
+};
+
  type FundamentalRow = {
      period_end_date: string;
      fiscal_quarter: string | null;
@@ -55,6 +69,114 @@ import type { QuarterlyResult, BalanceSheet, CashFlow, ShareholdingPattern } fro
  };
 
 export class FundamentalsRepository extends BaseRepository {
+    private tableExists(tableName: string): boolean {
+        const row = this.db.queryOne<{ name: string }>(
+            `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
+            [tableName]
+        );
+        return !!row;
+    }
+
+    private getSourceFundamentalRows(assetId: string, isConsolidated: boolean): FundamentalRow[] {
+        const incomeTable = isConsolidated ? "src_msi_quarterly" : "src_msi_quarterly_standalone";
+        const balanceSheetTable = isConsolidated ? "src_msi_balance_sheet" : "src_msi_balance_sheet_standalone";
+        const cashflowTable = isConsolidated ? "src_msi_cashflow" : "src_msi_cashflow_standalone";
+        const ratioTable = isConsolidated ? "src_msi_ratios" : "src_msi_ratios_standalone";
+
+        if (!this.tableExists(incomeTable)) {
+            return [];
+        }
+
+        const balanceSheetSource = this.tableExists(balanceSheetTable)
+            ? balanceSheetTable
+            : `(SELECT NULL AS asset_id, NULL AS period_end_date, NULL AS total_assets,
+                       NULL AS shareholders_funds_total, NULL AS equity_capital, NULL AS reserves,
+                       NULL AS long_term_borrowings, NULL AS short_term_borrowings,
+                       NULL AS cash_equivalents, NULL AS trade_receivables,
+                       NULL AS equity_shares_number)`;
+        const cashflowSource = this.tableExists(cashflowTable)
+            ? cashflowTable
+            : `(SELECT NULL AS asset_id, NULL AS period_end_date, NULL AS net_cash_operating,
+                       NULL AS net_cash_investing, NULL AS net_cash_financing,
+                       NULL AS capex, NULL AS free_cash_flow)`;
+        const ratioSource = this.tableExists(ratioTable)
+            ? ratioTable
+            : `(SELECT NULL AS asset_id, NULL AS period_end_date, NULL AS basic_eps,
+                       NULL AS book_value_per_share)`;
+
+        const rows = this.db.queryAll<FundamentalRow>(
+            `SELECT q.period_end_date,
+                    NULL as fiscal_quarter,
+                    NULL as fiscal_year,
+                    ${isConsolidated ? 1 : 0} as is_consolidated,
+                    COALESCE(q.total_revenue, q.revenue_ops) as revenue,
+                    q.operating_profit,
+                    q.ebit,
+                    q.finance_costs as interest,
+                    q.profit_before_tax as pbt,
+                    CASE
+                        WHEN q.tax_amount IS NOT NULL THEN q.tax_amount
+                        WHEN q.profit_before_tax IS NOT NULL AND q.net_profit IS NOT NULL THEN q.profit_before_tax - q.net_profit
+                        ELSE NULL
+                    END as tax,
+                    q.net_profit as pat,
+                    COALESCE(q.basic_eps, r.basic_eps) as eps,
+                    bs.total_assets,
+                    COALESCE(bs.shareholders_funds_total,
+                             CASE
+                                 WHEN bs.equity_capital IS NOT NULL AND bs.reserves IS NOT NULL THEN bs.equity_capital + bs.reserves
+                                 ELSE NULL
+                             END) as total_equity,
+                    CASE
+                        WHEN bs.long_term_borrowings IS NOT NULL OR bs.short_term_borrowings IS NOT NULL THEN COALESCE(bs.long_term_borrowings, 0) + COALESCE(bs.short_term_borrowings, 0)
+                        ELSE NULL
+                    END as total_debt,
+                    bs.cash_equivalents,
+                    bs.trade_receivables,
+                    cf.net_cash_operating as cfo,
+                    cf.net_cash_investing as cash_from_investing,
+                    cf.net_cash_financing as cash_from_financing,
+                    CASE
+                        WHEN cf.capex IS NOT NULL THEN ABS(cf.capex)
+                        WHEN cf.net_cash_investing IS NOT NULL THEN ABS(cf.net_cash_investing)
+                        ELSE NULL
+                    END as capex,
+                    COALESCE(cf.free_cash_flow,
+                             CASE
+                                 WHEN cf.net_cash_operating IS NOT NULL AND cf.capex IS NOT NULL THEN cf.net_cash_operating - ABS(cf.capex)
+                                 WHEN cf.net_cash_operating IS NOT NULL AND cf.net_cash_investing IS NOT NULL THEN cf.net_cash_operating + cf.net_cash_investing
+                                 ELSE NULL
+                             END) as fcf,
+                    COALESCE(r.book_value_per_share,
+                             CASE
+                                 WHEN bs.equity_shares_number IS NOT NULL AND bs.equity_shares_number != 0 AND COALESCE(bs.shareholders_funds_total,
+                                     CASE
+                                         WHEN bs.equity_capital IS NOT NULL AND bs.reserves IS NOT NULL THEN bs.equity_capital + bs.reserves
+                                         ELSE NULL
+                                     END) IS NOT NULL
+                                 THEN COALESCE(bs.shareholders_funds_total,
+                                     CASE
+                                         WHEN bs.equity_capital IS NOT NULL AND bs.reserves IS NOT NULL THEN bs.equity_capital + bs.reserves
+                                         ELSE NULL
+                                     END) / bs.equity_shares_number
+                                 ELSE NULL
+                             END) as book_value_per_share,
+                    bs.equity_shares_number as shares_outstanding,
+                    'MSI' as source
+             FROM ${incomeTable} q
+             LEFT JOIN ${balanceSheetSource} bs
+               ON bs.asset_id = q.asset_id AND bs.period_end_date = q.period_end_date
+             LEFT JOIN ${cashflowSource} cf
+               ON cf.asset_id = q.asset_id AND cf.period_end_date = q.period_end_date
+             LEFT JOIN ${ratioSource} r
+               ON r.asset_id = q.asset_id AND r.period_end_date = q.period_end_date
+             WHERE q.asset_id = ?
+             ORDER BY q.period_end_date DESC`,
+            [assetId]
+        );
+        return this.sortByPeriodDesc(rows);
+    }
+
     private parsePeriodDate(dateStr: string): Date | null {
         if (!dateStr) return null;
         if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -116,14 +238,17 @@ export class FundamentalsRepository extends BaseRepository {
              WHERE asset_id = ? AND is_consolidated = ?`,
             [assetId, isConsolidated ? 1 : 0]
         );
-        return this.sortByPeriodDesc(rows);
+        if (rows.length > 0) {
+            return this.sortByPeriodDesc(rows);
+        }
+        return this.getSourceFundamentalRows(assetId, isConsolidated);
     }
 
     private deriveShares(row: Pick<FundamentalRow, "shares_outstanding" | "pat" | "eps"> | null | undefined): number | null {
         if (!row) return null;
         if (row.shares_outstanding && row.shares_outstanding > 0) return row.shares_outstanding;
         if (row.pat != null && row.eps != null && row.eps !== 0) {
-            return (row.pat * 1e7) / row.eps;
+            return row.pat / row.eps;
         }
         return null;
     }
@@ -150,11 +275,11 @@ export class FundamentalsRepository extends BaseRepository {
                     total_debt: row.total_debt,
                     cash_equivalents: row.cash_equivalents,
                     trade_receivables: row.trade_receivables,
-                    cfo: row.cfo ?? 0,
-                    cash_from_investing: row.cash_from_investing ?? 0,
-                    cash_from_financing: row.cash_from_financing ?? 0,
-                    capex: row.capex ?? 0,
-                    fcf: row.fcf ?? 0,
+                    cfo: row.cfo ?? null,
+                    cash_from_investing: row.cash_from_investing ?? null,
+                    cash_from_financing: row.cash_from_financing ?? null,
+                    capex: row.capex ?? null,
+                    fcf: row.fcf ?? null,
                     shares_outstanding: row.shares_outstanding,
                     source: row.source,
                 });
@@ -172,11 +297,11 @@ export class FundamentalsRepository extends BaseRepository {
             existing.tax = (existing.tax ?? 0) + (row.tax ?? 0);
             existing.pat = (existing.pat ?? 0) + (row.pat ?? 0);
             existing.eps = (existing.eps ?? 0) + (row.eps ?? 0);
-            existing.cfo = (existing.cfo ?? 0) + (row.cfo ?? 0);
-            existing.cash_from_investing = (existing.cash_from_investing ?? 0) + (row.cash_from_investing ?? 0);
-            existing.cash_from_financing = (existing.cash_from_financing ?? 0) + (row.cash_from_financing ?? 0);
-            existing.capex = (existing.capex ?? 0) + (row.capex ?? 0);
-            existing.fcf = (existing.fcf ?? 0) + (row.fcf ?? 0);
+            if (row.cfo != null) existing.cfo = (existing.cfo ?? 0) + row.cfo;
+            if (row.cash_from_investing != null) existing.cash_from_investing = (existing.cash_from_investing ?? 0) + row.cash_from_investing;
+            if (row.cash_from_financing != null) existing.cash_from_financing = (existing.cash_from_financing ?? 0) + row.cash_from_financing;
+            if (row.capex != null) existing.capex = (existing.capex ?? 0) + row.capex;
+            if (row.fcf != null) existing.fcf = (existing.fcf ?? 0) + row.fcf;
         }
         return this.sortByPeriodDesc(Array.from(grouped.values()));
     }
@@ -186,28 +311,28 @@ export class FundamentalsRepository extends BaseRepository {
         const rows = this.getFundamentalRows(assetId, true);
         const shares = rows.map((row) => this.deriveShares(row)).find((value) => value != null) ?? null;
         if (!shares || price <= 0) return null;
-        return +((shares * price) / 1e7).toFixed(2);
+        return +(shares * price).toFixed(2);
     }
 
-    public getCompanyData(_assetId: string) {
-        void _assetId;
-        // MSI ratings are deprecated; returning placeholder object to satisfy frontend types
-        return {
-            composite_rating: null,
-            eps_rating: null,
-            rs_rating: null,
-            smr_rating: null,
-            week_high_52: null,
-            week_low_52: null,
-            pct_from_high: null,
-        };
+    public getCompanyData(assetId: string): CompanyDataRow | null {
+        const row = this.db.queryOne<CompanyDataRow>(
+            `SELECT composite_rating, eps_rating, rs_rating, smr_rating, acc_dis_rating,
+                    price_strength, week_high_52, week_low_52, pct_from_high,
+                    buyer_demand, group_rank
+             FROM msi_company_data
+             WHERE asset_id = ?`,
+            [assetId]
+        );
+        return row ?? null;
     }
 
     public getTtmRatios(assetId: string, isConsolidated: boolean = true) {
         const rows = this.getFundamentalRows(assetId, isConsolidated);
         if (!rows.length) return null;
         const trailing = rows.slice(0, 4);
-        const latest = rows.find((row) => row.total_equity != null || row.total_debt != null || row.total_assets != null || row.cash_equivalents != null) ?? rows[0];
+        const latestWithEquity = rows.find((row) => row.total_equity != null);
+        const latestAnyBS = rows.find((row) => row.total_debt != null || row.total_assets != null || row.cash_equivalents != null);
+        const latest = latestWithEquity ?? latestAnyBS ?? rows[0];
         const shares = rows.map((row) => this.deriveShares(row)).find((value) => value != null) ?? null;
         const ttmPat = trailing.reduce((sum, row) => sum + (row.pat ?? 0), 0);
         const ttmEps = trailing.reduce((sum, row) => sum + (row.eps ?? 0), 0);
@@ -218,7 +343,7 @@ export class FundamentalsRepository extends BaseRepository {
         const debt = latest.total_debt ?? null;
         const totalAssets = latest.total_assets ?? null;
         const cash = latest.cash_equivalents ?? null;
-        const bookValuePerShare = latest.book_value_per_share ?? (equity != null && shares ? +((equity * 1e7) / shares).toFixed(2) : null);
+        const bookValuePerShare = latest.book_value_per_share ?? (equity != null && shares && shares > 0 ? +(equity / shares).toFixed(2) : null);
         return {
             ttmPat,
             ttmEps,
@@ -292,11 +417,29 @@ export class FundamentalsRepository extends BaseRepository {
         });
     }
 
+    private getMsiEquityCapital(assetId: string, isConsolidated: boolean): Map<string, number> {
+        const table = isConsolidated ? 'src_msi_balance_sheet' : 'src_msi_balance_sheet_standalone';
+        if (!this.tableExists(table)) return new Map();
+        const rows = this.db.queryAll<{ period_end_date: string; equity_capital: number | null }>(
+            `SELECT period_end_date, equity_capital FROM ${table} WHERE asset_id = ? AND equity_capital IS NOT NULL`,
+            [assetId]
+        );
+        const result = new Map<string, number>();
+        for (const row of rows) {
+            const fyYear = this.periodToFY(row.period_end_date).replace('FY', '20');
+            if (!result.has(fyYear) && row.equity_capital != null) {
+                result.set(fyYear, row.equity_capital);
+            }
+        }
+        return result;
+    }
+
     public getBalanceSheet(assetId: string, isConsolidated: boolean = true): BalanceSheet[] {
         const rows = this.buildAnnualRows(this.getFundamentalRows(assetId, isConsolidated)).slice(0, 10);
+        const equityCapByFY = this.getMsiEquityCapital(assetId, isConsolidated);
         return rows.map((r) => {
-            const shares = this.deriveShares(r);
-            const equityCapital = shares ? +((shares / 1e7) * 1).toFixed(2) : null;
+            const fyYear = r.fiscal_year.replace('FY', '20');
+            const equityCapital = equityCapByFY.get(fyYear) ?? null;
             const debt = r.total_debt ?? null;
             const equity = r.total_equity ?? null;
             const debtEquity = equity != null && equity > 0 && debt != null ? +(debt / equity).toFixed(2) : null;
@@ -314,7 +457,7 @@ export class FundamentalsRepository extends BaseRepository {
                 tradeReceivables: r.trade_receivables ?? null,
                 borrowings: debt || null,
                 bookValue: r.shares_outstanding && r.shares_outstanding > 0 && equity != null
-                    ? +((equity * 1e7) / r.shares_outstanding).toFixed(2)
+                    ? +(equity / r.shares_outstanding).toFixed(2)
                     : null,
                 debtEquity,
             };
@@ -376,22 +519,42 @@ export class FundamentalsRepository extends BaseRepository {
             ev_ebitda: number | null;
         };
         const ratioTable = isConsolidated ? "src_msi_ratios" : "src_msi_ratios_standalone";
-        const msiRows = this.db.queryAll<MsiRatioRow>(
-            `SELECT period_end_date, ebit_margin, pre_tax_margin, net_profit_margin,
-                    roe, roa, roce, debt_equity, current_ratio, quick_ratio,
-                    interest_coverage, asset_turnover, inventory_turnover,
-                    debtor_days, creditor_days, sales_growth_yoy, net_income_growth_yoy,
-                    basic_eps_growth_yoy, book_value_per_share, ebit_growth_yoy,
-                    pre_tax_income_growth_yoy, pbdit_margin, dividend_payout,
-                    earnings_retention, ev_ebitda
-             FROM ${ratioTable} WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 12`,
-            [assetId]
-        );
+        const annualRatioTable = isConsolidated ? "msi_ratios_annual" : "msi_ratios_annual_standalone";
+        const msiRows = this.tableExists(ratioTable)
+            ? this.db.queryAll<MsiRatioRow>(
+                `SELECT period_end_date, ebit_margin, pre_tax_margin, net_profit_margin,
+                        roe, roa, roce, debt_equity, current_ratio, quick_ratio,
+                        interest_coverage, asset_turnover, inventory_turnover,
+                        debtor_days, creditor_days, sales_growth_yoy, net_income_growth_yoy,
+                        basic_eps_growth_yoy, book_value_per_share, ebit_growth_yoy,
+                        pre_tax_income_growth_yoy, pbdit_margin, dividend_payout,
+                        earnings_retention, ev_ebitda
+                 FROM ${ratioTable} WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 12`,
+                [assetId]
+            )
+            : [];
         const msiByPeriod = new Map(msiRows.map((r) => [r.period_end_date, r]));
+
+        const msiAnnualRows = this.tableExists(annualRatioTable)
+            ? this.db.queryAll<MsiRatioRow>(
+                `SELECT period_end_date, ebit_margin, pre_tax_margin, net_profit_margin,
+                        roe, roa, roce, debt_equity, current_ratio, quick_ratio,
+                        interest_coverage, asset_turnover, inventory_turnover,
+                        debtor_days, creditor_days, sales_growth_yoy, net_income_growth_yoy,
+                        basic_eps_growth_yoy, book_value_per_share, null as ebit_growth_yoy,
+                        null as pre_tax_income_growth_yoy, pbdit_margin, dividend_payout,
+                        earnings_retention, ev_ebitda
+                 FROM ${annualRatioTable} WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 12`,
+                [assetId]
+            )
+            : [];
+        const msiAnnualByYear = new Map(msiAnnualRows.map((r) => [r.period_end_date, r]));
 
         const fundRows = this.getFundamentalRows(assetId, isConsolidated).slice(0, 12);
         return fundRows.map((row) => {
-            const msi = msiByPeriod.get(row.period_end_date);
+            const fyYear = this.periodToFY(row.period_end_date).replace('FY', '20');
+            const msiAnnual = msiAnnualByYear.get(fyYear);
+            const msi = msiByPeriod.get(row.period_end_date) ?? msiAnnual;
             const operatingMargin = msi?.ebit_margin ?? (row.revenue && row.operating_profit != null ? +((row.operating_profit / row.revenue) * 100).toFixed(2) : null);
             const patMargin = msi?.net_profit_margin ?? (row.revenue && row.pat != null ? +((row.pat / row.revenue) * 100).toFixed(2) : null);
             const returnBase = row.ebit ?? row.operating_profit;
@@ -430,21 +593,25 @@ export class FundamentalsRepository extends BaseRepository {
     }
 
     public getOwnership(assetId: string): ShareholdingPattern[] {
-        const msiSH = this.db.queryAll<{
+        const msiSH = this.tableExists("src_msi_shareholding") ? this.db.queryAll<{
             period_end_date: string;
             promoter_holding: number | null;
+            promoter_change_qoq: number | null;
             fii_holding: number | null;
+            fii_change_qoq: number | null;
             dii_holding: number | null;
+            dii_change_qoq: number | null;
             public_holding: number | null;
             pledged_shares: number | null;
         }>(
-            `SELECT period_end_date, promoter_holding, fii_holding, dii_holding,
-                  public_holding, pledged_shares
+            `SELECT period_end_date, promoter_holding, promoter_change_qoq,
+                    fii_holding, fii_change_qoq, dii_holding, dii_change_qoq,
+                    public_holding, pledged_shares
              FROM src_msi_shareholding WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 8`,
             [assetId]
-        );
+        ) : [];
 
-        const scrSH = this.db.queryAll<{
+        const scrSH = this.tableExists("src_screener_shareholding") ? this.db.queryAll<{
             period_end_date: string;
             promoters_pct: number | null;
             fii_pct: number | null;
@@ -454,11 +621,12 @@ export class FundamentalsRepository extends BaseRepository {
             `SELECT period_end_date, promoters_pct, fii_pct, dii_pct, public_pct
              FROM src_screener_shareholding WHERE asset_id = ? ORDER BY period_end_date DESC LIMIT 8`,
             [assetId]
-        );
+        ) : [];
 
-        const useMsi = scrSH.length === 0 && msiSH.length > 0;
+        const useMsi = msiSH.length > 0;
         type AnyShRow = { period_end_date: string; promoter_holding?: number | null; promoter_change_qoq?: number | null; fii_holding?: number | null; fii_change_qoq?: number | null; dii_holding?: number | null; dii_change_qoq?: number | null; public_holding?: number | null; pledged_shares?: number | null; promoters_pct?: number | null; fii_pct?: number | null; dii_pct?: number | null; public_pct?: number | null };
-        const typedShRows: AnyShRow[] = scrSH.length > 0 ? scrSH as AnyShRow[] : msiSH as AnyShRow[];
+        const rawShRows: AnyShRow[] = useMsi ? msiSH as AnyShRow[] : scrSH as AnyShRow[];
+        const typedShRows = this.sortByPeriodDesc(rawShRows);
         return typedShRows.map((r) => {
             const n = (v: number | null | undefined) => v ?? undefined;
             return {
@@ -477,6 +645,7 @@ export class FundamentalsRepository extends BaseRepository {
                 publicPct: n(useMsi ? r.public_holding : r.public_pct),
                 pledged: n(useMsi ? r.pledged_shares : undefined),
                 pledgedPct: n(useMsi ? r.pledged_shares : undefined),
+                promoterPledgePct: n(useMsi ? r.pledged_shares : undefined),
             };
         });
     }

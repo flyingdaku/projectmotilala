@@ -90,7 +90,34 @@ export function FinancialsSection({ symbol }: Props) {
     annual: QuarterlyResult[];
     balanceSheets: BalanceSheet[];
     cashFlows: CashFlow[];
-    ratios: Array<{ periodEndDate: string; debtorDays: number | null; inventoryDays: number | null; daysPayable: number | null; roce: number | null; operatingMargin?: number | null; patMargin?: number | null }>;
+    ratios: Array<{
+      periodEndDate: string;
+      debtorDays: number | null;
+      inventoryDays: number | null;
+      daysPayable: number | null;
+      roce: number | null;
+      roe?: number | null;
+      roa?: number | null;
+      operatingMargin?: number | null;
+      patMargin?: number | null;
+      ebitMargin?: number | null;
+      preTaxMargin?: number | null;
+      debtEquity?: number | null;
+      currentRatio?: number | null;
+      quickRatio?: number | null;
+      interestCoverage?: number | null;
+      assetTurnover?: number | null;
+      inventoryTurnover?: number | null;
+      salesGrowthYoy?: number | null;
+      netIncomeGrowthYoy?: number | null;
+      epsGrowthYoy?: number | null;
+      bookValuePerShare?: number | null;
+      ebitGrowthYoy?: number | null;
+      pbditMargin?: number | null;
+      dividendPayout?: number | null;
+      earningsRetention?: number | null;
+      evEbitda?: number | null;
+    }>;
   } | null>(null);
   const [viewMode, setViewMode] = useState<"quarterly" | "annual">("annual");
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
@@ -98,9 +125,20 @@ export function FinancialsSection({ symbol }: Props) {
 
   useEffect(() => {
     fetch(`/api/stocks/${symbol}/financials?consolidated=${isConsolidated}`)
-      .then((r) => r.json())
-      .then((payload) => {
+      .then(async (r) => {
+        const payload = await r.json();
+        if (!r.ok || payload.error) {
+          console.error('[FinancialsSection] API error:', payload.error || r.status);
+          setData(null);
+          setLoadedKey(requestKey);
+          return;
+        }
         setData(payload);
+        setLoadedKey(requestKey);
+      })
+      .catch((err) => {
+        console.error('[FinancialsSection] fetch error:', err);
+        setData(null);
         setLoadedKey(requestKey);
       });
   }, [requestKey, symbol, isConsolidated]);
@@ -163,6 +201,8 @@ export function FinancialsSection({ symbol }: Props) {
       ROCE: r.roce ?? 0,
     }));
   }, [data]);
+
+  const latestRatio = data?.ratios?.[0] ?? null;
 
   const tooltipStyle = {
     backgroundColor: "var(--surface-elevated)",
@@ -296,6 +336,12 @@ export function FinancialsSection({ symbol }: Props) {
                     ))}
                   </tr>
                   <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>EBIT</td>
+                    {plRows.map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.ebit)}</td>
+                    ))}
+                  </tr>
+                  <tr>
                     <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>OPM %</td>
                     {plRows.map((r, i) => {
                       const opm = r.revenue && r.operatingProfit ? (r.operatingProfit / r.revenue * 100) : null;
@@ -303,6 +349,24 @@ export function FinancialsSection({ symbol }: Props) {
                         <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: opm && opm > 0 ? "#10B981" : "#EF4444" }}>{fmtPct(opm)}</td>
                       );
                     })}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Interest</td>
+                    {plRows.map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.interest)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>PBT</td>
+                    {plRows.map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: "var(--text-primary)" }}>{fmt(r.pbt)}</td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Tax</td>
+                    {plRows.map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.tax ?? 0) >= 0 ? "#EF4444" : "#10B981" }}>{fmt(r.tax)}</td>
+                    ))}
                   </tr>
                   <tr>
                     <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Net Profit</td>
@@ -466,6 +530,12 @@ export function FinancialsSection({ symbol }: Props) {
                       <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.cashFromFinancing ?? 0) >= 0 ? "#10B981" : "#EF4444" }}>{fmt(r.cashFromFinancing)}</td>
                     ))}
                   </tr>
+                  <tr>
+                    <td className="py-2.5 pr-4 font-medium" style={{ color: "var(--text-primary)" }}>Capex</td>
+                    {data.cashFlows.slice(0, 8).map((r, i) => (
+                      <td key={i} className="text-right py-2.5 px-3 font-mono" style={{ color: (r.capex ?? 0) > 0 ? "#EF4444" : "var(--text-primary)" }}>{fmt(r.capex)}</td>
+                    ))}
+                  </tr>
                   <tr className="bg-muted/5 font-bold">
                     <td className="py-3 pr-4" style={{ color: "var(--text-primary)" }}>Free Cash Flow</td>
                     {data.cashFlows.slice(0, 8).map((r, i) => (
@@ -512,6 +582,37 @@ export function FinancialsSection({ symbol }: Props) {
               </LineChart>
             </ResponsiveContainer>
           </div>
+          {latestRatio && (
+            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-3">
+              {[
+                { label: "ROE", val: latestRatio.roe, suffix: "%" },
+                { label: "ROA", val: latestRatio.roa, suffix: "%" },
+                { label: "EBIT Margin", val: latestRatio.ebitMargin, suffix: "%" },
+                { label: "Pre-Tax Margin", val: latestRatio.preTaxMargin, suffix: "%" },
+                { label: "Debt/Equity", val: latestRatio.debtEquity, suffix: "x" },
+                { label: "Current Ratio", val: latestRatio.currentRatio, suffix: "x" },
+                { label: "Quick Ratio", val: latestRatio.quickRatio, suffix: "x" },
+                { label: "Interest Coverage", val: latestRatio.interestCoverage, suffix: "x" },
+                { label: "Asset Turnover", val: latestRatio.assetTurnover, suffix: "x" },
+                { label: "Sales Growth YoY", val: latestRatio.salesGrowthYoy, suffix: "%" },
+                { label: "PAT Growth YoY", val: latestRatio.netIncomeGrowthYoy, suffix: "%" },
+                { label: "EPS Growth YoY", val: latestRatio.epsGrowthYoy, suffix: "%" },
+                { label: "BVPS", val: latestRatio.bookValuePerShare, suffix: "" },
+                { label: "EV/EBITDA", val: latestRatio.evEbitda, suffix: "x" },
+                { label: "Dividend Payout", val: latestRatio.dividendPayout, suffix: "%" },
+                { label: "Earnings Retention", val: latestRatio.earningsRetention, suffix: "%" },
+                { label: "PBDIT Margin", val: latestRatio.pbditMargin, suffix: "%" },
+                { label: "EBIT Growth YoY", val: latestRatio.ebitGrowthYoy, suffix: "%" },
+              ].map((metric) => (
+                <div key={metric.label} className="p-3 rounded-lg border" style={{ background: "var(--surface-elevated)", borderColor: "var(--border)" }}>
+                  <div className="text-[11px] mb-1" style={{ color: "var(--text-muted)" }}>{metric.label}</div>
+                  <div className="text-sm font-semibold font-mono" style={{ color: "var(--text-primary)" }}>
+                    {metric.val != null ? `${metric.val.toFixed(2)}${metric.suffix}` : "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           {data && data.quarterly.length >= 2 && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[

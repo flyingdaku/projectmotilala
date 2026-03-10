@@ -44,6 +44,7 @@ export const INDICATOR_CATEGORIES: IndicatorCategory[] = [
     { id: 'growth',         label: 'Growth' },
     { id: 'valuation',      label: 'Valuation' },
     { id: 'quality',        label: 'Quality & Rank' },
+    { id: 'factor',         label: 'Factor Exposure' },
     { id: 'math',           label: 'Math Operations' },
 ];
 
@@ -761,6 +762,38 @@ export const INDICATORS: IndicatorDef[] = [
         id: 'quality_score', label: 'Quality Score',   categoryId: 'quality',
         dslName: 'quality',  params: [],                 rhsType: 'number',
         description: 'Composite Quality Score (0-100)', supported: true,
+    },
+
+    // ── Factor Exposure (IIMA Carhart 4-Factor) ───────────────────────────
+    {
+        id: 'ff_beta',      label: 'Market Beta (β)',    categoryId: 'factor',
+        dslName: 'ff_beta', params: [],                   rhsType: 'number',
+        description: 'Carhart market beta from IIMA OLS regression', supported: false,
+    },
+    {
+        id: 'ff_smb',       label: 'Size Loading (SMB)', categoryId: 'factor',
+        dslName: 'ff_smb',  params: [],                   rhsType: 'number',
+        description: 'Small-minus-big factor loading', supported: false,
+    },
+    {
+        id: 'ff_hml',       label: 'Value Loading (HML)', categoryId: 'factor',
+        dslName: 'ff_hml',  params: [],                    rhsType: 'number',
+        description: 'High-minus-low (value) factor loading', supported: false,
+    },
+    {
+        id: 'ff_wml',       label: 'Momentum Loading (WML)', categoryId: 'factor',
+        dslName: 'ff_wml',  params: [],                       rhsType: 'number',
+        description: 'Winners-minus-losers (momentum) factor loading', supported: false,
+    },
+    {
+        id: 'ff_alpha',     label: 'Alpha (α)',           categoryId: 'factor',
+        dslName: 'ff_alpha', params: [],                   rhsType: 'number',
+        description: 'Daily abnormal return unexplained by factors', supported: false,
+    },
+    {
+        id: 'ff_r2',        label: 'Factor R²',           categoryId: 'factor',
+        dslName: 'ff_r2',   params: [],                    rhsType: 'number',
+        description: 'Model R-squared: how much return variance factors explain', supported: false,
     },
 ];
 

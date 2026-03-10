@@ -6,11 +6,20 @@
  */
 
 import type {
-  FeedItem, StockSummary, PriceBar, CorporateAction,
-  CompanyProfile, CompanyDocument, CompanyEvent,
+  FeedItem,
+  StockSummary,
+  PriceBar,
+  CorporateAction,
+  CompanyProfile,
+  CompanyDocument,
+  CompanyEvent,
   QuarterlyResult, BalanceSheet, CashFlow, AnomalyFlag,
-  ShareholdingPattern, GovernanceScore,
-  FactorExposure, EarningsQuality, ComputedRatios,
+  ShareholdingPattern,
+  GovernanceScore,
+  FactorExposure,
+  FactorContext,
+  EarningsQuality,
+  ComputedRatios,
   PeerComparison,
 } from "./types";
 
@@ -167,13 +176,32 @@ interface DataAdapter {
         inventoryDays: number | null;
         daysPayable: number | null;
         roce: number | null;
+        roe?: number | null;
+        roa?: number | null;
         operatingMargin?: number | null;
         patMargin?: number | null;
+        ebitMargin?: number | null;
+        preTaxMargin?: number | null;
+        debtEquity?: number | null;
+        currentRatio?: number | null;
+        quickRatio?: number | null;
+        interestCoverage?: number | null;
+        assetTurnover?: number | null;
+        inventoryTurnover?: number | null;
+        salesGrowthYoy?: number | null;
+        netIncomeGrowthYoy?: number | null;
+        epsGrowthYoy?: number | null;
+        bookValuePerShare?: number | null;
+        ebitGrowthYoy?: number | null;
+        pbditMargin?: number | null;
+        dividendPayout?: number | null;
+        earningsRetention?: number | null;
+        evEbitda?: number | null;
       }>;
       anomalies: AnomalyFlag[];
     }>;
     getOwnership(assetId: string): Promise<{ shareholding: ShareholdingPattern[]; governance: GovernanceScore }>;
-    getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure | null; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }>;
+    getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure | null; factorContext: FactorContext; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }>;
   };
   follow: {
     getStatus(userId: string, symbol: string): Promise<{ isFollowing: boolean; followerCount: number; alertConfig?: Record<string, boolean> }>;
@@ -407,7 +435,7 @@ function createMockAdapter(): DataAdapter {
           governance: { overall: 72, boardIndependence: 68, disclosure: 78, relatedParty: 65, auditQuality: 80 },
         };
       },
-      async getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure | null; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }> {
+      async getAnalytics(assetId: string): Promise<{ factorExposure: FactorExposure | null; factorContext: FactorContext; earningsQuality: EarningsQuality; ratioHistory: Partial<ComputedRatios>[]; ratios: ComputedRatios }> {
         const months = Array.from({ length: 24 }, (_, i) => {
           const d = new Date();
           d.setMonth(d.getMonth() - (23 - i));
@@ -421,6 +449,42 @@ function createMockAdapter(): DataAdapter {
             wmlLoading: +((Math.random() - 0.4) * 0.5).toFixed(2),
             alpha: +((Math.random() - 0.3) * 0.02).toFixed(4),
             rSquared: +(0.6 + Math.random() * 0.3).toFixed(3),
+            sampleSize: 252,
+            regressionStartDate: months[0],
+            regressionEndDate: months[months.length - 1],
+          },
+          factorContext: {
+            releaseTag: "2025-12",
+            latestSnapshots: [
+              {
+                frequency: "DAILY",
+                asOf: months[months.length - 1],
+                marketReturn: +(Math.random() * 4 - 2).toFixed(2),
+                marketPremium: +(Math.random() * 4 - 2).toFixed(2),
+                rfRate: +(Math.random() * 0.03).toFixed(2),
+                smb: +(Math.random() * 3 - 1.5).toFixed(2),
+                hml: +(Math.random() * 3 - 1.5).toFixed(2),
+                wml: +(Math.random() * 3 - 1.5).toFixed(2),
+                notes: "Delayed survivorship-bias-adjusted IIMA release",
+              },
+              {
+                frequency: "MONTHLY",
+                asOf: months[months.length - 1],
+                marketReturn: +(Math.random() * 8 - 4).toFixed(2),
+                marketPremium: +(Math.random() * 8 - 4).toFixed(2),
+                rfRate: +(Math.random() * 0.3).toFixed(2),
+                smb: +(Math.random() * 6 - 3).toFixed(2),
+                hml: +(Math.random() * 6 - 3).toFixed(2),
+                wml: +(Math.random() * 6 - 3).toFixed(2),
+                notes: "Delayed survivorship-bias-adjusted IIMA release",
+              },
+            ],
+            drawdowns: [
+              { factorCode: "ERP", factorName: "Equity Risk Premium (ERP)", annualizedReturn: 12.4, annualizedVolatility: 18.2, worstDrawdown: -56.7, drawdownDurationYears: 3.1 },
+              { factorCode: "SMB", factorName: "Size Factor (SMB)", annualizedReturn: 4.3, annualizedVolatility: 15.6, worstDrawdown: -48.2, drawdownDurationYears: 4.2 },
+              { factorCode: "HML", factorName: "Value Factor (HML)", annualizedReturn: 6.1, annualizedVolatility: 14.2, worstDrawdown: -39.5, drawdownDurationYears: 2.8 },
+              { factorCode: "WML", factorName: "Momentum Factor (WML)", annualizedReturn: 8.9, annualizedVolatility: 16.8, worstDrawdown: -44.7, drawdownDurationYears: 2.2 },
+            ],
           },
           earningsQuality: {
             overallScore: +(65 + Math.random() * 25),

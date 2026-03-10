@@ -19,6 +19,7 @@ import type {
     ShareholdingPattern,
     GovernanceScore,
     FactorExposure,
+    FactorContext,
     EarningsQuality,
     ComputedRatios,
     PeerComparison,
@@ -30,12 +31,92 @@ import { AssetRepository } from "./repositories/assets";
 import { PriceRepository } from "./repositories/prices";
 import { FundamentalsRepository } from "./repositories/fundamentals";
 import { CorpActionRepository } from "./repositories/corp_actions";
+import { FactorRepository } from "./repositories/factors";
+
+type RegressionInput = {
+    assetReturn: number;
+    marketPremium: number;
+    smb: number;
+    hml: number;
+    wml: number;
+    rfRate: number | null;
+    date: string;
+};
+
+function solveLinearSystem(matrix: number[][], vector: number[]): number[] | null {
+    const n = vector.length;
+    const augmented = matrix.map((row, index) => [...row, vector[index]]);
+    for (let pivot = 0; pivot < n; pivot += 1) {
+        let maxRow = pivot;
+        for (let row = pivot + 1; row < n; row += 1) {
+            if (Math.abs(augmented[row][pivot]) > Math.abs(augmented[maxRow][pivot])) {
+                maxRow = row;
+            }
+        }
+        if (Math.abs(augmented[maxRow][pivot]) < 1e-10) {
+            return null;
+        }
+        if (maxRow !== pivot) {
+            [augmented[pivot], augmented[maxRow]] = [augmented[maxRow], augmented[pivot]];
+        }
+        const pivotValue = augmented[pivot][pivot];
+        for (let col = pivot; col <= n; col += 1) {
+            augmented[pivot][col] /= pivotValue;
+        }
+        for (let row = 0; row < n; row += 1) {
+            if (row === pivot) continue;
+            const factor = augmented[row][pivot];
+            for (let col = pivot; col <= n; col += 1) {
+                augmented[row][col] -= factor * augmented[pivot][col];
+            }
+        }
+    }
+    return augmented.map((row) => row[n]);
+}
+
+function computeFactorExposure(rows: RegressionInput[]): FactorExposure | null {
+    if (rows.length < 60) return null;
+    const predictors = rows.map((row) => [1, row.marketPremium, row.smb, row.hml, row.wml]);
+    const response = rows.map((row) => row.assetReturn - (row.rfRate ?? 0));
+    const columns = predictors[0].length;
+    const xtx = Array.from({ length: columns }, () => Array(columns).fill(0));
+    const xty = Array(columns).fill(0);
+    for (let rowIndex = 0; rowIndex < predictors.length; rowIndex += 1) {
+        const x = predictors[rowIndex];
+        const y = response[rowIndex];
+        for (let i = 0; i < columns; i += 1) {
+            xty[i] += x[i] * y;
+            for (let j = 0; j < columns; j += 1) {
+                xtx[i][j] += x[i] * x[j];
+            }
+        }
+    }
+    const coefficients = solveLinearSystem(xtx, xty);
+    if (!coefficients) return null;
+    const predictions = predictors.map((x) => x.reduce((sum, value, index) => sum + value * coefficients[index], 0));
+    const meanY = response.reduce((sum, value) => sum + value, 0) / response.length;
+    const ssTot = response.reduce((sum, value) => sum + (value - meanY) ** 2, 0);
+    const ssRes = response.reduce((sum, value, index) => sum + (value - predictions[index]) ** 2, 0);
+    const rSquared = ssTot > 0 ? Math.max(0, Math.min(1, 1 - ssRes / ssTot)) : null;
+    return {
+        alpha: +coefficients[0].toFixed(4),
+        marketBeta: +coefficients[1].toFixed(3),
+        smbLoading: +coefficients[2].toFixed(3),
+        hmlLoading: +coefficients[3].toFixed(3),
+        wmlLoading: +coefficients[4].toFixed(3),
+        rSquared: rSquared != null ? +rSquared.toFixed(3) : null,
+        sampleSize: rows.length,
+        regressionStartDate: rows[0]?.date ?? null,
+        regressionEndDate: rows[rows.length - 1]?.date ?? null,
+    };
+}
 
 export function createSqliteAdapter() {
     const assetsRepo = new AssetRepository();
     const pricesRepo = new PriceRepository();
     const fundRepo = new FundamentalsRepository();
     const corpRepo = new CorpActionRepository();
+    const factorRepo = new FactorRepository();
 
     return {
         stocks: {
@@ -88,7 +169,7 @@ export function createSqliteAdapter() {
                 const shares = fv ? fundRepo.getLatestShares(asset.id, fv) : null;
 
                 const bookValuePerShare = ttmRatios?.bookValuePerShare ?? (equity && shares && shares > 0
-                    ? +((equity * 1e7) / shares).toFixed(2) : null);
+                    ? +(equity / shares).toFixed(2) : null);
                 const pb = bookValuePerShare && price > 0
                     ? +(price / bookValuePerShare).toFixed(2) : null;
 
@@ -151,8 +232,13 @@ export function createSqliteAdapter() {
 
                 const filteredPeers = assetsRepo.getPeersBase(asset);
 
+                const peersWithPrices = filteredPeers.filter((p) => {
+                    const lp = pricesRepo.getLatestPrice(p.id);
+                    return lp && lp.close > 0;
+                });
+
                 return Promise.all(
-                    filteredPeers.map(async (p) => {
+                    peersWithPrices.map(async (p) => {
                         const latestPrice = pricesRepo.getLatestPrice(p.id);
                         const price = latestPrice?.close ?? 0;
                         const fv = p.face_value ?? 1;
@@ -308,6 +394,7 @@ export function createSqliteAdapter() {
 
             async getAnalytics(assetId: string): Promise<{
                 factorExposure: FactorExposure | null;
+                factorContext: FactorContext;
                 earningsQuality: EarningsQuality;
                 ratioHistory: Partial<ComputedRatios>[];
                 ratios: ComputedRatios;
@@ -391,9 +478,16 @@ export function createSqliteAdapter() {
                     debtEquity != null ? Math.max(0, 30 - debtEquity * 20) : 0,
                 ].reduce((sum, value) => sum + value, 0);
                 const earningsOverallScore = qualityScore > 0 ? qualityScore : (msiData?.composite_rating ?? null);
+                const factorExposure = computeFactorExposure(factorRepo.getRegressionInputs(assetId));
+                const factorContext = {
+                    releaseTag: factorRepo.getReleaseTag(),
+                    latestSnapshots: factorRepo.getLatestSnapshots(),
+                    drawdowns: factorRepo.getDrawdownStats(),
+                } satisfies FactorContext;
 
                 return {
-                    factorExposure: null,
+                    factorExposure,
+                    factorContext,
                     earningsQuality: {
                         overallScore: earningsOverallScore,
                         cfoPatRatio: cfoPatRatio ?? null,

@@ -51,7 +51,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("run_pipeline")
 
-def run(trade_date: date, skip_bse: bool = False, skip_amfi: bool = False, skip_corp_actions: bool = False, skip_adjust: bool = False, skip_reconcile: bool = False):
+def run(trade_date: date, skip_bse: bool = False, skip_amfi: bool = False, skip_corp_actions: bool = False, skip_adjust: bool = False, skip_reconcile: bool = False, skip_iima: bool = False):
     """Run the full nightly pipeline for a given trade date."""
     ensure_logs_dir()
 
@@ -143,7 +143,7 @@ def run(trade_date: date, skip_bse: bool = False, skip_amfi: bool = False, skip_
     # ── Steps 5-8: Parallel Data Ingestion ───────────────────────────
     import concurrent.futures
 
-    logger.info("Steps 5-8: Running Ingestion Pipelines (NSE, BSE, AMFI, Fundamentals) in parallel...")
+    logger.info("Steps 5-8: Running Ingestion Pipelines (NSE, BSE, AMFI, Fundamentals, IIMA FF) in parallel...")
     
     def run_nse():
         from pipelines.nse_bhavcopy import run_nse_bhavcopy_pipeline
@@ -176,12 +176,33 @@ def run(trade_date: date, skip_bse: bool = False, skip_amfi: bool = False, skip_
         except Exception as e:
             logger.warning(f"Fundamentals pipeline failed (non-fatal): {e}")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+    def run_iima():
+        if skip_iima:
+            logger.info("IIMA Fama-French pipeline skipped")
+            return
+        try:
+            from pipelines.ff_iima_pipeline import run_iima_ff_pipeline
+            run_iima_ff_pipeline(trade_date=trade_date)
+        except Exception as e:
+            logger.warning(f"IIMA Fama-French pipeline failed (non-fatal): {e}")
+
+    def run_nifty_indices():
+        try:
+            from sources.nifty_indices import NiftyIndicesIngester
+            ingester = NiftyIndicesIngester()
+            with get_connection() as conn:
+                ingester.run(trade_date, conn)
+        except Exception as e:
+            logger.warning(f"Nifty Indices pipeline failed (non-fatal): {e}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         futures = [
             executor.submit(run_nse),
             executor.submit(run_bse),
             executor.submit(run_amfi),
-            executor.submit(run_fundamentals)
+            executor.submit(run_fundamentals),
+            executor.submit(run_iima),
+            executor.submit(run_nifty_indices)
         ]
         concurrent.futures.wait(futures)
         # Check for exceptions in the parallel execution
@@ -228,6 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-corp-actions", action="store_true", help="Skip all corporate actions (NSE + BSE + reconcile)")
     parser.add_argument("--skip-adjust", action="store_true", help="Skip recomputing adjusted close prices")
     parser.add_argument("--skip-reconcile", action="store_true", help="Skip NSE vs BSE corporate actions reconciliation")
+    parser.add_argument("--skip-iima", action="store_true", help="Skip IIMA delayed Fama-French ingestion")
 
     args = parser.parse_args()
 
@@ -240,4 +262,5 @@ if __name__ == "__main__":
         skip_corp_actions=args.skip_corp_actions,
         skip_adjust=args.skip_adjust,
         skip_reconcile=args.skip_reconcile,
+        skip_iima=args.skip_iima,
     )

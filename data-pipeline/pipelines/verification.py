@@ -197,7 +197,7 @@ def check_pipeline_run_health(trade_date: date) -> dict:
     Verify all expected pipeline sources ran successfully for trade_date.
     Expected sources: NSE_BHAVCOPY, BSE_BHAVCOPY, AMFI_NAV, NSE_CORP_ACTIONS
     """
-    expected_sources = ["NSE_BHAVCOPY", "BSE_BHAVCOPY", "AMFI_NAV"]
+    expected_sources = ["NSE_BHAVCOPY", "BSE_BHAVCOPY", "AMFI_NAV", "IIMA_FF"]
 
     results = execute_query(
         """SELECT source, status, records_inserted, circuit_breaks, error_log
@@ -226,6 +226,77 @@ def check_pipeline_run_health(trade_date: date) -> dict:
     }
 
 
+def check_iima_factor_snapshot() -> dict:
+    """Verify the delayed IIMA factor snapshot is populated across all required tables."""
+    factor_summary = execute_query(
+        """SELECT frequency, COUNT(*) AS row_count, MAX(date) AS latest_date
+           FROM ff_factor_returns
+           WHERE source = 'IIMA'
+           GROUP BY frequency"""
+    )
+    factor_map = {row["frequency"]: row for row in factor_summary}
+    missing_frequencies = [freq for freq in ["DAILY", "MONTHLY", "YEARLY"] if freq not in factor_map]
+
+    portfolio_count = execute_one(
+        "SELECT COUNT(*) AS cnt FROM ff_iima_portfolio_returns"
+    )["cnt"]
+    breakpoint_count = execute_one(
+        "SELECT COUNT(*) AS cnt FROM ff_iima_breakpoints"
+    )["cnt"]
+    drawdown_count = execute_one(
+        "SELECT COUNT(*) AS cnt FROM ff_iima_drawdowns"
+    )["cnt"]
+
+    latest_daily = factor_map.get("DAILY", {}).get("latest_date")
+    latest_success = execute_one(
+        """SELECT MAX(run_date) AS latest_run_date
+           FROM pipeline_runs
+           WHERE source = 'IIMA_FF' AND status = 'SUCCESS'"""
+    )
+
+    status = "PASS"
+    issues = []
+
+    if missing_frequencies:
+        status = "WARN"
+        issues.append(f"Missing IIMA factor frequencies: {missing_frequencies}")
+
+    if portfolio_count == 0:
+        status = "WARN"
+        issues.append("No IIMA portfolio return rows found")
+
+    if breakpoint_count == 0:
+        status = "WARN"
+        issues.append("No IIMA breakpoint rows found")
+
+    if drawdown_count == 0:
+        status = "WARN"
+        issues.append("No IIMA drawdown rows found")
+
+    if latest_success is None or latest_success.get("latest_run_date") is None:
+        status = "WARN"
+        issues.append("IIMA FF pipeline has never completed successfully")
+
+    result = {
+        "check": "IIMA_FACTOR_SNAPSHOT",
+        "status": status,
+        "latest_daily_factor_date": latest_daily,
+        "latest_successful_run": None if latest_success is None else latest_success.get("latest_run_date"),
+        "factor_frequencies_present": sorted(factor_map.keys()),
+        "portfolio_rows": portfolio_count,
+        "breakpoint_rows": breakpoint_count,
+        "drawdown_rows": drawdown_count,
+        "issues": issues,
+    }
+
+    if status == "WARN":
+        logger.warning("IIMA factor snapshot issues: %s", issues)
+    else:
+        logger.info("IIMA factor snapshot: PASS")
+
+    return result
+
+
 # ─── MAIN VERIFICATION RUNNER ─────────────────────────────────────────────────
 
 def run_verification_pipeline(trade_date: date = None):
@@ -248,6 +319,7 @@ def run_verification_pipeline(trade_date: date = None):
         ("duplicates", check_no_duplicate_prices),
         ("calendar", check_trading_calendar_consistency),
         ("pipeline_health", lambda: check_pipeline_run_health(trade_date)),
+        ("iima_snapshot", check_iima_factor_snapshot),
     ]
 
     for name, check_fn in checks:

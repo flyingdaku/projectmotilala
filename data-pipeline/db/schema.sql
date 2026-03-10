@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS daily_prices (
   adj_close       REAL,
   volume          INTEGER,
   trades          INTEGER,
-  source_exchange TEXT NOT NULL CHECK(source_exchange IN ('NSE', 'BSE', 'AMFI')),
+  source_exchange TEXT NOT NULL CHECK(source_exchange IN ('NSE', 'BSE', 'AMFI', 'NSE_TRI')),
   is_verified     INTEGER DEFAULT 0,
   PRIMARY KEY     (asset_id, date),
   FOREIGN KEY     (asset_id) REFERENCES assets(id)
@@ -1002,6 +1002,186 @@ CREATE TABLE IF NOT EXISTS fundamental_conflicts (
   FOREIGN KEY (asset_id) REFERENCES assets(id)
 );
 
+CREATE TABLE IF NOT EXISTS daily_market_cap (
+  asset_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  shares_outstanding INTEGER NOT NULL,
+  close_price REAL NOT NULL,
+  market_cap REAL NOT NULL,
+  source TEXT CHECK(source IN ('COMPUTED', 'SCREENER', 'MANUAL')),
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (asset_id, date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_daily_market_cap_date ON daily_market_cap(date);
+CREATE INDEX IF NOT EXISTS idx_daily_market_cap_asset ON daily_market_cap(asset_id, date DESC);
+
+CREATE TABLE IF NOT EXISTS annual_book_value (
+  asset_id TEXT NOT NULL,
+  fiscal_year_end TEXT NOT NULL,
+  book_value_per_share REAL NOT NULL,
+  total_equity REAL,
+  shares_outstanding INTEGER,
+  source TEXT CHECK(source IN ('SCREENER', 'FUNDAMENTALS', 'MANUAL')),
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (asset_id, fiscal_year_end),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_annual_book_value_year ON annual_book_value(fiscal_year_end);
+
+CREATE TABLE IF NOT EXISTS rbi_tbill_yields (
+  auction_date TEXT PRIMARY KEY,
+  maturity_days INTEGER DEFAULT 91,
+  yield_pct REAL NOT NULL,
+  cutoff_price REAL,
+  notified_amount REAL,
+  source_url TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_tbill_date ON rbi_tbill_yields(auction_date DESC);
+
+CREATE TABLE IF NOT EXISTS ff_breakpoints (
+  rebalance_date TEXT NOT NULL,
+  breakpoint_type TEXT NOT NULL CHECK(breakpoint_type IN ('SIZE', 'VALUE', 'MOMENTUM')),
+  percentile INTEGER NOT NULL CHECK(percentile IN (30, 50, 70)),
+  value REAL NOT NULL,
+  num_stocks_below INTEGER,
+  num_stocks_above INTEGER,
+  num_stocks_total INTEGER,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (rebalance_date, breakpoint_type, percentile)
+);
+CREATE INDEX IF NOT EXISTS idx_breakpoints_date ON ff_breakpoints(rebalance_date DESC);
+
+CREATE TABLE IF NOT EXISTS ff_portfolio_constituents (
+  portfolio_id TEXT NOT NULL,
+  rebalance_date TEXT NOT NULL,
+  asset_id TEXT NOT NULL,
+  weight REAL NOT NULL,
+  market_cap REAL,
+  book_to_market REAL,
+  past_12m_return REAL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (portfolio_id, rebalance_date, asset_id),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_constituents_date ON ff_portfolio_constituents(rebalance_date DESC);
+CREATE INDEX IF NOT EXISTS idx_portfolio_constituents_asset ON ff_portfolio_constituents(asset_id);
+
+CREATE TABLE IF NOT EXISTS ff_factor_returns (
+  date TEXT NOT NULL,
+  frequency TEXT NOT NULL CHECK(frequency IN ('DAILY', 'MONTHLY', 'YEARLY')),
+  market_return REAL,
+  rf_rate REAL,
+  market_premium REAL,
+  smb REAL,
+  hml REAL,
+  wml REAL,
+  num_stocks INTEGER,
+  num_portfolios INTEGER,
+  source TEXT DEFAULT 'COMPUTED' CHECK(source IN ('COMPUTED', 'IIMA', 'MANUAL')),
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (date, frequency, source)
+);
+CREATE INDEX IF NOT EXISTS idx_ff_returns_date ON ff_factor_returns(date DESC);
+CREATE INDEX IF NOT EXISTS idx_ff_returns_freq ON ff_factor_returns(frequency, date DESC);
+
+CREATE TABLE IF NOT EXISTS ff_portfolio_returns (
+  portfolio_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  return REAL NOT NULL,
+  num_stocks INTEGER,
+  total_market_cap REAL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (portfolio_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_portfolio_returns_date ON ff_portfolio_returns(date DESC);
+
+CREATE TABLE IF NOT EXISTS ff_validation (
+  date TEXT NOT NULL,
+  factor TEXT NOT NULL CHECK(factor IN ('MARKET', 'SMB', 'HML', 'WML')),
+  our_value REAL,
+  iima_value REAL,
+  deviation REAL,
+  deviation_pct REAL,
+  abs_deviation REAL,
+  rolling_correlation REAL,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (date, factor)
+);
+CREATE INDEX IF NOT EXISTS idx_validation_date ON ff_validation(date DESC);
+CREATE INDEX IF NOT EXISTS idx_validation_factor ON ff_validation(factor, date DESC);
+
+CREATE TABLE IF NOT EXISTS ff_stock_eligibility (
+  asset_id TEXT NOT NULL,
+  rebalance_date TEXT NOT NULL,
+  is_eligible INTEGER DEFAULT 0,
+  market_cap REAL,
+  median_price REAL,
+  failed_filters TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (asset_id, rebalance_date),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_stock_eligibility_date ON ff_stock_eligibility(rebalance_date);
+CREATE INDEX IF NOT EXISTS idx_stock_eligibility_eligible ON ff_stock_eligibility(rebalance_date, is_eligible);
+
+CREATE TABLE IF NOT EXISTS ff_computation_log (
+  id TEXT PRIMARY KEY,
+  run_date TEXT NOT NULL,
+  computation_type TEXT NOT NULL CHECK(computation_type IN ('DAILY', 'MONTHLY', 'REBALANCE', 'BACKFILL')),
+  start_date TEXT,
+  end_date TEXT,
+  status TEXT NOT NULL CHECK(status IN ('RUNNING', 'SUCCESS', 'PARTIAL', 'FAILED')),
+  num_stocks_eligible INTEGER,
+  num_portfolios_formed INTEGER,
+  factors_computed TEXT,
+  error_log TEXT,
+  duration_ms INTEGER,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_computation_log_date ON ff_computation_log(run_date DESC);
+CREATE INDEX IF NOT EXISTS idx_computation_log_status ON ff_computation_log(status);
+
+CREATE TABLE IF NOT EXISTS ff_iima_portfolio_returns (
+  date TEXT NOT NULL,
+  frequency TEXT NOT NULL CHECK(frequency IN ('DAILY', 'MONTHLY', 'YEARLY')),
+  portfolio_family TEXT NOT NULL CHECK(portfolio_family IN ('SIZE_VALUE', 'SIZE_MOMENTUM')),
+  portfolio_code TEXT NOT NULL,
+  return_pct REAL NOT NULL,
+  release_tag TEXT,
+  notes TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (date, frequency, portfolio_family, portfolio_code)
+);
+CREATE INDEX IF NOT EXISTS idx_ff_iima_portfolio_returns_lookup ON ff_iima_portfolio_returns(portfolio_family, frequency, date DESC);
+
+CREATE TABLE IF NOT EXISTS ff_iima_breakpoints (
+  period_key TEXT NOT NULL,
+  breakpoint_family TEXT NOT NULL CHECK(breakpoint_family IN ('SIZE_VALUE', 'SIZE_MOMENTUM')),
+  size_p90 REAL,
+  low_cut REAL,
+  high_cut REAL,
+  release_tag TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (period_key, breakpoint_family)
+);
+CREATE INDEX IF NOT EXISTS idx_ff_iima_breakpoints_family_period ON ff_iima_breakpoints(breakpoint_family, period_key DESC);
+
+CREATE TABLE IF NOT EXISTS ff_iima_drawdowns (
+  factor_code TEXT PRIMARY KEY CHECK(factor_code IN ('ERP', 'HML', 'SMB', 'WML')),
+  factor_name TEXT NOT NULL,
+  annualized_return REAL,
+  annualized_volatility REAL,
+  worst_drawdown REAL,
+  drawdown_duration_years REAL,
+  source_url TEXT,
+  release_tag TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- ─── PRE-COMPUTED METRICS ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS asset_metrics (
   asset_id         TEXT PRIMARY KEY,
@@ -1054,3 +1234,18 @@ CREATE TABLE IF NOT EXISTS trading_holidays (
 -- Enable WAL mode for better concurrent write performance
 PRAGMA journal_mode=WAL;
 PRAGMA foreign_keys=ON;
+
+-- ─── INDEX CONSTITUENTS ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS index_constituents (
+  index_id        TEXT NOT NULL,
+  asset_id        TEXT NOT NULL,
+  date            TEXT NOT NULL,
+  weight          REAL NOT NULL,
+  ffmc            REAL,
+  created_at      TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY     (index_id, asset_id, date),
+  FOREIGN KEY     (index_id) REFERENCES assets(id),
+  FOREIGN KEY     (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_index_constituents_index_date ON index_constituents(index_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_index_constituents_asset ON index_constituents(asset_id);

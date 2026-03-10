@@ -244,6 +244,36 @@ export interface FactorExposure {
   wmlLoading?: number | null;
   alpha?: number | null;
   rSquared?: number | null;
+  sampleSize?: number | null;
+  regressionStartDate?: string | null;
+  regressionEndDate?: string | null;
+}
+
+export interface FactorSnapshot {
+  frequency: "DAILY" | "MONTHLY" | "YEARLY";
+  asOf: string;
+  marketReturn?: number | null;
+  marketPremium?: number | null;
+  rfRate?: number | null;
+  smb?: number | null;
+  hml?: number | null;
+  wml?: number | null;
+  notes?: string | null;
+}
+
+export interface FactorDrawdownStat {
+  factorCode: "ERP" | "HML" | "SMB" | "WML";
+  factorName: string;
+  annualizedReturn?: number | null;
+  annualizedVolatility?: number | null;
+  worstDrawdown?: number | null;
+  drawdownDurationYears?: number | null;
+}
+
+export interface FactorContext {
+  releaseTag?: string | null;
+  latestSnapshots: FactorSnapshot[];
+  drawdowns: FactorDrawdownStat[];
 }
 
 export interface EarningsQuality {
@@ -341,4 +371,12 @@ export interface ScreenerFilters {
   // Universe / classification
   sector?: string[];
   assetClass?: string[];
+
+  // Factor exposure (IIMA Carhart 4-Factor)
+  ffBeta?: RangeFilter;
+  ffSmb?: RangeFilter;
+  ffHml?: RangeFilter;
+  ffWml?: RangeFilter;
+  ffAlpha?: RangeFilter;
+  ffRSquared?: RangeFilter;
 }

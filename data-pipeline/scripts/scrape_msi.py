@@ -387,6 +387,11 @@ def setup_db(db_path):
         'sales_growth_yoy': 'REAL',
         'pat_growth_yoy': 'REAL',
         'eps_growth_yoy': 'REAL',
+        'traded_goods': 'REAL',
+        'power_fuel': 'REAL',
+        'admin_selling': 'REAL',
+        'research_dev': 'REAL',
+        'other_expenses': 'REAL',
     })
     _ensure_table_columns(conn, 'src_msi_quarterly_standalone', {
         'other_income': 'REAL',

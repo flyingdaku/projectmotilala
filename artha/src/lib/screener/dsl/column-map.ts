@@ -175,6 +175,15 @@ const PLAIN_MAP: Record<string, ColInfo> = {
     // Dividend
     dvd_payout_ratio:   { sql: 'cr.dividend_payout',   table: 'cr' },
     buyback_yield_5y_avg: { sql: 'cr.buyback_yield',   table: 'cr' },
+
+    // Factor exposure — IIMA Carhart 4-Factor (future: ff alias = asset_factor_exposure view)
+    ff_beta:            { sql: 'ff.market_beta',        table: 'expr' },
+    ff_smb:             { sql: 'ff.smb_loading',        table: 'expr' },
+    ff_hml:             { sql: 'ff.hml_loading',        table: 'expr' },
+    ff_wml:             { sql: 'ff.wml_loading',        table: 'expr' },
+    ff_alpha:           { sql: 'ff.alpha',              table: 'expr' },
+    ff_r2:              { sql: 'ff.r_squared',          table: 'expr' },
+    quality:            { sql: 'cr.quality_score',      table: 'cr' },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
