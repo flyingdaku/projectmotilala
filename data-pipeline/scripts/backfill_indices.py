@@ -15,7 +15,9 @@ from core.db import get_connection, generate_id
 
 WORKERS = 8          # parallel index fetchers
 CHUNK_DAYS = 365     # 1 year per API request
-SLEEP_BETWEEN = 0.2  # seconds between chunks within a thread
+SLEEP_BETWEEN = 0.15 # seconds between chunks within a thread
+TIMEOUT = 10         # seconds — fail fast on missing early-year chunks
+MAX_EMPTY_STREAK = 3 # skip remaining early chunks after N consecutive empties
 _print_lock = threading.Lock()
 
 def log(msg: str):
@@ -48,7 +50,7 @@ def _fetch_chunk(session: requests.Session, index_name: str, start: str, end: st
     url = "https://www.niftyindices.com/Backpage.aspx/getHistoricaldataDBtoString"
     cinfo = json.dumps({"name": index_name, "startDate": start, "endDate": end,
                         "historicaltype": "2", "DataType": data_type})
-    resp = session.post(url, json={"cinfo": cinfo}, timeout=30)
+    resp = session.post(url, json={"cinfo": cinfo}, timeout=TIMEOUT)
     if resp.status_code != 200:
         return []
     d_str = resp.json().get("d", "")
@@ -89,23 +91,43 @@ def _parse_rows(rows: List[Dict], data_type: str) -> List[Tuple]:
 
 
 def fetch_index(index_name: str, start_date: date, end_date: date) -> Tuple[str, List[Tuple], str]:
-    """Fetch all history for one index. Returns (index_name, parsed_rows, data_type)."""
+    """Fetch all history for one index. Returns (index_name, parsed_rows, data_type).
+
+    Chunks are iterated newest → oldest so we always hit real data first.
+    Once MAX_EMPTY_STREAK consecutive trailing chunks return nothing (the index
+    didn't exist yet in those years) we stop — no point going further back.
+    """
     session = _make_session()
     chunks = chunk_date_ranges(start_date, end_date)
+    chunks_rev = list(reversed(chunks))   # newest first
     all_rows, data_type = [], "TR"
+    empty_streak = 0
 
-    for c_start, c_end in chunks:
+    for c_start, c_end in chunks_rev:
         s, e = c_start.strftime("%d-%b-%Y"), c_end.strftime("%d-%b-%Y")
+        got_data = False
         try:
             rows = _fetch_chunk(session, index_name, s, e, "TR")
             if rows:
                 data_type = "TR"
             else:
                 rows = _fetch_chunk(session, index_name, s, e, "HR")
-                data_type = "HR"
-            all_rows.extend(_parse_rows(rows, data_type))
-        except Exception as exc:
-            log(f"  WARN [{index_name}] chunk {s}-{e}: {exc}")
+                if rows:
+                    data_type = "HR"
+            parsed = _parse_rows(rows, data_type)
+            if parsed:
+                all_rows.extend(parsed)
+                got_data = True
+        except Exception:
+            pass  # timeout counts as empty
+
+        if got_data:
+            empty_streak = 0
+        else:
+            empty_streak += 1
+            if empty_streak >= MAX_EMPTY_STREAK:
+                break  # index didn't exist this far back — stop
+
         time.sleep(SLEEP_BETWEEN)
 
     return index_name, all_rows, data_type
