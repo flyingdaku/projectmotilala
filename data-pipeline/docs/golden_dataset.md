@@ -12,6 +12,8 @@ This document defines which data source to use as the "source of truth" for each
 | **Daily OHLCV (dual-listed)** | NSE Bhavcopy | BSE Bhavcopy | NSE has higher liquidity, better price discovery |
 | **Daily OHLCV (BSE-only)** | BSE Bhavcopy | — | Only source for BSE-exclusive stocks |
 | **Daily NAV (MF/ETF)** | AMFI | — | Official NAV publisher |
+| **Daily Index Close (TRI)** | NiftyIndices.com (TR) | NiftyIndices.com (HR) | Total Return Index includes dividend reinvestment for accurate backtesting |
+| **Daily Index Close (PRI)** | NiftyIndices.com (HR) | — | Price Return Index used only when TRI unavailable |
 | **Adjusted Close** | Computed | — | Derived from raw close + corporate actions |
 | **Corporate Actions** | NSE | BSE | NSE API is more reliable and complete |
 

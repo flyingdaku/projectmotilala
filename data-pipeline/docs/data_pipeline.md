@@ -22,7 +22,10 @@ Executes the following critical sequence:
 ### 2. Historical Backfill Engine (`backfill.py`)
 Handles multi-year historical data catch-up using chunked API requests and polite session delays. It maintains its own resume state using the `pipeline_runs` table.
 
-### 3. MarketSmith India (MSI) Scraper (`scrape_msi.py`)
+### 3. Nifty Indices Backfill (`backfill_indices.py`)
+A parallelized script that fetches historical data for all Nifty indices from niftyindices.com. It prioritizes Total Return Index (TRI) data over Price Return (PRI), handles dual response schemas, and uses smart iteration to skip non-existent early-year data efficiently.
+
+### 4. MarketSmith India (MSI) Scraper (`scrape_msi.py`)
 A specialized high-throughput scraper that uses a pool of worker threads to extract proprietary institutional metrics, hierarchical industry classifications, and shareholding data.
 
 ## Key Design Principles

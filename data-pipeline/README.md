@@ -23,10 +23,16 @@ python run_pipeline.py
 # 5. Run for a specific date
 python run_pipeline.py 2024-01-15
 
-# 6. Full historical backfill (from 2000-01-01)
+# 6. Backfill Nifty indices (TRI + Price Return)
+python scripts/backfill_indices.py --start 2000-01-01
+
+# 7. Backfill specific indices
+python scripts/backfill_indices.py --indices "Nifty 50" "Nifty Bank" --start 2020-01-01
+
+# 8. Full historical backfill (from 2000-01-01)
 python -m pipelines.backfill
 
-# 7. Backfill from a specific date
+# 9. Backfill from a specific date
 python -m pipelines.backfill 2020-01-01
 ```
 
@@ -37,6 +43,10 @@ data-pipeline/
 ├── db/
 │   ├── schema.sql          # SQLite schema (adapted from PostgreSQL spec)
 │   └── market_data.db      # SQLite database (created on first run)
+├── scripts/
+│   ├── backfill_indices.py # Nifty indices backfill (TRI + Price Return)
+│   ├── fetch_constituents.py # Nifty index constituents
+│   └── scrape_msi.py       # MarketSmith India fundamentals scraper
 ├── pipelines/
 │   ├── nse_bhavcopy.py     # NSE EOD prices (primary source)
 │   ├── bse_bhavcopy.py     # BSE EOD prices (secondary + BSE-only stocks)
@@ -109,6 +119,45 @@ python -m pipelines.adjust_prices INE009A01021
 python -m pipelines.verification 2024-01-15
 ```
 
+## Nifty Indices Backfill
+
+The `scripts/backfill_indices.py` script fetches historical data for all Nifty indices from niftyindices.com.
+
+### Features
+
+- **Total Return Index (TRI) preferred** - Fetches TRI first (includes dividend reinvestment), falls back to Price Return (PRI)
+- **Dual schema support** - Handles both TR (`TRIDate`/`Total Returns Index`) and HR (`HistoricalDate`/`OHLC`) response formats
+- **Parallel execution** - 8 workers by default, processes multiple indices concurrently
+- **Smart iteration** - Fetches newest chunks first, stops after 3 consecutive empty chunks (fast skip for indices that don't exist in early years)
+- **TRI/PRI distinction** - TRI rows stored with `source_exchange='NSE_TRI'`, PRI with `source_exchange='NSE'`
+
+### Usage
+
+```bash
+# Full backfill for all 135+ indices from 2000-01-01
+python scripts/backfill_indices.py --start 2000-01-01
+
+# Backfill specific indices
+python scripts/backfill_indices.py --indices "Nifty 50" "Nifty Bank" --start 2024-01-01
+
+# Adjust worker count (default: 8)
+python scripts/backfill_indices.py --start 2000-01-01 --workers 12
+```
+
+### Performance
+
+- **Full backfill (135 indices)**: ~6 minutes
+- **Single index**: ~5-10 seconds
+- **Chunk size**: 1 year per API request
+- **Timeout**: 10s (fast-fail on missing early-year data)
+
+### Data Coverage
+
+- **NIFTY 500**: 6,491 days (2000-01-03 → present)
+- **NIFTY NEXT 50**: 6,050 days (2000-01-03 → present)
+- **Sectoral/Thematic indices**: Varies, typically 2005-2025
+- **Total rows**: ~5.9M index price records (69K TRI + 5.8M PRI)
+
 ## Running Tests
 
 ```bash
@@ -130,14 +179,21 @@ pytest tests/test_pipeline_integration.py -v # Integration tests only
 ## Database Schema
 
 Key tables:
-- `assets` — master list of all equities, ETFs, mutual funds
-- `daily_prices` — EOD OHLCV + adj_close (NSE/BSE/AMFI)
+- `assets` — master list of all equities, ETFs, mutual funds, indices
+- `daily_prices` — EOD OHLCV + adj_close (NSE/BSE/AMFI/NSE_TRI)
 - `corporate_actions` — splits, bonuses, dividends, rights, mergers
 - `merger_events` — acquired/acquirer linkage for merger events
 - `fundamentals` — quarterly financial data
 - `asset_metrics` — pre-computed returns, risk, valuation metrics
 - `pipeline_runs` — audit log for every pipeline execution
 - `trading_holidays` — NSE holiday cache
+
+### source_exchange values
+
+- `NSE` — NSE equities (Price Return)
+- `BSE` — BSE equities
+- `AMFI` — Mutual funds/ETFs NAV
+- `NSE_TRI` — Nifty indices (Total Return Index)
 
 ## Corporate Action Corner Cases
 
@@ -173,4 +229,26 @@ ORDER BY ca.ex_date DESC LIMIT 10;
 SELECT a.nse_symbol, COUNT(*) as days
 FROM daily_prices dp JOIN assets a ON dp.asset_id = a.id
 GROUP BY a.id ORDER BY days DESC LIMIT 20;
+
+-- Nifty indices coverage
+SELECT 
+  COUNT(*) as total_indices,
+  COUNT(CASE WHEN source_exchange = 'NSE_TRI' THEN 1 END) as tri_indices,
+  COUNT(CASE WHEN source_exchange = 'NSE' AND a.asset_class = 'INDEX' THEN 1 END) as pri_indices
+FROM daily_prices dp JOIN assets a ON dp.asset_id = a.id
+WHERE a.asset_class = 'INDEX';
+
+-- Top Nifty indices by history length
+SELECT 
+  a.name,
+  COUNT(*) as days,
+  MIN(dp.date) as start_date,
+  MAX(dp.date) as end_date,
+  dp.source_exchange
+FROM daily_prices dp 
+JOIN assets a ON dp.asset_id = a.id
+WHERE a.asset_class = 'INDEX'
+GROUP BY a.name, dp.source_exchange
+ORDER BY days DESC
+LIMIT 10;
 ```
