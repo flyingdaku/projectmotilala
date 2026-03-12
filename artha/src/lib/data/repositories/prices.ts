@@ -2,6 +2,42 @@ import { BaseRepository } from "./base";
 import type { PriceBar } from "../types";
 
 export class PriceRepository extends BaseRepository {
+    public getAdjustedCloses(assetId: string, startDate: string, endDate: string): Array<{ date: string; price: number }> {
+        type PriceRow = {
+            date: string;
+            adj_close: number | null;
+            close: number;
+            source_exchange: string;
+        };
+
+        const rows = this.db.queryAll<PriceRow>(
+            `SELECT date,
+                    adj_close,
+                    close,
+                    source_exchange
+             FROM daily_prices
+             WHERE asset_id = ? AND date >= ? AND date <= ?
+               AND source_exchange IN ('NSE','BSE')
+             ORDER BY date ASC`,
+            [assetId, startDate, endDate]
+        );
+
+        const byDate = new Map<string, PriceRow>();
+        for (const row of rows) {
+            const existing = byDate.get(row.date);
+            if (!existing || row.source_exchange === "NSE") {
+                byDate.set(row.date, row);
+            }
+        }
+
+        return [...byDate.values()]
+            .map((row) => ({
+                date: row.date,
+                price: row.adj_close ?? row.close,
+            }))
+            .filter((row) => Number.isFinite(row.price) && row.price > 0);
+    }
+
     public getLatestPrice(assetId: string): { close: number; date: string; pct_change: number } | null {
         // Get last 2 prices to compute 1d change
         const rows = this.db.queryAll<{ close: number; date: string; open: number }>(

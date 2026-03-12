@@ -359,6 +359,138 @@ def run_verification_pipeline(trade_date: date = None):
     return results
 
 
+# ─── CHECK 6: EODHD COMPLETENESS ──────────────────────────────────────────────
+
+def check_eodhd_completeness(trade_date: date) -> dict:
+    """
+    Verify we have EODHD data for a high percentage of mapped assets.
+    Threshold: >= 90% coverage is acceptable.
+    """
+    total = execute_one(
+        "SELECT COUNT(*) as cnt FROM eodhd_symbol_mapping WHERE is_active = 1"
+    )["cnt"]
+
+    if total == 0:
+        return {"status": "SKIP", "reason": "No EODHD symbol mappings"}
+
+    covered = execute_one(
+        """SELECT COUNT(DISTINCT edp.asset_id) as cnt
+           FROM eodhd_daily_prices edp
+           JOIN eodhd_symbol_mapping esm ON edp.asset_id = esm.asset_id
+           WHERE edp.date = ? AND esm.is_active = 1""",
+        (trade_date.isoformat(),),
+    )["cnt"]
+
+    coverage_pct = (covered / total * 100) if total > 0 else 0.0
+    status = "PASS" if coverage_pct >= 90 else "WARN"
+
+    result = {
+        "check": "EODHD_COMPLETENESS",
+        "date": trade_date.isoformat(),
+        "total_mapped": total,
+        "assets_with_data": covered,
+        "coverage_pct": round(coverage_pct, 2),
+        "status": status,
+    }
+
+    logger.info(
+        f"[EODHD_COMPLETENESS] {covered}/{total} assets ({coverage_pct:.1f}%) — {status}"
+    )
+
+    return result
+
+
+# ─── CHECK 7: PRICE RECONCILIATION HEALTH ─────────────────────────────────────
+
+def check_price_reconciliation_health(trade_date: date) -> dict:
+    """
+    Verify price reconciliation status.
+    Alert if >1% of assets have major deviations.
+    """
+    total = execute_one(
+        "SELECT COUNT(*) as cnt FROM price_reconciliation WHERE date = ?",
+        (trade_date.isoformat(),),
+    )["cnt"]
+
+    if total == 0:
+        return {"status": "SKIP", "reason": "No reconciliation records for date"}
+
+    major_deviations = execute_one(
+        """SELECT COUNT(*) as cnt FROM price_reconciliation
+           WHERE date = ? AND status = 'MAJOR_DEVIATION'""",
+        (trade_date.isoformat(),),
+    )["cnt"]
+
+    minor_deviations = execute_one(
+        """SELECT COUNT(*) as cnt FROM price_reconciliation
+           WHERE date = ? AND status = 'MINOR_DEVIATION'""",
+        (trade_date.isoformat(),),
+    )["cnt"]
+
+    major_pct = (major_deviations / total * 100) if total > 0 else 0.0
+    status = "PASS" if major_pct <= 1.0 else "WARN"
+
+    result = {
+        "check": "PRICE_RECONCILIATION_HEALTH",
+        "date": trade_date.isoformat(),
+        "total_reconciled": total,
+        "major_deviations": major_deviations,
+        "minor_deviations": minor_deviations,
+        "major_deviation_pct": round(major_pct, 2),
+        "status": status,
+    }
+
+    logger.info(
+        f"[PRICE_RECONCILIATION] {major_deviations} major, {minor_deviations} minor "
+        f"({major_pct:.1f}% major) — {status}"
+    )
+
+    return result
+
+
+# ─── CHECK 8: ADJUSTED CLOSE VALIDATION ───────────────────────────────────────
+
+def check_adjusted_close_validation(trade_date: date) -> dict:
+    """
+    Compare our adj_close vs EODHD adjusted_close.
+    Alert if >5% of assets deviate >2%.
+    """
+    total = execute_one(
+        """SELECT COUNT(*) as cnt FROM price_reconciliation
+           WHERE date = ? AND internal_adj_close IS NOT NULL 
+           AND eodhd_adj_close IS NOT NULL""",
+        (trade_date.isoformat(),),
+    )["cnt"]
+
+    if total == 0:
+        return {"status": "SKIP", "reason": "No adj_close data to compare"}
+
+    deviations = execute_one(
+        """SELECT COUNT(*) as cnt FROM price_reconciliation
+           WHERE date = ? AND adj_close_deviation_pct > 2.0""",
+        (trade_date.isoformat(),),
+    )["cnt"]
+
+    deviation_pct = (deviations / total * 100) if total > 0 else 0.0
+    status = "PASS" if deviation_pct <= 5.0 else "WARN"
+
+    result = {
+        "check": "ADJUSTED_CLOSE_VALIDATION",
+        "date": trade_date.isoformat(),
+        "total_compared": total,
+        "deviations_over_2pct": deviations,
+        "deviation_pct": round(deviation_pct, 2),
+        "status": status,
+    }
+
+    logger.info(
+        f"[ADJ_CLOSE_VALIDATION] {deviations}/{total} deviations "
+        f"({deviation_pct:.1f}%) — {status}"
+    )
+
+    return result
+
+
 if __name__ == "__main__":
     import sys
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

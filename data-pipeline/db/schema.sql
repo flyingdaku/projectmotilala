@@ -1087,6 +1087,55 @@ CREATE TABLE IF NOT EXISTS ff_factor_returns (
 CREATE INDEX IF NOT EXISTS idx_ff_returns_date ON ff_factor_returns(date DESC);
 CREATE INDEX IF NOT EXISTS idx_ff_returns_freq ON ff_factor_returns(frequency, date DESC);
 
+-- ─── INDEX METADATA ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS index_metadata (
+  id                    TEXT PRIMARY KEY,
+  asset_id              TEXT NOT NULL UNIQUE,
+  index_name            TEXT NOT NULL,
+  nse_symbol            TEXT,
+  -- ── Classification ──────────────────────────────────────────
+  category              TEXT CHECK(category IN ('BROAD_MARKET', 'SECTORAL', 'THEMATIC', 'STRATEGY', 'FIXED_INCOME', 'COMMODITY', 'CUSTOM')),
+  sub_category          TEXT,
+  index_type            TEXT CHECK(index_type IN ('BENCHMARK', 'SECTOR', 'THEMATIC', 'FACTOR', 'LEVERAGED', 'INVERSE', 'CUSTOM')),
+  -- ── Data Source & Quality ───────────────────────────────────
+  primary_source        TEXT NOT NULL CHECK(primary_source IN ('NSE_TRI', 'NSE', 'BSE', 'CUSTOM')),
+  data_type             TEXT CHECK(data_type IN ('TRI', 'PRI', 'MIXED')),
+  has_full_ohlc         INTEGER DEFAULT 0,
+  -- ── Coverage & Status ───────────────────────────────────────
+  earliest_date         TEXT,
+  latest_date           TEXT,
+  total_records         INTEGER DEFAULT 0,
+  last_updated          TEXT,
+  update_frequency      TEXT CHECK(update_frequency IN ('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'INACTIVE')),
+  is_active             INTEGER DEFAULT 1,
+  -- ── Index Characteristics ───────────────────────────────────
+  base_date             TEXT,
+  base_value            REAL,
+  num_constituents      INTEGER,
+  rebalance_frequency   TEXT CHECK(rebalance_frequency IN ('DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'SEMI_ANNUAL', 'ANNUAL', 'NA')),
+  methodology_url       TEXT,
+  -- ── Data Quality Metrics ────────────────────────────────────
+  coverage_pct          REAL,
+  data_completeness     TEXT CHECK(data_completeness IN ('COMPLETE', 'PARTIAL', 'SPARSE', 'UNKNOWN')),
+  has_gaps              INTEGER DEFAULT 0,
+  gap_count             INTEGER DEFAULT 0,
+  longest_gap_days      INTEGER,
+  -- ── Extensible Fields ───────────────────────────────────────
+  tags                  TEXT,
+  notes                 TEXT,
+  metadata_json         TEXT,
+  -- ── Audit Fields ────────────────────────────────────────────
+  created_at            TEXT DEFAULT (datetime('now')),
+  updated_at            TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_index_metadata_asset ON index_metadata(asset_id);
+CREATE INDEX IF NOT EXISTS idx_index_metadata_category ON index_metadata(category, sub_category);
+CREATE INDEX IF NOT EXISTS idx_index_metadata_source ON index_metadata(primary_source);
+CREATE INDEX IF NOT EXISTS idx_index_metadata_active ON index_metadata(is_active, update_frequency);
+CREATE INDEX IF NOT EXISTS idx_index_metadata_updated ON index_metadata(last_updated DESC);
+
 CREATE TABLE IF NOT EXISTS ff_portfolio_returns (
   portfolio_id TEXT NOT NULL,
   date TEXT NOT NULL,
@@ -1249,3 +1298,104 @@ CREATE TABLE IF NOT EXISTS index_constituents (
 );
 CREATE INDEX IF NOT EXISTS idx_index_constituents_index_date ON index_constituents(index_id, date DESC);
 CREATE INDEX IF NOT EXISTS idx_index_constituents_asset ON index_constituents(asset_id);
+
+-- ─── EODHD DATA INTEGRATION ────────────────────────────────────────────
+
+-- EODHD raw EOD prices (supplementary validation source)
+CREATE TABLE IF NOT EXISTS eodhd_daily_prices (
+  asset_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  open REAL,
+  high REAL,
+  low REAL,
+  close REAL NOT NULL,
+  adjusted_close REAL,      -- EODHD's pre-computed adjusted close
+  volume INTEGER,
+  eodhd_symbol TEXT,         -- e.g., RELIANCE.NSE
+  exchange TEXT CHECK(exchange IN ('NSE', 'BSE')),
+  fetched_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (asset_id, date, exchange),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_eodhd_daily_asset_date ON eodhd_daily_prices(asset_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_eodhd_daily_date ON eodhd_daily_prices(date);
+CREATE INDEX IF NOT EXISTS idx_eodhd_daily_exchange ON eodhd_daily_prices(exchange, date DESC);
+
+-- Price reconciliation tracking (NSE/BSE/EODHD comparison)
+CREATE TABLE IF NOT EXISTS price_reconciliation (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  nse_close REAL,
+  bse_close REAL,
+  eodhd_nse_close REAL,
+  eodhd_bse_close REAL,
+  internal_adj_close REAL,  -- Our computed adj_close
+  eodhd_adj_close REAL,     -- EODHD's adjusted_close
+  close_deviation_pct REAL,
+  adj_close_deviation_pct REAL,
+  volume_nse INTEGER,
+  volume_eodhd INTEGER,
+  status TEXT CHECK(status IN ('MATCH', 'MINOR_DEVIATION', 'MAJOR_DEVIATION', 'MISSING_SOURCE', 'EODHD_ONLY')),
+  flags TEXT,                -- JSON array of issues
+  reconciled_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_price_recon_asset_date ON price_reconciliation(asset_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_price_recon_status ON price_reconciliation(status, date DESC);
+CREATE INDEX IF NOT EXISTS idx_price_recon_date ON price_reconciliation(date DESC);
+
+-- EODHD symbol mapping (asset_id to EODHD ticker format)
+CREATE TABLE IF NOT EXISTS eodhd_symbol_mapping (
+  asset_id TEXT PRIMARY KEY,
+  eodhd_nse_symbol TEXT,     -- e.g., RELIANCE.NSE
+  eodhd_bse_symbol TEXT,     -- e.g., RELIANCE.BSE
+  eodhd_mcx_symbol TEXT,     -- e.g., CRUDEOIL.MCX (commodities)
+  isin TEXT,
+  exchange_preference TEXT CHECK(exchange_preference IN ('NSE', 'BSE', 'MCX')),
+  is_active INTEGER DEFAULT 1,
+  is_delisted INTEGER DEFAULT 0,  -- 1 = delisted, survivorship-bias-free flag
+  delisted_date TEXT,             -- Date of delisting if known
+  match_method TEXT,              -- isin | symbol | name | manual
+  last_verified TEXT,
+  notes TEXT,
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_eodhd_mapping_nse_symbol ON eodhd_symbol_mapping(eodhd_nse_symbol);
+CREATE INDEX IF NOT EXISTS idx_eodhd_mapping_bse_symbol ON eodhd_symbol_mapping(eodhd_bse_symbol);
+CREATE INDEX IF NOT EXISTS idx_eodhd_mapping_active ON eodhd_symbol_mapping(is_active);
+
+-- Corporate actions from EODHD (for validation against our CA table)
+CREATE TABLE IF NOT EXISTS eodhd_corporate_actions (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  type TEXT,                 -- dividend, split, bonus
+  value REAL,
+  declaration_date TEXT,
+  payment_date TEXT,
+  record_date TEXT,
+  raw_json TEXT,
+  fetched_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_eodhd_ca_asset_date ON eodhd_corporate_actions(asset_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_eodhd_ca_type ON eodhd_corporate_actions(type, date DESC);
+
+-- EODHD intraday prices (Phase 2)
+CREATE TABLE IF NOT EXISTS eodhd_intraday_prices (
+  asset_id TEXT NOT NULL,
+  timestamp TEXT NOT NULL,  -- ISO 8601 with timezone
+  resolution TEXT NOT NULL CHECK(resolution IN ('1m', '5m', '15m', '1h')),
+  open REAL,
+  high REAL,
+  low REAL,
+  close REAL NOT NULL,
+  volume INTEGER,
+  eodhd_symbol TEXT,
+  exchange TEXT CHECK(exchange IN ('NSE', 'BSE')),
+  fetched_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (asset_id, timestamp, resolution)
+);
+CREATE INDEX IF NOT EXISTS idx_eodhd_intraday_asset_time ON eodhd_intraday_prices(asset_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_eodhd_intraday_resolution ON eodhd_intraday_prices(resolution, timestamp DESC);

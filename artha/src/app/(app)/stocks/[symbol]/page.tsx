@@ -270,7 +270,18 @@ export default function StockPage() {
           <AnalyticsSection symbol={symbol} />
 
           {/* Peer Comparison */}
-          <PeersSection symbol={symbol} currentRatios={{ peTtm: stock.pe, roce: stock.roce, roe: stock.roe, pb: stock.pb }} />
+          <PeersSection
+            symbol={symbol}
+            currentRatios={{
+              peTtm: stock.pe,
+              roce: stock.roce,
+              roe: stock.roe,
+              pb: stock.pb,
+              debtEquity: stock.debtEquity,
+              dividendYield: stock.dividendYield,
+              marketCapCr: stock.marketCapCr,
+            }}
+          />
 
 
           {/* Documents & Filings - At the bottom */}

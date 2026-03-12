@@ -51,7 +51,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("run_pipeline")
 
-def run(trade_date: date, skip_bse: bool = False, skip_amfi: bool = False, skip_corp_actions: bool = False, skip_adjust: bool = False, skip_reconcile: bool = False, skip_iima: bool = False):
+def run(trade_date: date, skip_bse=False, skip_amfi=False, skip_corp_actions=False, skip_adjust=False, skip_reconcile=False, skip_iima=False, skip_eodhd=False, skip_eodhd_reconcile=False) -> bool:
     """Run the full nightly pipeline for a given trade date."""
     ensure_logs_dir()
 
@@ -195,14 +195,60 @@ def run(trade_date: date, skip_bse: bool = False, skip_amfi: bool = False, skip_
         except Exception as e:
             logger.warning(f"Nifty Indices pipeline failed (non-fatal): {e}")
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+    def run_bse_indices():
+        try:
+            from sources.bse_indices import BSEIndicesIngester
+            ingester = BSEIndicesIngester()
+            with get_connection() as conn:
+                ingester.run(trade_date, conn)
+        except Exception as e:
+            logger.warning(f"BSE Indices pipeline failed (non-fatal): {e}")
+
+    def run_eodhd():
+        if skip_eodhd:
+            logger.info("EODHD EOD pipeline skipped")
+            return
+        try:
+            from sources.eodhd.eodhd_eod import EODHDEODIngester
+            ingester = EODHDEODIngester()
+            with get_connection() as conn:
+                ingester.run(trade_date, conn)
+        except Exception as e:
+            logger.warning(f"EODHD EOD pipeline failed (non-fatal): {e}")
+
+    def run_eodhd_ca():
+        if skip_eodhd:
+            logger.info("EODHD CA pipeline skipped")
+            return
+        try:
+            from sources.eodhd.eodhd_corporate_actions import EODHDCorporateActionsIngester
+            ingester = EODHDCorporateActionsIngester()
+            with get_connection() as conn:
+                ingester.run(trade_date, conn)
+        except Exception as e:
+            logger.warning(f"EODHD CA pipeline failed (non-fatal): {e}")
+
+    def run_eodhd_reconciliation():
+        if skip_eodhd or skip_eodhd_reconcile:
+            logger.info("EODHD reconciliation skipped")
+            return
+        try:
+            from pipelines.eodhd_reconciliation import reconcile_prices
+            reconcile_prices(trade_date, alert_on_major=True)
+        except Exception as e:
+            logger.warning(f"EODHD reconciliation failed (non-fatal): {e}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         futures = [
             executor.submit(run_nse),
             executor.submit(run_bse),
             executor.submit(run_amfi),
             executor.submit(run_fundamentals),
             executor.submit(run_iima),
-            executor.submit(run_nifty_indices)
+            executor.submit(run_nifty_indices),
+            executor.submit(run_bse_indices),
+            executor.submit(run_eodhd),
+            executor.submit(run_eodhd_ca),
         ]
         concurrent.futures.wait(futures)
         # Check for exceptions in the parallel execution
@@ -211,6 +257,13 @@ def run(trade_date: date, skip_bse: bool = False, skip_amfi: bool = False, skip_
             if exc:
                 logger.error(f"Ingestion pipeline encountered a fatal error: {exc}")
                 raise exc
+
+    # ── Step 5.5: EODHD Price Reconciliation ─────────────────────
+    if not skip_eodhd and not skip_eodhd_reconcile:
+        logger.info("Step 5.5: Running EODHD price reconciliation...")
+        run_eodhd_reconciliation()
+    else:
+        logger.info("Step 5.5: EODHD reconciliation skipped")
 
     # ── Step 6: Recompute Adjusted Close ─────────────────────────
     if not skip_adjust:
@@ -250,6 +303,8 @@ if __name__ == "__main__":
     parser.add_argument("--skip-adjust", action="store_true", help="Skip recomputing adjusted close prices")
     parser.add_argument("--skip-reconcile", action="store_true", help="Skip NSE vs BSE corporate actions reconciliation")
     parser.add_argument("--skip-iima", action="store_true", help="Skip IIMA delayed Fama-French ingestion")
+    parser.add_argument("--skip-eodhd", action="store_true", help="Skip EODHD EOD price ingestion")
+    parser.add_argument("--skip-eodhd-reconcile", action="store_true", help="Skip EODHD price reconciliation")
 
     args = parser.parse_args()
 
@@ -263,4 +318,6 @@ if __name__ == "__main__":
         skip_adjust=args.skip_adjust,
         skip_reconcile=args.skip_reconcile,
         skip_iima=args.skip_iima,
+        skip_eodhd=args.skip_eodhd,
+        skip_eodhd_reconcile=args.skip_eodhd_reconcile,
     )
