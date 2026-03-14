@@ -42,7 +42,7 @@ export function TopBar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 w-full min-w-0 items-center justify-between overflow-hidden border-b px-3 md:px-4 shrink-0"
+    <header className="sticky top-0 z-50 flex h-14 w-full min-w-0 items-center justify-between border-b px-3 md:px-4 shrink-0"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
 
       {/* Left: Logo */}

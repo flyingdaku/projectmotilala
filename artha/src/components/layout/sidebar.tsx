@@ -114,9 +114,6 @@ const CATEGORIES = [
     items: [
       { label: "SIP vs Lumpsum", href: "/utilities/sip-vs-lumpsum" },
       { label: "Smart SIP", href: "/utilities/smart-sip" },
-      { label: "Tax Optimizer", href: "/utilities/tax-calculator" },
-      { label: "Tax Harvesting", href: "/utilities/tax-harvesting" },
-      { label: "PPF vs ELSS", href: "/utilities/ppf-vs-elss" },
       { label: "FIRE Simulator", href: "/utilities/fire-calculator" },
       { label: "Prepay vs Invest", href: "/utilities/prepay-vs-invest" },
       { label: "Compound Interest", href: "/utilities/compound-interest" },

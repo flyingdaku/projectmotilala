@@ -46,7 +46,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="antialiased font-sans" style={{ background: "var(--background)", color: "var(--text-primary)" }}>
+      <body className={`font-sans antialiased text-foreground bg-background min-h-screen flex flex-col`}>
         <ThemeProvider>
           <WatchlistProvider>
             <LayoutContent>{children}</LayoutContent>

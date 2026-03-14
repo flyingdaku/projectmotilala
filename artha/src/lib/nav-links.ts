@@ -56,11 +56,8 @@ export const UTILITY_LINKS = [
   { name: "SIP vs Lumpsum", href: "/utilities/sip-vs-lumpsum" },
   { name: "Smart SIP", href: "/utilities/smart-sip" },
   { name: "FIRE Calculator", href: "/utilities/fire-calculator" },
-  { name: "PPF vs ELSS", href: "/utilities/ppf-vs-elss" },
   { name: "Loan Calculator", href: "/utilities/loan-calculator" },
   { name: "Compound Interest", href: "/utilities/compound-interest" },
-  { name: "Tax Calculator", href: "/utilities/tax-calculator" },
-  { name: "Tax Harvesting", href: "/utilities/tax-harvesting" },
   { name: "Direct vs Regular", href: "/utilities/direct-vs-regular" },
   { name: "Prepay vs Invest", href: "/utilities/prepay-vs-invest" },
 ];
