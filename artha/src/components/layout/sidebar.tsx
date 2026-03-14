@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   Home, PieChart, Target, Search, Layers, BarChart2,
   Wrench, History, Activity, ChevronLeft, ChevronRight, Bell,
-  Globe
+  Globe, ChevronDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -59,7 +59,6 @@ const CATEGORIES = [
     title: "Portfolio Strategy",
     items: [
       { label: "Risk Factor Allocation", href: "/analytics/risk-factor-allocation" },
-      { label: "Asset Liability", href: "/analytics/asset-liability" },
       { label: "Efficient Frontier", href: "/analytics/efficient-frontier" },
       { label: "Dynamic Allocation", href: "/analytics/dynamic-allocation" },
       { label: "Tactical Allocation", href: "/analytics/tactical-allocation" },
@@ -161,10 +160,6 @@ export function Sidebar() {
           })}
         </div>
 
-        <div className="px-4 py-3">
-          <div className="h-px w-full" style={{ background: "var(--nav-border)" }} />
-        </div>
-
         <div className="px-2">
           {!collapsed ? (
             <Accordion
@@ -237,17 +232,6 @@ export function Sidebar() {
           )}
         </div>
       </ScrollArea>
-
-      <div className="border-t p-2 space-y-1" style={{ borderColor: "var(--nav-border)" }}>
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex w-full items-center justify-center rounded-xl p-2 transition-colors duration-150 hover:bg-[var(--nav-hover-bg)]"
-          style={{ color: "var(--nav-text-muted)" }}
-          title={collapsed ? "Expand" : "Collapse"}
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
-      </div>
     </div>
   );
 }

@@ -126,6 +126,9 @@ def run_golden_ca_pipeline(from_date: date, to_date: date):
     mapping_logs = defaultdict(dict)
     
     with get_db() as conn:
+        # Clear existing records for the range to avoid duplicates from previous manual/buggy runs
+        conn.execute("DELETE FROM corporate_actions WHERE ex_date BETWEEN ? AND ?", (from_date.isoformat(), to_date.isoformat()))
+        
         # Get NSE actions
         nse_raw = conn.execute("""
             SELECT id, asset_id, symbol, subject, ex_date, record_date, face_value 

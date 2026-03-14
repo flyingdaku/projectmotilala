@@ -1,11 +1,7 @@
-import { ContextualNav } from "@/components/layout/contextual-nav";
-import { FACTOR_LINKS } from "@/lib/nav-links";
 
 export default function Page() {
   return (
     <div className="space-y-6 pb-20">
-      <ContextualNav links={FACTOR_LINKS} />
-      
       <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
         <div>
           <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Factor Regression</h1>

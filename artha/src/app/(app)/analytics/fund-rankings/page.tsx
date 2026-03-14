@@ -1,11 +1,7 @@
-import { ContextualNav } from "@/components/layout/contextual-nav";
-import { ASSET_LINKS } from "@/lib/nav-links";
 
 export default function Page() {
   return (
     <div className="space-y-6 pb-20">
-      <ContextualNav links={ASSET_LINKS} />
-      
       <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
         <div>
           <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Fund Rankings</h1>

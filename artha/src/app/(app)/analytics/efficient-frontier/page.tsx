@@ -2,8 +2,6 @@
 
 import { useState, useMemo } from "react";
 import { Play, TrendingUp, Target, AlertCircle, Info, RefreshCw } from "lucide-react";
-import { ContextualNav } from "@/components/layout/contextual-nav";
-import { QUANT_LINKS } from "@/lib/nav-links";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ZAxis, Cell
@@ -94,8 +92,6 @@ export default function EfficientFrontierPage() {
 
   return (
     <div className="space-y-6 pb-20">
-      <ContextualNav links={QUANT_LINKS} />
-      
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap mb-2">
         <div>

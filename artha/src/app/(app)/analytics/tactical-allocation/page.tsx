@@ -6,8 +6,6 @@ import {
   AreaChart, Area, BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from "recharts";
-import { ContextualNav } from "@/components/layout/contextual-nav";
-import { BACKTEST_LINKS } from "@/lib/nav-links";
 
 import {
   ASSET_LABELS, AssetKey,
@@ -306,8 +304,6 @@ export default function TacticalAllocationPage() {
 
   return (
     <div className="space-y-6 pb-20">
-      <ContextualNav links={BACKTEST_LINKS} />
-      
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <div className="p-2 rounded-lg" style={{ background: "var(--accent-subtle)", color: "var(--accent-brand)" }}>

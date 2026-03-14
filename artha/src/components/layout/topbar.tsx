@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, BarChart2 } from "lucide-react";
+import { Search, Bookmark } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -89,9 +89,10 @@ export function TopBar() {
         {/* Watchlist */}
         <button
           onClick={toggleWatchlist}
-          className="relative p-2 rounded-lg transition-all hover:bg-[var(--surface-elevated)] active:scale-95 group"
+          className="relative px-3 py-2 rounded-lg transition-all hover:bg-[var(--surface-elevated)] active:scale-95 group flex items-center gap-2"
           style={{ color: "var(--text-muted)" }} title="Watchlist">
-          <BarChart2 size={18} className="transition-colors group-hover:text-[var(--accent-brand)]" />
+          <Bookmark size={16} className="transition-colors group-hover:text-[var(--accent-brand)]" />
+          <span className="text-xs font-medium transition-colors group-hover:text-[var(--accent-brand)]">Watchlist</span>
         </button>
 
         {/* User initials / Avatar small */}

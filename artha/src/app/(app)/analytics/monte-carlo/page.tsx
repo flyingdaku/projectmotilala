@@ -2,8 +2,6 @@
 
 import { useState, useMemo } from "react";
 import { Activity, Play, Info, Calculator, Percent, ArrowRight, TrendingUp, Target, ShieldAlert, X, Plus } from "lucide-react";
-import { ContextualNav } from "@/components/layout/contextual-nav";
-import { QUANT_LINKS } from "@/lib/nav-links";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";

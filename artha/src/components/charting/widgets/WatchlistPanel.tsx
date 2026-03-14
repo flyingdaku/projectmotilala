@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { Check, ChevronDown, ChevronUp, Plus, Settings, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ArrowDown, ArrowUp, Plus, Settings, Trash2, Search, X } from 'lucide-react';
 import { useChartStore } from '../store/useChartStore';
 import { cn } from '@/lib/utils';
 import { getIndustryGroupEmoji } from '@/lib/utils/emojis';
@@ -16,6 +16,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 
 type WatchlistMetricKey =
   | 'rvol1'
@@ -89,26 +96,26 @@ export interface WatchlistConfig {
   marketCap: WatchlistColumnConfig;
 }
 
-const WATCHLIST_PANEL_SYMBOL_WIDTH = 136;
-const WATCHLIST_PANEL_INDUSTRY_WIDTH = 28;
-const WATCHLIST_PANEL_CHANGE_WIDTH = 76;
+const WATCHLIST_PANEL_SYMBOL_WIDTH = 120;
+const WATCHLIST_PANEL_INDUSTRY_WIDTH = 24;
+const WATCHLIST_PANEL_CHANGE_WIDTH = 68;
 const WATCHLIST_PANEL_PRICE_WIDTH = 90;
-const WATCHLIST_PANEL_PADDING_WIDTH = 16;
+const WATCHLIST_PANEL_PADDING_WIDTH = 12;
 const WATCHLIST_MAX_CUSTOM_COLUMNS = 10;
 
 const WATCHLIST_METRICS: WatchlistMetricDefinition[] = [
-  { key: 'rvol1', label: 'RVol', shortLabel: 'RVol', width: 88, kind: 'number', periodOptions: [1, 5, 10, 20] },
-  { key: 'atr', label: 'ATR', shortLabel: 'ATR', width: 88, kind: 'number', periodOptions: [7, 14, 21] },
-  { key: 'natr', label: 'NATR', shortLabel: 'NATR', width: 88, kind: 'percent', periodOptions: [7, 14, 21] },
-  { key: 'pe', label: 'P/E', shortLabel: 'P/E', width: 82, kind: 'multiple' },
-  { key: 'pb', label: 'P/B', shortLabel: 'P/B', width: 82, kind: 'multiple' },
-  { key: 'roe', label: 'ROE', shortLabel: 'ROE', width: 82, kind: 'percent' },
-  { key: 'roce', label: 'ROCE', shortLabel: 'ROCE', width: 84, kind: 'percent' },
-  { key: 'debtToEquity', label: 'Debt / Eq', shortLabel: 'D/E', width: 88, kind: 'multiple' },
-  { key: 'dividendYield', label: 'Dividend Yield', shortLabel: 'Div Yld', width: 98, kind: 'percent' },
-  { key: 'salesGrowth', label: 'Sales Growth', shortLabel: 'Sales Gr', width: 96, kind: 'percent' },
-  { key: 'profitGrowth', label: 'Profit Growth', shortLabel: 'Profit Gr', width: 96, kind: 'percent' },
-  { key: 'marketCap', label: 'Market Cap', shortLabel: 'MCap', width: 104, kind: 'currencyCompact' },
+  { key: 'rvol1', label: 'RVol', shortLabel: 'RVol', width: 72, kind: 'number', periodOptions: [1, 5, 10, 20] },
+  { key: 'atr', label: 'ATR', shortLabel: 'ATR', width: 72, kind: 'number', periodOptions: [7, 14, 21] },
+  { key: 'natr', label: 'NATR', shortLabel: 'NATR', width: 72, kind: 'percent', periodOptions: [7, 14, 21] },
+  { key: 'pe', label: 'P/E', shortLabel: 'P/E', width: 68, kind: 'multiple' },
+  { key: 'pb', label: 'P/B', shortLabel: 'P/B', width: 68, kind: 'multiple' },
+  { key: 'roe', label: 'ROE', shortLabel: 'ROE', width: 68, kind: 'percent' },
+  { key: 'roce', label: 'ROCE', shortLabel: 'ROCE', width: 70, kind: 'percent' },
+  { key: 'debtToEquity', label: 'Debt / Eq', shortLabel: 'D/E', width: 72, kind: 'multiple' },
+  { key: 'dividendYield', label: 'Dividend Yield', shortLabel: 'Div Yld', width: 78, kind: 'percent' },
+  { key: 'salesGrowth', label: 'Sales Growth', shortLabel: 'Sales Gr', width: 76, kind: 'percent' },
+  { key: 'profitGrowth', label: 'Profit Growth', shortLabel: 'Profit Gr', width: 76, kind: 'percent' },
+  { key: 'marketCap', label: 'Market Cap', shortLabel: 'MCap', width: 84, kind: 'currencyCompact' },
 ];
 
 const METRIC_DEFINITIONS = Object.fromEntries(
@@ -171,7 +178,7 @@ function getEnabledMetricColumns(config: WatchlistConfig) {
 
 export function getWatchlistPanelWidth(config: WatchlistConfig) {
   const metricsWidth = getEnabledMetricColumns(config).reduce((sum, metric) => sum + metric.width, 0);
-  return WATCHLIST_PANEL_PADDING_WIDTH + WATCHLIST_PANEL_SYMBOL_WIDTH + WATCHLIST_PANEL_CHANGE_WIDTH + WATCHLIST_PANEL_PRICE_WIDTH + metricsWidth + (config.industryIcon.enabled ? WATCHLIST_PANEL_INDUSTRY_WIDTH : 0);
+  return WATCHLIST_PANEL_PADDING_WIDTH + WATCHLIST_PANEL_SYMBOL_WIDTH + WATCHLIST_PANEL_CHANGE_WIDTH + metricsWidth + (config.industryIcon.enabled ? WATCHLIST_PANEL_INDUSTRY_WIDTH : 0);
 }
 
 interface WatchlistPanelProps {
@@ -213,20 +220,22 @@ function getSortValue(item: WatchItem, sortKey: SortKey) {
 
 function SortArrow({ active, direction }: { active: boolean; direction: 'asc' | 'desc' }) {
   if (!active) {
-    return <ChevronDown size={11} className="text-foreground/70" />;
+    return <ArrowDown size={11} className="text-foreground/70 self-center" />;
   }
 
   if (direction === 'asc') {
-    return <ChevronUp size={11} className="text-foreground" />;
+    return <ArrowUp size={11} className="text-foreground self-center" />;
   }
 
-  return <ChevronDown size={11} className="text-foreground" />;
+  return <ArrowDown size={11} className="text-foreground self-center" />;
 }
 
 export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose }: WatchlistPanelProps) {
   const { symbol: activeSymbol, setSymbol } = useChartStore();
-  const [sortKey, setSortKey] = useState<SortKey>('change');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [sortKey, setSortKey] = useState<SortKey>('symbol');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [watchlists, setWatchlists] = useState<WatchlistCollection[]>(DEFAULT_WATCHLIST_COLLECTIONS);
   const [selectedWatchlistIds, setSelectedWatchlistIds] = useState<string[]>([DEFAULT_WATCHLIST_COLLECTIONS[0].id]);
 
@@ -257,7 +266,6 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
       segments.push(`${metric.width}px`);
     });
 
-    segments.push(`${WATCHLIST_PANEL_PRICE_WIDTH}px`);
     segments.push(`${WATCHLIST_PANEL_CHANGE_WIDTH}px`);
     return segments.join(' ');
   }, [config.industryIcon.enabled, enabledMetricColumns]);
@@ -403,10 +411,13 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
       style={{ width: `${getWatchlistPanelWidth(config)}px` }}
     >
       <div className="flex items-center justify-between border-b border-border px-2 py-2">
-        <div className="min-w-0 flex-1 pr-0.5">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="Add stock to watchlist" onClick={() => setSearchOpen(true)}>
+            <Plus size={15} />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-7 w-[188px] justify-between gap-1 px-1 text-left text-[13px] font-semibold text-foreground">
+              <Button variant="ghost" className="h-7 w-[172px] justify-between gap-1 px-1 text-left text-[13px] font-semibold text-foreground">
                 <span className="truncate">{activeWatchlist?.name ?? 'Watchlist'}</span>
                 <ChevronDown size={14} />
               </Button>
@@ -536,38 +547,29 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
         </div>
       </div>
 
-      <div className="grid items-center gap-0.5 border-b border-border bg-muted/30 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground" style={{ gridTemplateColumns }}>
-        <button type="button" onClick={() => handleSort('symbol')} className="flex min-w-0 items-center gap-0.5 text-left hover:text-foreground">
+      <div className="grid items-center gap-px border-b border-border bg-muted/30 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground" style={{ gridTemplateColumns }}>
+        <button type="button" onClick={() => handleSort('symbol')} className="flex min-w-0 items-center gap-px text-left hover:text-foreground">
           <span>Symbol</span>
           <SortArrow active={sortKey === 'symbol'} direction={sortDirection} />
         </button>
 
         {config.industryIcon.enabled && (
-          <button type="button" onClick={() => handleSort('industryGroup')} className="flex items-center justify-center gap-0.5 hover:text-foreground">
+          <button type="button" onClick={() => handleSort('industryGroup')} className="flex items-center justify-center gap-px text-center hover:text-foreground">
             <span>Ind</span>
             <SortArrow active={sortKey === 'industryGroup'} direction={sortDirection} />
           </button>
         )}
 
         {enabledMetricColumns.map((metric) => (
-          <button key={metric.key} type="button" onClick={() => handleSort(metric.key)} className="flex items-center justify-end gap-0.5 text-right hover:text-foreground">
+          <button key={metric.key} type="button" onClick={() => handleSort(metric.key)} className="flex items-center justify-end gap-px text-right hover:text-foreground">
             <span>{metric.shortLabel}{config[metric.key].period ? `(${config[metric.key].period})` : ''}</span>
             <SortArrow active={sortKey === metric.key} direction={sortDirection} />
           </button>
         ))}
 
-        <button type="button" onClick={() => handleSort('price')} className="flex items-center justify-end gap-0.5 text-right hover:text-foreground">
-          <span>LTP</span>
-          <SortArrow active={sortKey === 'price'} direction={sortDirection} />
-        </button>
-
-        <button type="button" onClick={() => handleSort('change')} className="flex items-center justify-end text-right hover:text-foreground">
-          <span className="relative inline-block pr-3">
-            <span>Chg%</span>
-            <span className="absolute -top-1 right-0">
-              <SortArrow active={sortKey === 'change'} direction={sortDirection} />
-            </span>
-          </span>
+        <button type="button" onClick={() => handleSort('change')} className="flex items-center justify-end gap-px text-right hover:text-foreground">
+          <span>Chg%</span>
+          <SortArrow active={sortKey === 'change'} direction={sortDirection} />
         </button>
       </div>
 
@@ -584,7 +586,7 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
                 type="button"
                 onClick={() => handleSelect(item)}
                 className={cn(
-                  'group relative grid min-h-10 w-full items-center gap-0.5 border-b border-border/80 px-2 py-2 text-left transition-colors',
+                  'group relative grid min-h-10 w-full items-center gap-px border-b border-border/80 px-2 pr-4 py-2 text-left transition-colors',
                   isActive
                     ? 'bg-amber-500/5 hover:bg-muted/40'
                     : 'bg-transparent hover:bg-muted/40'
@@ -607,12 +609,13 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
                   </div>
                 ))}
 
-                <div className="truncate pr-5 text-right text-[11px] font-mono text-muted-foreground">
-                  ₹{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-
-                <div className={cn('truncate pr-5 text-right text-[11px] font-semibold', isPositive ? 'text-emerald-500' : isNegative ? 'text-rose-500' : 'text-muted-foreground')}>
-                  {isPositive ? '+' : ''}{item.change.toFixed(2)}%
+                <div className="flex flex-col items-end gap-0.5">
+                  <div className={cn('truncate text-right text-[11px] font-semibold', isPositive ? 'text-emerald-500' : isNegative ? 'text-rose-500' : 'text-muted-foreground')}>
+                    {isPositive ? '+' : ''}{item.change.toFixed(2)}%
+                  </div>
+                  <div className="truncate text-right text-[10px] font-mono text-muted-foreground">
+                    ₹{item.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
                 </div>
 
                 <span
@@ -645,6 +648,37 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
           </div>
         )}
       </div>
+
+      <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Stock to Watchlist</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by symbol or name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Search functionality coming soon...
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

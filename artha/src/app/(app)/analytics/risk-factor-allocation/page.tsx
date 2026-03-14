@@ -1,8 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { ContextualNav } from '@/components/layout/contextual-nav';
-import { FACTOR_LINKS } from '@/lib/nav-links';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
@@ -121,8 +119,6 @@ export default function RiskFactorAllocationPage() {
 
   return (
     <div className="space-y-6 pb-20">
-      <ContextualNav links={FACTOR_LINKS} />
-
       <div>
         <h1 className="text-xl font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>
           Portfolio Factor Attribution

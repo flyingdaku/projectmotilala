@@ -13,8 +13,6 @@ import {
   assetCorrelation, computeAssetMetrics
 } from "@/lib/india-historical-data";
 import { formatINR } from "@/lib/utils";
-import { ContextualNav } from "@/components/layout/contextual-nav";
-import { ASSET_LINKS } from "@/lib/nav-links";
 
 // Distinct colors for up to 6 assets
 const ASSET_COLORS = [
@@ -139,8 +137,6 @@ export default function AssetCorrelationsPage() {
 
   return (
     <div className="space-y-6 pb-20">
-      <ContextualNav links={ASSET_LINKS} />
-      
       {/* Header */}
       <div className="flex items-center gap-3 mb-2">
         <div className="p-2 rounded-lg" style={{ background: "var(--accent-subtle)", color: "var(--accent-brand)" }}>

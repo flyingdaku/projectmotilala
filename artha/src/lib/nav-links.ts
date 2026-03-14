@@ -50,7 +50,6 @@ export const QUANT_LINKS = [
   { name: "Efficient Frontier", href: "/analytics/efficient-frontier" },
   { name: "Monte Carlo Simulation", href: "/analytics/monte-carlo" },
   { name: "Financial Goals", href: "/analytics/financial-goals" },
-  { name: "Asset Liability Modeling", href: "/analytics/asset-liability" },
 ];
 
 export const UTILITY_LINKS = [
