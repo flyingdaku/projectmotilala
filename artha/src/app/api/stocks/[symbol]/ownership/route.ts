@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDataAdapter } from '@/lib/data';
+import { buildDataMeta, getCoverage } from '@/lib/stock/presentation';
 
 export async function GET(
     _req: NextRequest,
@@ -16,7 +17,19 @@ export async function GET(
         const assetId = String(stock.id);
 
         const { shareholding, governance } = await adapter.company.getOwnership(assetId);
-        return NextResponse.json({ shareholding, governance });
+        return NextResponse.json({
+            shareholding,
+            governance,
+            meta: buildDataMeta({
+                asOfCandidates: [shareholding[0]?.quarterEnd, shareholding[0]?.quarter],
+                coverage: getCoverage([
+                    shareholding.length ? shareholding : null,
+                    governance?.overallScore ?? governance?.overall ?? null,
+                    governance?.independentDirectorsPct ?? null,
+                ]),
+                note: 'Ownership updates are quarterly; governance fields may be partial.',
+            }),
+        });
     } catch (err) {
         console.error('[stock ownership]', err);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });

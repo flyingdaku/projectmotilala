@@ -7,6 +7,10 @@ import {
 } from "recharts";
 import { TrendingUp, BarChart2 } from "lucide-react";
 import type { FactorExposure, FactorContext, EarningsQuality, ComputedRatios } from "@/lib/data/types";
+import type { DataMeta } from "@/lib/stock/presentation";
+import { buildDataMeta, getCoverage } from "@/lib/stock/presentation";
+import { CoverageNotice, DataMetaInline } from "@/components/stock/StockUiPrimitives";
+import { formatMoneyInCrores, formatPercent, formatRatio, MISSING_VALUE_LABEL } from "@/lib/utils/formatters";
 
 interface Props {
   symbol: string;
@@ -19,6 +23,7 @@ export function AnalyticsSection({ symbol }: Props) {
     earningsQuality: EarningsQuality | null;
     ratioHistory: Partial<ComputedRatios>[];
     ratios: ComputedRatios | null;
+    meta?: DataMeta;
   } | null>(null);
   const [activeMetric, setActiveMetric] = useState<"peTtm" | "pb" | "evEbitda" | "roce" | "roe">("peTtm");
   const [loadedSymbol, setLoadedSymbol] = useState<string | null>(null);
@@ -53,6 +58,20 @@ export function AnalyticsSection({ symbol }: Props) {
   const currentVal = data?.ratios?.[activeMetric] ?? null;
   const factorSnapshots = data?.factorContext?.latestSnapshots ?? [];
   const factorDrawdowns = data?.factorContext?.drawdowns ?? [];
+  const meta = data?.meta ?? buildDataMeta({
+    asOfCandidates: [
+      data?.ratioHistory?.[0]?.computedDate as string | null | undefined,
+      data?.factorContext?.latestSnapshots?.[0]?.asOf,
+      data?.factorExposure?.regressionEndDate,
+    ],
+    coverage: getCoverage([
+      data?.factorExposure,
+      factorSnapshots.length ? factorSnapshots : null,
+      data?.earningsQuality,
+      data?.ratios,
+    ]),
+    note: "Ratios are derived from adjusted market history.",
+  });
 
   // Valuation band — ±1 σ of historical values
   const { mean, stddev } = useMemo(() => {
@@ -100,7 +119,12 @@ export function AnalyticsSection({ symbol }: Props) {
       {/* Valuation Band Chart */}
       <div className="p-6 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Valuation Band</h2>
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Valuation Band</h2>
+            <div className="mt-2">
+              <DataMetaInline meta={meta} />
+            </div>
+          </div>
           <div className="flex bg-muted/20 p-0.5 rounded-lg border border-border gap-0.5">
             {Object.entries(METRIC_LABELS).map(([key, label]) => (
               <button key={key} onClick={() => setActiveMetric(key as typeof activeMetric)}
@@ -112,9 +136,7 @@ export function AnalyticsSection({ symbol }: Props) {
         </div>
 
         {historicalChart.length === 0 ? (
-          <div className="h-56 flex items-center justify-center text-sm" style={{ color: "var(--text-muted)" }}>
-            No historical ratio data available
-          </div>
+          <CoverageNotice meta={meta} title="Historical valuation hidden" message="A valuation band needs enough ratio history to avoid drawing a misleading mean and sigma range." />
         ) : (
           <>
             <div className="h-56">
@@ -255,7 +277,7 @@ export function AnalyticsSection({ symbol }: Props) {
                       <div key={metric.label}>
                         <div className="text-xs" style={{ color: "var(--text-muted)" }}>{metric.label}</div>
                         <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>
-                          {metric.value != null ? `${metric.value >= 0 ? "+" : ""}${metric.value.toFixed(2)}%` : "—"}
+                          {metric.value != null ? formatPercent(metric.value, 2) : MISSING_VALUE_LABEL}
                         </div>
                       </div>
                     ))}
@@ -265,9 +287,7 @@ export function AnalyticsSection({ symbol }: Props) {
             </div>
             <div className="space-y-3">
               {factorDrawdowns.length === 0 ? (
-                <div className="h-full min-h-48 flex items-center justify-center text-sm" style={{ color: "var(--text-muted)" }}>
-                  No IIMA drawdown statistics available
-                </div>
+                <CoverageNotice meta={meta} title="Drawdown statistics unavailable" message="Factor drawdown statistics are not available for the current analytics sample yet." className="h-full min-h-48 flex items-center" />
               ) : (
                 factorDrawdowns.map((drawdown) => (
                   <div key={drawdown.factorCode} className="p-4 rounded-lg border" style={{ background: "var(--surface-elevated)", borderColor: "var(--border)" }}>
@@ -280,19 +300,19 @@ export function AnalyticsSection({ symbol }: Props) {
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div>
                         <div className="text-xs" style={{ color: "var(--text-muted)" }}>Ann. return</div>
-                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.annualizedReturn != null ? `${drawdown.annualizedReturn.toFixed(1)}%` : "—"}</div>
+                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.annualizedReturn != null ? formatPercent(drawdown.annualizedReturn, 1) : MISSING_VALUE_LABEL}</div>
                       </div>
                       <div>
                         <div className="text-xs" style={{ color: "var(--text-muted)" }}>Ann. vol</div>
-                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.annualizedVolatility != null ? `${drawdown.annualizedVolatility.toFixed(1)}%` : "—"}</div>
+                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.annualizedVolatility != null ? formatPercent(drawdown.annualizedVolatility, 1) : MISSING_VALUE_LABEL}</div>
                       </div>
                       <div>
                         <div className="text-xs" style={{ color: "var(--text-muted)" }}>Worst drawdown</div>
-                        <div className="font-mono font-semibold text-red-400">{drawdown.worstDrawdown != null ? `${drawdown.worstDrawdown.toFixed(1)}%` : "—"}</div>
+                        <div className="font-mono font-semibold text-red-500">{drawdown.worstDrawdown != null ? formatPercent(drawdown.worstDrawdown, 1) : MISSING_VALUE_LABEL}</div>
                       </div>
                       <div>
                         <div className="text-xs" style={{ color: "var(--text-muted)" }}>Recovery window</div>
-                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.drawdownDurationYears != null ? `${drawdown.drawdownDurationYears.toFixed(1)}y` : "—"}</div>
+                        <div className="font-mono font-semibold" style={{ color: "var(--text-primary)" }}>{drawdown.drawdownDurationYears != null ? `${drawdown.drawdownDurationYears.toFixed(1)}y` : MISSING_VALUE_LABEL}</div>
                       </div>
                     </div>
                   </div>
@@ -320,7 +340,7 @@ export function AnalyticsSection({ symbol }: Props) {
               <div key={metric.label} className="p-3 rounded-lg" style={{ background: "var(--surface-elevated)", border: "1px solid var(--border)" }}>
                 <div className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{metric.label}</div>
                 <div className="text-base font-bold font-mono" style={{ color: "var(--text-primary)" }}>
-                  {metric.val != null ? `${metric.val.toFixed(2)}${metric.suffix}` : "—"}
+                  {metric.val != null ? `${metric.val.toFixed(2)}${metric.suffix}` : MISSING_VALUE_LABEL}
                 </div>
               </div>
             ))}
@@ -362,9 +382,13 @@ export function AnalyticsSection({ symbol }: Props) {
                 <div className="text-base font-bold font-mono" style={{ color: "var(--text-primary)" }}>
                   {m.val != null
                     ? m.isCr
-                      ? m.val >= 1e5 ? `${(m.val / 1e5).toFixed(2)}L` : m.val.toFixed(0)
-                      : `${m.val.toFixed(2)}${m.suffix}`
-                    : "—"}
+                      ? formatMoneyInCrores(m.val, { digits: 2 })
+                      : m.suffix === "x"
+                        ? formatRatio(m.val, 2)
+                        : m.suffix === "%"
+                          ? formatPercent(m.val, 2)
+                          : `${m.val.toFixed(2)}${m.suffix}`
+                    : MISSING_VALUE_LABEL}
                 </div>
               </div>
             ))}

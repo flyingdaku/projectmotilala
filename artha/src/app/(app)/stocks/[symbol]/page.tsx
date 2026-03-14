@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { TrendingUp, TrendingDown, Minus, Activity, Building2, Landmark } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { SectionNav } from "@/components/stock/SectionNav";
 import { EmbeddedChart } from "@/components/charting/EmbeddedChart";
 import { OverviewSection } from "@/components/stock/OverviewSection";
@@ -18,31 +18,26 @@ import { FloatingNavButton } from "@/components/stock/FloatingNavButton";
 import { getSectorEmoji } from "@/lib/utils/emojis";
 import type { StockDetail } from "@/lib/data";
 import type { CompanyProfile } from "@/lib/data/types";
+import type { DataMeta } from "@/lib/stock/presentation";
+import { DataMetaInline, MetricValue } from "@/components/stock/StockUiPrimitives";
+import {
+  formatCurrency,
+  formatMetricRange,
+  formatMoneyInCrores,
+  formatPercent,
+  formatRatio,
+  formatSignedChange,
+  formatVolume,
+} from "@/lib/utils/formatters";
 
-function formatCurrency(value?: number | null, digits = 2) {
-  if (value == null) return "—";
-  return `₹${value.toLocaleString("en-IN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
-}
-
-function formatPercent(value?: number | null, digits = 2) {
-  if (value == null) return "—";
-  return `${value.toFixed(digits)}%`;
-}
-
-function formatMarketCapCr(value?: number | null) {
-  if (value == null) return "—";
-  if (value >= 100000) return `₹${(value / 100000).toFixed(2)}L Cr`;
-  if (value >= 1000) return `₹${(value / 1000).toFixed(1)}K Cr`;
-  return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 0 })} Cr`;
-}
-
-function formatVolume(value?: number | null) {
-  if (value == null) return "—";
-  if (value >= 10000000) return `${(value / 10000000).toFixed(2)} Cr`;
-  if (value >= 100000) return `${(value / 100000).toFixed(2)} L`;
-  if (value >= 1000) return `${(value / 1000).toFixed(1)} K`;
-  return value.toLocaleString("en-IN");
-}
+type OverviewResponse = {
+  stock: StockDetail | null;
+  profile: CompanyProfile | null;
+  meta?: {
+    hero?: DataMeta;
+    overview?: DataMeta;
+  } | null;
+};
 
 export default function StockPage() {
   const params = useParams();
@@ -50,9 +45,11 @@ export default function StockPage() {
 
   const [stock, setStock] = useState<StockDetail | null>(null);
   const [profile, setProfile] = useState<CompanyProfile | null>(null);
+  const [overviewMeta, setOverviewMeta] = useState<OverviewResponse["meta"]>(null);
   const [loadedSymbol, setLoadedSymbol] = useState("");
   const [notFound, setNotFound] = useState(false);
   const [showStickyBar, setShowStickyBar] = useState(false);
+  const [showFullDescription, setShowFullDescription] = useState(false);
 
   useEffect(() => {
     if (!symbol) return;
@@ -60,6 +57,7 @@ export default function StockPage() {
       .then(r => {
         if (r.status === 404) {
           setNotFound(true);
+          setOverviewMeta(null);
           setLoadedSymbol(symbol);
           return null;
         }
@@ -70,9 +68,12 @@ export default function StockPage() {
         setNotFound(false);
         setStock(data.stock ?? null);
         setProfile(data.profile ?? null);
+        setOverviewMeta(data.meta ?? null);
+        setShowFullDescription(false);
         setLoadedSymbol(symbol);
       })
       .catch(() => {
+        setOverviewMeta(null);
         setLoadedSymbol(symbol);
       });
   }, [symbol]);
@@ -110,30 +111,41 @@ export default function StockPage() {
   const isPos = (stock.pctChange1d ?? 0) > 0;
   const isNeg = (stock.pctChange1d ?? 0) < 0;
   const keyMetrics = [
-    { label: "Market Cap", value: formatMarketCapCr(stock.marketCapCr), tone: "text-foreground" },
-    { label: "P/E", value: stock.pe?.toFixed(1) ?? "—", tone: "text-foreground" },
-    { label: "ROCE", value: formatPercent(stock.roce, 1), tone: "text-foreground" },
-    { label: "ROE", value: formatPercent(stock.roe, 1), tone: "text-foreground" },
-    { label: "Dividend Yield", value: formatPercent(stock.dividendYield, 2), tone: "text-foreground" },
-    { label: "52W Range", value: stock.high52w && stock.low52w ? `${formatCurrency(stock.low52w, 0)} - ${formatCurrency(stock.high52w, 0)}` : "—", tone: "text-foreground" },
+    { label: "Market Cap", value: formatMoneyInCrores(stock.marketCapCr), reason: "Market capitalization is not available for this listing yet." },
+    { label: "P/E", value: formatRatio(stock.pe, 1), reason: "TTM earnings are unavailable or non-positive." },
+    { label: "ROCE", value: formatPercent(stock.roce, 1), reason: "Return-on-capital history is missing." },
+    { label: "ROE", value: formatPercent(stock.roe, 1), reason: "Return-on-equity history is missing." },
+    {
+      label: "52W Range",
+      value: formatMetricRange(
+        stock.low52w,
+        stock.high52w,
+        (value) => formatCurrency(value, { decimals: 0 }),
+      ),
+      reason: "A full 52-week price range is not available yet.",
+    },
+    { label: "Avg Volume", value: formatVolume(stock.avgVolume), reason: "Recent average volume is not available." },
   ];
-  const researchSnapshot = [
-    { label: "Sector", value: stock.sector ?? "—", icon: <Building2 size={14} /> },
-    { label: "Industry", value: stock.industry ?? "—", icon: <Landmark size={14} /> },
-    { label: "Avg Volume", value: formatVolume(stock.avgVolume), icon: <Activity size={14} /> },
-  ];
+  const identityChips = [
+    stock.sector ? `${getSectorEmoji(stock.sector)} ${stock.sector}` : null,
+    stock.industry ?? null,
+    stock.exchange ?? (stock.nseSymbol || stock.bseCode ? "NSE/BSE" : null),
+    ...(profile?.indexMemberships?.slice(0, 3) ?? []),
+  ].filter(Boolean) as string[];
+  const summaryText = profile?.descriptionShort
+    ?? `${stock.name} is a listed Indian company${stock.industry ? ` operating in ${stock.industry}` : ""}${stock.sector ? ` within the ${stock.sector} sector` : ""}.`;
 
   return (
-    <div className="w-full pb-12">
+    <div className="w-full min-w-0 pb-12">
       {/* Sticky Metrics Bar */}
-      {stock && <StickyMetricsBar stock={stock} visible={showStickyBar} />}
+      {stock && <StickyMetricsBar stock={stock} meta={overviewMeta?.hero ?? null} visible={showStickyBar} />}
 
       <SectionNav />
 
       {/* Floating Navigation Button (Mobile) */}
       <FloatingNavButton />
 
-      <div className="mx-auto mt-6 w-[calc(100%-20vw)] max-w-[calc(100vw-160px)] overflow-hidden rounded-[28px] border" style={{ background: "var(--surface)", borderColor: "var(--border)", boxShadow: "0 18px 40px rgba(10,15,28,0.06)" }}>
+      <div className="mx-auto mt-6 w-full max-w-[1180px] overflow-hidden rounded-[28px] border" style={{ background: "var(--surface)", borderColor: "var(--border)", boxShadow: "0 18px 40px rgba(10,15,28,0.06)" }}>
         {/* Stock Header */}
         <div className="border-b px-6 pb-8 pt-6" style={{ background: "linear-gradient(180deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 88%, transparent) 100%)", borderColor: "var(--border)" }}>
           <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -157,22 +169,16 @@ export default function StockPage() {
                         {profile?.analystRatings?.targetPrice != null && (
                           <span className="text-xs px-2.5 py-1 rounded-md font-medium"
                             style={{ border: "1px solid rgba(245,158,11,0.24)", background: "var(--accent-subtle)", color: "var(--accent-brand)" }}>
-                            Target {formatCurrency(profile.analystRatings.targetPrice, 0)}
+                            Target {formatCurrency(profile.analystRatings.targetPrice, { decimals: 0 })}
                           </span>
                         )}
                       </div>
                       <div className="mt-2 flex items-center gap-2 flex-wrap text-xs" style={{ color: "var(--text-secondary)" }}>
-                        {stock.sector && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1" style={{ borderColor: "var(--border)", background: "var(--surface-elevated)" }}>
-                            <span className="text-[14px] leading-none">{getSectorEmoji(stock.sector)}</span>
-                            <span>{stock.sector}</span>
+                        {identityChips.map((chip) => (
+                          <span key={chip} className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1" style={{ borderColor: "var(--border)", background: "var(--surface-elevated)" }}>
+                            <span>{chip}</span>
                           </span>
-                        )}
-                        {stock.industry && (
-                          <span className="inline-flex items-center rounded-full border px-2.5 py-1" style={{ borderColor: "var(--border)", background: "var(--surface-elevated)" }}>
-                            {stock.industry}
-                          </span>
-                        )}
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -184,9 +190,12 @@ export default function StockPage() {
                     {stock.pctChange1d != null && (
                       <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold font-mono ${isPos ? "text-emerald-500 bg-emerald-500/10" : isNeg ? "text-rose-500 bg-rose-500/10" : "text-muted-foreground bg-muted/20"}`}>
                         {isPos ? <TrendingUp size={14} /> : isNeg ? <TrendingDown size={14} /> : <Minus size={14} />}
-                        {isPos ? "+" : ""}{stock.pctChange1d.toFixed(2)}%
+                        {formatSignedChange(stock.pctChange1d)}
                       </span>
                     )}
+                  </div>
+                  <div className="mt-2">
+                    <DataMetaInline meta={overviewMeta?.hero ?? null} />
                   </div>
                 </div>
 
@@ -195,33 +204,34 @@ export default function StockPage() {
                 </div>
               </div>
 
-              <div className="mt-5 rounded-xl border px-4 py-4" style={{ background: "var(--surface-elevated)", borderColor: "var(--border)" }}>
-                <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                  {profile?.descriptionShort ?? `${stock.name} is a listed Indian company${stock.industry ? ` operating in ${stock.industry}` : ""}${stock.sector ? ` within the ${stock.sector} sector` : ""}.`}
-                </p>
-              </div>
-
               <div className="mt-5 grid gap-3 lg:grid-cols-3">
                 {keyMetrics.map((metric) => (
                   <div key={metric.label} className="rounded-xl border px-4 py-3" style={{ background: "var(--background)", borderColor: "var(--border)" }}>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>{metric.label}</div>
-                    <div className={`mt-2 text-base font-semibold font-mono ${metric.tone}`}>{metric.value}</div>
+                    <div className="mt-2 text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+                      <MetricValue value={metric.value} reason={metric.reason} className="metric-mono" />
+                    </div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {researchSnapshot.map((item) => (
-                  <div key={item.label} className="flex items-start gap-3 rounded-xl border px-3.5 py-3" style={{ background: "var(--background)", borderColor: "var(--border)" }}>
-                    <div className="mt-0.5 rounded-lg border p-2" style={{ color: "var(--accent-brand)", borderColor: "rgba(245,158,11,0.22)", background: "var(--accent-subtle)" }}>
-                      {item.icon}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>{item.label}</div>
-                      <div className="mt-1 text-sm font-medium break-words" style={{ color: "var(--text-primary)" }}>{item.value}</div>
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-5 rounded-xl border px-4 py-4" style={{ background: "var(--surface-elevated)", borderColor: "var(--border)" }}>
+                <p className={`text-sm leading-6 ${showFullDescription ? "" : "line-clamp-2"}`} style={{ color: "var(--text-secondary)" }}>
+                  {summaryText}
+                </p>
+                {summaryText.length > 140 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFullDescription((value) => !value)}
+                    className="mt-2 text-xs font-medium"
+                    style={{ color: "var(--accent-brand)" }}
+                  >
+                    {showFullDescription ? "Show less" : "Read more"}
+                  </button>
+                )}
+                <div className="mt-2">
+                  <DataMetaInline meta={overviewMeta?.overview ?? null} />
+                </div>
               </div>
 
               {profile?.analystRatings && (
@@ -255,7 +265,7 @@ export default function StockPage() {
         {/* Page content */}
         <div className="px-6 py-8 space-y-10">
           {/* Overview */}
-          <OverviewSection stock={stock} profile={profile} />
+          <OverviewSection stock={stock} profile={profile} meta={overviewMeta?.overview ?? null} />
 
           {/* Chart */}
           <EmbeddedChart symbol={symbol} currentPrice={stock.price ?? null} priceChange={stock.pctChange1d ?? null} />

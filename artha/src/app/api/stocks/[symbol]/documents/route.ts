@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDataAdapter } from '@/lib/data';
+import { buildDataMeta } from '@/lib/stock/presentation';
 
 // Map category to document types
 const CATEGORY_MAP: Record<string, string[]> = {
@@ -42,7 +43,17 @@ export async function GET(
             documents = await adapter.company.getDocuments(assetId, docType || undefined);
         }
 
-        return NextResponse.json({ documents });
+        return NextResponse.json({
+            documents,
+            meta: buildDataMeta({
+                asOfCandidates: [documents[0]?.docDate],
+                coverage: documents.length > 0 ? 1 : 0,
+                status: documents.length > 0 ? 'partial' : 'unavailable',
+                note: documents.length > 0
+                    ? 'Documents are grouped by filing category.'
+                    : 'This category is not fetched for the current company yet.',
+            }),
+        });
     } catch (err) {
         console.error('[stock documents]', err);
         return NextResponse.json({ error: 'Internal error' }, { status: 500 });

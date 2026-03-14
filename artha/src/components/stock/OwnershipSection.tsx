@@ -7,6 +7,10 @@ import {
 } from "recharts";
 import { AlertTriangle, Shield, Users } from "lucide-react";
 import type { ShareholdingPattern, GovernanceScore } from "@/lib/data/types";
+import type { DataMeta } from "@/lib/stock/presentation";
+import { buildDataMeta, getCoverage } from "@/lib/stock/presentation";
+import { CoverageNotice, DataMetaInline } from "@/components/stock/StockUiPrimitives";
+import { formatPercent, formatSignedChange, MISSING_VALUE_LABEL } from "@/lib/utils/formatters";
 
 const SH_COLORS = {
   Promoter: "#F59E0B",
@@ -24,16 +28,22 @@ export function OwnershipSection({ symbol }: Props) {
   const [data, setData] = useState<{
     shareholding: ShareholdingPattern[];
     governance: GovernanceScore | null;
+    meta?: DataMeta;
   } | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadedSymbol, setLoadedSymbol] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"trend" | "donut">("trend");
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/stocks/${symbol}/ownership`)
       .then((r) => r.json())
-      .then(setData)
-      .finally(() => setLoading(false));
+      .then((payload) => {
+        setData(payload);
+        setLoadedSymbol(symbol);
+      })
+      .catch(() => {
+        setData(null);
+        setLoadedSymbol(symbol);
+      });
   }, [symbol]);
 
   const trendData = useMemo(() => {
@@ -102,8 +112,16 @@ export function OwnershipSection({ symbol }: Props) {
   };
 
   const axisStyle = { fontSize: 11, fill: "var(--text-muted)" };
+  const meta = data?.meta ?? buildDataMeta({
+    asOfCandidates: [data?.shareholding?.[0]?.quarterEnd, data?.shareholding?.[0]?.quarter],
+    coverage: getCoverage([
+      data?.shareholding?.length ? data.shareholding : null,
+      data?.governance,
+    ]),
+    note: "Ownership updates are quarterly.",
+  });
 
-  if (loading) {
+  if (loadedSymbol !== symbol) {
     return (
       <section id="ownership" className="scroll-mt-28">
         <div className="p-6 rounded-xl border flex items-center justify-center h-64"
@@ -151,7 +169,12 @@ export function OwnershipSection({ symbol }: Props) {
         {/* Main Chart */}
         <div className="lg:col-span-2 p-6 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Shareholding Pattern</h2>
+            <div>
+              <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Shareholding Pattern</h2>
+              <div className="mt-2">
+                <DataMetaInline meta={meta} />
+              </div>
+            </div>
             <div className="flex bg-muted/20 p-0.5 rounded-lg border border-border">
               {(["trend", "donut"] as const).map((v) => (
                 <button key={v} onClick={() => setActiveView(v)}
@@ -225,13 +248,13 @@ export function OwnershipSection({ symbol }: Props) {
                 <div key={item.label} className="flex items-center justify-between text-sm">
                   <span style={{ color: "var(--text-secondary)" }}>{item.label}</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-medium" style={{ color: "var(--text-primary)" }}>
-                      {item.current?.toFixed(2) ?? "—"}%
+                    <span className="font-mono font-medium metric-mono" style={{ color: "var(--text-primary)" }}>
+                      {item.current != null ? formatPercent(item.current, 2) : MISSING_VALUE_LABEL}
                     </span>
                     {item.val !== null && item.val !== undefined && (
-                      <span className={`text-xs font-mono font-semibold ${item.val > 0 ? "text-green-400" : item.val < 0 ? "text-red-400" : "text-muted-foreground"}`}>
-                        {item.val > 0 ? "▲" : item.val < 0 ? "▼" : "—"}
-                        {Math.abs(item.val).toFixed(2)}
+                      <span className={`text-xs font-mono font-semibold metric-mono ${item.val > 0 ? "text-green-500" : item.val < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                        {item.val > 0 ? "▲" : item.val < 0 ? "▼" : "•"}
+                        {formatSignedChange(item.val, 2, "")}
                       </span>
                     )}
                   </div>
@@ -258,12 +281,12 @@ export function OwnershipSection({ symbol }: Props) {
                 </ResponsiveContainer>
               </div>
             ) : (
-              <p className="text-xs" style={{ color: "var(--text-muted)" }}>No pledge data available</p>
+              <CoverageNotice meta={meta} title="Pledge history unavailable" message="Promoter pledge trend is hidden until the underlying shareholding dataset provides a usable history." />
             )}
             <div className="mt-2 text-center">
               <span className="text-xs" style={{ color: "var(--text-muted)" }}>Current Pledge: </span>
-              <span className={`text-sm font-bold font-mono ${pledgePct > 20 ? "text-red-400" : pledgePct > 5 ? "text-yellow-400" : "text-green-400"}`}>
-                {pledgePct.toFixed(2)}%
+              <span className={`text-sm font-bold font-mono metric-mono ${pledgePct > 20 ? "text-red-500" : pledgePct > 5 ? "text-yellow-600" : "text-green-500"}`}>
+                {formatPercent(pledgePct, 2)}
               </span>
             </div>
           </div>
@@ -280,12 +303,12 @@ export function OwnershipSection({ symbol }: Props) {
                   { label: "Independent Directors", val: data.governance.independentDirectorsPct, suffix: "%" },
                   { label: "Board Size", val: data.governance.boardSize, suffix: "" },
                   { label: "CEO Tenure", val: data.governance.ceoTenureYears, suffix: " yrs" },
-                  { label: "Audit Opinion", val: null, text: data.governance.auditOpinion ?? "N/A" },
+                  { label: "Audit Opinion", val: null, text: data.governance.auditOpinion ?? "Unavailable" },
                 ].map((item) => (
                   <div key={item.label} className="flex justify-between">
                     <span style={{ color: "var(--text-muted)" }}>{item.label}</span>
-                    <span className="font-medium font-mono" style={{ color: "var(--text-primary)" }}>
-                      {item.text ?? (item.val !== null && item.val !== undefined ? `${item.val}${item.suffix}` : "—")}
+                    <span className="font-medium font-mono metric-mono" style={{ color: "var(--text-primary)" }}>
+                      {item.text ?? (item.val !== null && item.val !== undefined ? `${item.val}${item.suffix}` : MISSING_VALUE_LABEL)}
                     </span>
                   </div>
                 ))}

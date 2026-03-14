@@ -60,6 +60,49 @@ CREATE INDEX IF NOT EXISTS idx_daily_prices_asset_date ON daily_prices(asset_id,
 CREATE INDEX IF NOT EXISTS idx_daily_prices_date       ON daily_prices(date);
 
 -- ─── CORPORATE ACTIONS ────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS src_nse_corporate_actions (
+  id                TEXT PRIMARY KEY,
+  asset_id          TEXT NOT NULL,
+  symbol            TEXT,
+  series            TEXT,
+  subject           TEXT,
+  ex_date           TEXT,
+  record_date       TEXT,
+  bc_start_date     TEXT,
+  bc_end_date       TEXT,
+  nd_start_date     TEXT,
+  nd_end_date       TEXT,
+  company_name      TEXT,
+  isin              TEXT,
+  face_value        TEXT,
+  raw_json          TEXT,
+  created_at        TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, ex_date, subject),
+  FOREIGN KEY       (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_src_nse_ca_asset  ON src_nse_corporate_actions(asset_id);
+CREATE INDEX IF NOT EXISTS idx_src_nse_ca_exdate ON src_nse_corporate_actions(ex_date);
+
+CREATE TABLE IF NOT EXISTS src_bse_corporate_actions (
+  id                TEXT PRIMARY KEY,
+  asset_id          TEXT NOT NULL,
+  scrip_code        TEXT,
+  scrip_name        TEXT,
+  purpose           TEXT,
+  ex_date           TEXT,
+  record_date       TEXT,
+  bc_start_date     TEXT,
+  bc_end_date       TEXT,
+  nd_start_date     TEXT,
+  nd_end_date       TEXT,
+  raw_json          TEXT,
+  created_at        TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, ex_date, purpose),
+  FOREIGN KEY       (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_src_bse_ca_asset  ON src_bse_corporate_actions(asset_id);
+CREATE INDEX IF NOT EXISTS idx_src_bse_ca_exdate ON src_bse_corporate_actions(ex_date);
 CREATE TABLE IF NOT EXISTS corporate_actions (
   id                TEXT PRIMARY KEY,
   asset_id          TEXT NOT NULL,
@@ -81,6 +124,50 @@ CREATE TABLE IF NOT EXISTS corporate_actions (
 CREATE INDEX IF NOT EXISTS idx_corp_actions_asset  ON corporate_actions(asset_id);
 CREATE INDEX IF NOT EXISTS idx_corp_actions_exdate ON corporate_actions(ex_date);
 CREATE INDEX IF NOT EXISTS idx_corp_actions_type   ON corporate_actions(action_type);
+
+-- ─── CORPORATE ACTION STAGING ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS src_nse_corporate_actions (
+  id                TEXT PRIMARY KEY,
+  asset_id          TEXT NOT NULL,
+  symbol            TEXT,
+  series            TEXT,
+  subject           TEXT,
+  ex_date           TEXT,
+  record_date       TEXT,
+  bc_start_date     TEXT,
+  bc_end_date       TEXT,
+  nd_start_date     TEXT,
+  nd_end_date       TEXT,
+  company_name      TEXT,
+  isin              TEXT,
+  face_value        TEXT,
+  raw_json          TEXT,
+  created_at        TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, ex_date, subject),
+  FOREIGN KEY       (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_src_nse_ca_asset  ON src_nse_corporate_actions(asset_id);
+CREATE INDEX IF NOT EXISTS idx_src_nse_ca_exdate ON src_nse_corporate_actions(ex_date);
+
+CREATE TABLE IF NOT EXISTS src_bse_corporate_actions (
+  id                TEXT PRIMARY KEY,
+  asset_id          TEXT NOT NULL,
+  scrip_code        TEXT,
+  scrip_name        TEXT,
+  purpose           TEXT,
+  ex_date           TEXT,
+  record_date       TEXT,
+  bc_start_date     TEXT,
+  bc_end_date       TEXT,
+  nd_start_date     TEXT,
+  nd_end_date       TEXT,
+  raw_json          TEXT,
+  created_at        TEXT DEFAULT (datetime('now')),
+  UNIQUE (asset_id, ex_date, purpose),
+  FOREIGN KEY       (asset_id) REFERENCES assets(id)
+);
+CREATE INDEX IF NOT EXISTS idx_src_bse_ca_asset  ON src_bse_corporate_actions(asset_id);
+CREATE INDEX IF NOT EXISTS idx_src_bse_ca_exdate ON src_bse_corporate_actions(ex_date);
 
 -- ─── MERGER EVENTS ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS merger_events (

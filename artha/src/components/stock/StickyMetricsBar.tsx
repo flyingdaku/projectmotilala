@@ -1,28 +1,31 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { StockDetail } from "@/lib/data";
+import type { DataMeta } from "@/lib/stock/presentation";
+import { DataMetaInline } from "@/components/stock/StockUiPrimitives";
+import { formatCurrency, formatMoneyInCrores, formatRatio, formatSignedChange } from "@/lib/utils/formatters";
 
 interface Props {
   stock: StockDetail;
+  meta?: DataMeta | null;
   visible: boolean;
 }
 
-export function StickyMetricsBar({ stock, visible }: Props) {
+export function StickyMetricsBar({ stock, meta, visible }: Props) {
   const isPos = (stock.pctChange1d ?? 0) > 0;
   const isNeg = (stock.pctChange1d ?? 0) < 0;
 
   return (
     <div
-      className={`sticky top-0 z-40 transition-transform duration-300 w-[calc(100%+64px)] -mx-8 px-8 ${visible ? "translate-y-0" : "-translate-y-full h-0 overflow-hidden"
+      className={`sticky top-0 z-40 w-full transition-transform duration-300 ${visible ? "translate-y-0" : "-translate-y-full h-0 overflow-hidden"
         }`}
       style={{
         background: "var(--surface)",
         backdropFilter: "blur(8px)",
       }}
     >
-      <div className="max-w-[1400px] mx-auto px-8 py-3">
+      <div className="mx-auto w-full max-w-[1180px] px-4 py-3 md:px-6">
         <div className="flex items-center justify-between gap-4">
           {/* Left: Name + Price */}
           <div className="flex items-center gap-4 min-w-0">
@@ -47,18 +50,14 @@ export function StickyMetricsBar({ stock, visible }: Props) {
 
             <div className="flex items-baseline gap-2 shrink-0">
               <span
-                className="text-lg font-bold font-mono"
+                className="text-lg font-bold font-mono metric-mono"
                 style={{ color: "var(--text-primary)" }}
               >
-                ₹
-                {stock.price?.toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                }) ?? "—"}
+                {formatCurrency(stock.price)}
               </span>
               {stock.pctChange1d != null && (
                 <span
-                  className={`flex items-center gap-1 text-xs font-semibold font-mono ${isPos
+                  className={`flex items-center gap-1 text-xs font-semibold font-mono metric-mono ${isPos
                     ? "text-emerald-500"
                     : isNeg
                       ? "text-rose-500"
@@ -72,8 +71,7 @@ export function StickyMetricsBar({ stock, visible }: Props) {
                   ) : (
                     <Minus size={12} />
                   )}
-                  {isPos ? "+" : ""}
-                  {stock.pctChange1d.toFixed(2)}%
+                  {formatSignedChange(stock.pctChange1d)}
                 </span>
               )}
             </div>
@@ -84,19 +82,17 @@ export function StickyMetricsBar({ stock, visible }: Props) {
             {[
               {
                 label: "Mkt Cap",
-                value: stock.marketCapCr
-                  ? `₹${(stock.marketCapCr / 100).toFixed(1)}B`
-                  : "—",
+                value: formatMoneyInCrores(stock.marketCapCr),
               },
-              { label: "P/E", value: stock.pe?.toFixed(1) ?? "—" },
-              { label: "P/B", value: stock.pb?.toFixed(2) ?? "—" },
+              { label: "P/E", value: formatRatio(stock.pe, 1) },
+              { label: "P/B", value: formatRatio(stock.pb, 2) },
               {
                 label: "52W H",
-                value: stock.high52w ? `₹${stock.high52w.toFixed(0)}` : "—",
+                value: formatCurrency(stock.high52w, { decimals: 0 }),
               },
               {
                 label: "52W L",
-                value: stock.low52w ? `₹${stock.low52w.toFixed(0)}` : "—",
+                value: formatCurrency(stock.low52w, { decimals: 0 }),
               },
             ].map((m) => (
               <div key={m.label} className="text-center">
@@ -107,7 +103,7 @@ export function StickyMetricsBar({ stock, visible }: Props) {
                   {m.label}
                 </div>
                 <div
-                  className="text-xs font-mono font-semibold"
+                  className="text-xs font-mono font-semibold metric-mono"
                   style={{ color: "var(--text-primary)" }}
                 >
                   {m.value}
@@ -115,6 +111,9 @@ export function StickyMetricsBar({ stock, visible }: Props) {
               </div>
             ))}
           </div>
+        </div>
+        <div className="mt-2">
+          <DataMetaInline meta={meta ?? null} />
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   Home, PieChart, Target, Search, Layers, BarChart2,
   Wrench, History, Activity, ChevronLeft, ChevronRight, Bell,
-  Globe, Settings
+  Globe
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -239,13 +239,6 @@ export function Sidebar() {
       </ScrollArea>
 
       <div className="border-t p-2 space-y-1" style={{ borderColor: "var(--nav-border)" }}>
-        <NavItem
-          icon={Settings}
-          label="Settings"
-          href="/settings"
-          collapsed={collapsed}
-          active={pathname === "/settings"}
-        />
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="flex w-full items-center justify-center rounded-xl p-2 transition-colors duration-150 hover:bg-[var(--nav-hover-bg)]"

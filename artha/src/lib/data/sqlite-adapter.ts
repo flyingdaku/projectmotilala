@@ -209,6 +209,7 @@ export function createSqliteAdapter() {
                     isin: asset.isin ?? undefined,
                     assetClass: "EQUITY",
                     price,
+                    priceDate: latestPrice?.date ?? undefined,
                     pctChange1d: latestPrice?.pct_change ?? 0,
                     high52w: (range.high52w as number) ?? undefined,
                     low52w: (range.low52w as number) ?? undefined,

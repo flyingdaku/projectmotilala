@@ -1,36 +1,27 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
 import type { ComputedRatios, PeerComparison } from "@/lib/data/types";
+import type { DataMeta } from "@/lib/stock/presentation";
+import { buildDataMeta, completenessScore, dedupeByKey, getCoverage } from "@/lib/stock/presentation";
+import { CoverageNotice, DataMetaInline, StickyMetricTable, type StickyMetricTableRow } from "@/components/stock/StockUiPrimitives";
+import { formatMoneyInCrores, formatPercent, formatRatio, MISSING_VALUE_LABEL } from "@/lib/utils/formatters";
 
 const METRICS = [
-  { key: "peTtm", label: "P/E (TTM)", suffix: "x" },
-  { key: "pb", label: "P/B", suffix: "x" },
-  { key: "roce", label: "ROCE", suffix: "%" },
-  { key: "roe", label: "ROE", suffix: "%" },
-  { key: "patMargin", label: "PAT Margin", suffix: "%" },
-  { key: "revenueGrowth1y", label: "Rev. Growth 1Y", suffix: "%" },
-  { key: "debtEquity", label: "D/E", suffix: "x" },
-  { key: "dividendYield", label: "Div. Yield", suffix: "%" },
+  { key: "peTtm", label: "P/E (TTM)", type: "ratio" as const },
+  { key: "pb", label: "P/B", type: "ratio" as const },
+  { key: "roce", label: "ROCE", type: "percent" as const },
+  { key: "roe", label: "ROE", type: "percent" as const },
+  { key: "patMargin", label: "PAT Margin", type: "percent" as const },
+  { key: "revenueGrowth1y", label: "Rev. Growth 1Y", type: "percent" as const },
+  { key: "debtEquity", label: "D/E", type: "ratio" as const },
+  { key: "dividendYield", label: "Div. Yield", type: "percent" as const },
 ];
-
-function fmt(v: number | null | undefined, suffix: string) {
-  if (v == null) return "—";
-  return `${v.toFixed(2)}${suffix}`;
-}
-
-function DiffBadge({ val, base }: { val: number | null; base: number | null }) {
-  if (val == null || base == null || base === 0) return <span className="text-muted-foreground text-xs">—</span>;
-  const diff = ((val - base) / Math.abs(base)) * 100;
-  if (diff > 5) return <TrendingUp size={11} className="text-green-400" />;
-  if (diff < -5) return <TrendingDown size={11} className="text-red-400" />;
-  return <Minus size={11} className="text-muted-foreground" />;
-}
 
 type CorrelationPeriod = "1y" | "3y" | "5y";
 
@@ -45,6 +36,22 @@ type PeerCorrelationResponse = {
   matrixSymbols: string[];
   matrix: Record<string, Record<string, number | null>>;
 };
+
+type PeersPayload = {
+  peers: PeerComparison[];
+  meta?: DataMeta;
+};
+
+type RankedPeer = PeerComparison & {
+  completeness: number;
+  marketCapGap: number;
+  displaySymbol: string;
+};
+
+function formatMetricValue(value: number | null | undefined, type: "ratio" | "percent"): string {
+  if (value == null) return MISSING_VALUE_LABEL;
+  return type === "percent" ? formatPercent(value, 2) : formatRatio(value, 2);
+}
 
 function corrColor(value: number | null | undefined) {
   if (value == null) return "var(--surface-elevated)";
@@ -64,6 +71,14 @@ function corrLabel(value: number | null | undefined) {
   return "Diversifies well";
 }
 
+function DiffBadge({ val, base }: { val: number | null | undefined; base: number | null | undefined }) {
+  if (val == null || base == null || base === 0) return <span className="text-muted-foreground text-xs">•</span>;
+  const diff = ((val - base) / Math.abs(base)) * 100;
+  if (diff > 5) return <TrendingUp size={11} className="text-green-500" />;
+  if (diff < -5) return <TrendingDown size={11} className="text-red-500" />;
+  return <Minus size={11} className="text-muted-foreground" />;
+}
+
 interface Props {
   symbol: string;
   currentRatios: Partial<ComputedRatios> | null;
@@ -71,21 +86,24 @@ interface Props {
 
 export function PeersSection({ symbol, currentRatios }: Props) {
   const [peers, setPeers] = useState<PeerComparison[]>([]);
+  const [peerMeta, setPeerMeta] = useState<DataMeta | null>(null);
   const [selfRatios, setSelfRatios] = useState<Partial<ComputedRatios> | null>(currentRatios);
   const [chartMetric, setChartMetric] = useState<string>("peTtm");
   const [correlationPeriod, setCorrelationPeriod] = useState<CorrelationPeriod>("1y");
   const [correlationData, setCorrelationData] = useState<PeerCorrelationResponse | null>(null);
   const [showMatrix, setShowMatrix] = useState(false);
+  const [showIncompletePeers, setShowIncompletePeers] = useState(false);
   const [loadedSymbol, setLoadedSymbol] = useState<string | null>(null);
   const [correlationKey, setCorrelationKey] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/stocks/${symbol}/peers`).then((r) => r.json()),
-      fetch(`/api/stocks/${symbol}/analytics`).then((r) => r.json()),
+      fetch(`/api/stocks/${symbol}/peers`).then((response) => response.json()),
+      fetch(`/api/stocks/${symbol}/analytics`).then((response) => response.json()),
     ])
-      .then(([peersPayload, analyticsPayload]) => {
+      .then(([peersPayload, analyticsPayload]: [PeersPayload, { ratios?: Partial<ComputedRatios> }]) => {
         setPeers(peersPayload.peers ?? []);
+        setPeerMeta(peersPayload.meta ?? null);
         setSelfRatios({
           ...currentRatios,
           ...(analyticsPayload?.ratios ?? {}),
@@ -94,6 +112,7 @@ export function PeersSection({ symbol, currentRatios }: Props) {
       })
       .catch(() => {
         setPeers([]);
+        setPeerMeta(null);
         setSelfRatios(currentRatios);
         setLoadedSymbol(symbol);
       });
@@ -102,7 +121,7 @@ export function PeersSection({ symbol, currentRatios }: Props) {
   useEffect(() => {
     const requestKey = `${symbol}-${correlationPeriod}`;
     fetch(`/api/stocks/${symbol}/peer-correlations?period=${correlationPeriod}`)
-      .then((r) => r.json())
+      .then((response) => response.json())
       .then((payload) => {
         setCorrelationData(payload);
         setCorrelationKey(requestKey);
@@ -116,16 +135,113 @@ export function PeersSection({ symbol, currentRatios }: Props) {
   const loading = loadedSymbol !== symbol;
   const correlationLoading = correlationKey !== `${symbol}-${correlationPeriod}`;
   const displayRatios = selfRatios ?? currentRatios;
+  const selectedMetric = METRICS.find((metric) => metric.key === chartMetric) ?? METRICS[0];
+  const subjectMarketCap = displayRatios?.marketCapCr ?? null;
 
-  const chartMetricDef = METRICS.find((m) => m.key === chartMetric) ?? METRICS[0];
+  const rankedPeers = useMemo<RankedPeer[]>(() => {
+    const deduped = dedupeByKey(peers, (peer) => `${(peer.name ?? "").trim().toLowerCase()}::${(peer.nseSymbol ?? peer.symbol ?? "").trim().toUpperCase()}`);
+    return deduped
+      .filter((peer) => (peer.nseSymbol ?? peer.symbol ?? "").toUpperCase() !== symbol)
+      .map((peer) => {
+        const completeness = completenessScore([
+          peer.peTtm,
+          peer.pb,
+          peer.roce,
+          peer.roe,
+          peer.patMargin,
+          peer.revenueGrowth1y,
+          peer.debtEquity,
+          peer.dividendYield,
+          peer.marketCapCr,
+        ]);
+
+        const marketCapGap = subjectMarketCap && peer.marketCapCr
+          ? Math.abs(((peer.marketCapCr - subjectMarketCap) / subjectMarketCap) * 100)
+          : Number.POSITIVE_INFINITY;
+
+        return {
+          ...peer,
+          displaySymbol: peer.nseSymbol ?? peer.symbol,
+          completeness,
+          marketCapGap,
+        };
+      })
+      .sort((left, right) => {
+        if (right.completeness !== left.completeness) return right.completeness - left.completeness;
+        return left.marketCapGap - right.marketCapGap;
+      });
+  }, [peers, subjectMarketCap, symbol]);
+
+  const completePeers = rankedPeers.filter((peer) => peer.completeness >= 0.625);
+  const incompletePeers = rankedPeers.filter((peer) => peer.completeness < 0.625);
+  const visiblePeers = showIncompletePeers ? [...completePeers, ...incompletePeers] : completePeers;
+
+  const effectiveMeta = peerMeta ?? buildDataMeta({
+    coverage: getCoverage([visiblePeers.length ? visiblePeers : null]),
+    note: "Only peers with comparable metric coverage are shown first.",
+  });
 
   const chartData = [
-    ...(displayRatios ? [{ name: symbol, value: (displayRatios as Record<string, number | null>)[chartMetric] ?? 0, isSelf: true }] : []),
-    ...peers.map((p) => ({
-      name: p.nseSymbol ?? p.name.slice(0, 8),
-      value: ((p as unknown as Record<string, number | null>)[chartMetric]) ?? 0,
+    ...(displayRatios ? [{
+      name: symbol,
+      value: (displayRatios as Record<string, number | null>)[chartMetric] ?? null,
+      isSelf: true,
+    }] : []),
+    ...completePeers.slice(0, 5).map((peer) => ({
+      name: peer.displaySymbol,
+      value: (peer as unknown as Record<string, number | null>)[chartMetric] ?? null,
       isSelf: false,
     })),
+  ];
+
+  const tableRows: StickyMetricTableRow[] = [
+    ...(displayRatios ? [{
+      key: `${symbol}-self`,
+      label: (
+        <div>
+          <div className="font-semibold" style={{ color: "var(--accent-brand)" }}>{symbol} ★</div>
+          <div className="text-xs" style={{ color: "var(--text-muted)" }}>Current company</div>
+        </div>
+      ),
+      values: Object.fromEntries([
+        ...METRICS.map((metric) => {
+          const value = (displayRatios as Record<string, number | null>)[metric.key] ?? null;
+          return [metric.key, <span className="font-mono metric-mono" key={metric.key}>{formatMetricValue(value, metric.type)}</span>];
+        }),
+        ["marketCapCr", <span className="font-mono metric-mono" key="marketCapCr">{formatMoneyInCrores((displayRatios as Record<string, number | null>).marketCapCr)}</span>],
+      ]),
+      rowClassName: "bg-muted/5",
+    }] : []),
+    ...visiblePeers.map((peer) => ({
+      key: peer.displaySymbol,
+      label: (
+        <div className="min-w-0">
+          <Link href={`/stocks/${peer.displaySymbol}`} className="font-medium hover:underline" style={{ color: "var(--text-primary)" }}>
+            {peer.displaySymbol}
+          </Link>
+          <div className="text-xs truncate" style={{ color: "var(--text-muted)" }}>{peer.name}</div>
+        </div>
+      ),
+      values: Object.fromEntries([
+        ...METRICS.map((metric) => {
+          const value = (peer as unknown as Record<string, number | null>)[metric.key] ?? null;
+          const baseValue = displayRatios ? (displayRatios as Record<string, number | null>)[metric.key] ?? null : null;
+          return [
+            metric.key,
+            <div key={`${peer.displaySymbol}-${metric.key}`} className="flex items-center justify-end gap-1">
+              <span className="font-mono metric-mono">{formatMetricValue(value, metric.type)}</span>
+              <DiffBadge val={value} base={baseValue} />
+            </div>,
+          ];
+        }),
+        ["marketCapCr", <span className="font-mono metric-mono" key={`${peer.displaySymbol}-marketCap`}>{formatMoneyInCrores(peer.marketCapCr)}</span>],
+      ]),
+    })),
+  ];
+
+  const tableColumns = [
+    ...METRICS.map((metric) => ({ key: metric.key, label: metric.label })),
+    { key: "marketCapCr", label: "Mkt Cap" },
   ];
 
   const tooltipStyle = {
@@ -134,6 +250,7 @@ export function PeersSection({ symbol, currentRatios }: Props) {
     borderRadius: "8px",
     fontSize: "12px",
   };
+
   const rankedCorrelations = [...(correlationData?.peers ?? [])]
     .filter((peer) => peer.correlation != null)
     .sort((left, right) => (right.correlation ?? -1) - (left.correlation ?? -1));
@@ -141,130 +258,146 @@ export function PeersSection({ symbol, currentRatios }: Props) {
   if (loading) {
     return (
       <section id="peers" className="scroll-mt-28">
-        <div className="p-6 rounded-xl border flex items-center justify-center h-64"
-          style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        <div className="p-6 rounded-xl border flex items-center justify-center h-64" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
           <div className="animate-spin w-8 h-8 rounded-full border-2 border-[var(--accent-brand)] border-t-transparent" />
         </div>
       </section>
     );
   }
 
-  if (peers.length === 0) {
+  if (rankedPeers.length === 0) {
     return (
       <section id="peers" className="scroll-mt-28">
-        <div className="p-6 rounded-xl border flex items-center justify-center h-32"
-          style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>No peer data available</p>
-        </div>
+        <CoverageNotice
+          meta={effectiveMeta}
+          title="Peer comparison unavailable"
+          message="No comparable peer set with enough market data is available for this company yet."
+        />
       </section>
     );
   }
 
   return (
     <section id="peers" className="scroll-mt-28 space-y-4">
-      <div className="p-6 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
-          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Competitive Positioning</h2>
+      <div className="p-6 rounded-xl border space-y-6" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Competitive Positioning</h2>
+            <div className="mt-2">
+              <DataMetaInline meta={effectiveMeta} />
+            </div>
+          </div>
           <div className="flex bg-muted/20 p-0.5 rounded-lg border border-border overflow-x-auto">
-            {METRICS.slice(0, 5).map((m) => (
-              <button key={m.key} onClick={() => setChartMetric(m.key)}
-                className={`flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${chartMetric === m.key ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}>
-                {m.label}
+            {METRICS.slice(0, 5).map((metric) => (
+              <button
+                key={metric.key}
+                onClick={() => setChartMetric(metric.key)}
+                className={`flex-shrink-0 px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${chartMetric === metric.key ? "bg-background shadow-sm text-foreground border border-border" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {metric.label}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Bar Chart comparison */}
-        <div className="h-56 mb-6">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.4} />
-              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--text-muted)" }}
-                tickFormatter={(v) => `${v}${chartMetricDef.suffix}`} width={44} />
-              <Tooltip contentStyle={tooltipStyle}
-                formatter={(v: unknown) => [`${(v as number).toFixed(2)}${chartMetricDef.suffix}`, chartMetricDef.label]} />
-              <Bar dataKey="value" radius={[3, 3, 0, 0]}
-                fill="var(--accent-brand)"
-                label={false}>
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,1.05fr)]">
+          <div className="rounded-xl border p-4" style={{ background: "var(--background)", borderColor: "var(--border)" }}>
+            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              Top comparable peers by {selectedMetric.label}
+            </div>
+            <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              Showing the current company plus the five most complete peers first.
+            </div>
+            <div className="h-64 mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 4, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.4} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--text-muted)" }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "var(--text-muted)" }} width={44} />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    formatter={(value: unknown) => [formatMetricValue(value as number, selectedMetric.type), selectedMetric.label]}
+                  />
+                  <Bar dataKey="value" radius={[3, 3, 0, 0]} fill="var(--accent-brand)" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
-        {/* Comparison Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                <th className="text-left py-2 pr-4 font-semibold" style={{ color: "var(--text-muted)" }}>Company</th>
-                {METRICS.map((m) => (
-                  <th key={m.key} className="text-right py-2 px-2 font-semibold whitespace-nowrap" style={{ color: "var(--text-muted)" }}>{m.label}</th>
-                ))}
-                <th className="text-right py-2 px-2 font-semibold" style={{ color: "var(--text-muted)" }}>Mkt Cap</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Self row highlighted */}
-              {displayRatios && (
-                <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--accent-subtle)" }}>
-                  <td className="py-2.5 pr-4 font-semibold" style={{ color: "var(--accent-brand)" }}>
-                    {symbol} ★
-                  </td>
-                  {METRICS.map((m) => {
-                    const val = (displayRatios as Record<string, number | null>)[m.key] ?? null;
-                    return (
-                      <td key={m.key} className="text-right py-2.5 px-2 font-mono font-medium" style={{ color: "var(--text-primary)" }}>
-                        {fmt(val, m.suffix)}
-                      </td>
-                    );
-                  })}
-                  <td className="text-right py-2.5 px-2 font-mono" style={{ color: "var(--text-primary)" }}>
-                    {(displayRatios as Record<string, number | null>).marketCapCr
-                      ? `₹${((displayRatios as Record<string, number | null>).marketCapCr! / 100).toFixed(0)}B`
-                      : "—"}
-                  </td>
-                </tr>
-              )}
-
-              {peers.map((p, i) => {
-                const peerRatios = p as unknown as Record<string, number | null | string>;
-                return (
-                  <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}
-                    className="hover:bg-[var(--surface-elevated)] transition-colors">
-                    <td className="py-2.5 pr-4">
-                      <Link href={`/stocks/${p.nseSymbol ?? p.symbol}`}
-                        className="font-medium hover:underline" style={{ color: "var(--text-primary)" }}>
-                        {p.nseSymbol ?? p.symbol}
+          <div className="rounded-xl border p-4" style={{ background: "var(--background)", borderColor: "var(--border)" }}>
+            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>Peer shortlist</div>
+            <div className="mt-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              Complete peers are sorted ahead of sparse rows so the table is decision-ready at first glance.
+            </div>
+            <div className="mt-4 space-y-3">
+              {completePeers.slice(0, 3).map((peer) => (
+                <div key={peer.displaySymbol} className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--border)", background: "var(--surface)" }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <Link href={`/stocks/${peer.displaySymbol}`} className="text-sm font-semibold hover:underline" style={{ color: "var(--text-primary)" }}>
+                        {peer.displaySymbol}
                       </Link>
-                      <div className="text-xs truncate max-w-28" style={{ color: "var(--text-muted)" }}>{p.name}</div>
-                    </td>
-                    {METRICS.map((m) => {
-                      const val = peerRatios[m.key] as number | null;
-                      const baseVal = displayRatios ? (displayRatios as Record<string, number | null>)[m.key] ?? null : null;
-                      return (
-                        <td key={m.key} className="text-right py-2.5 px-2">
-                          <div className="flex items-center justify-end gap-1">
-                            <span className="font-mono" style={{ color: "var(--text-primary)" }}>{fmt(val, m.suffix)}</span>
-                            <DiffBadge val={val} base={baseVal} />
-                          </div>
-                        </td>
-                      );
-                    })}
-                    <td className="text-right py-2.5 px-2 font-mono" style={{ color: "var(--text-muted)" }}>
-                      {peerRatios.marketCapCr
-                        ? `₹${((peerRatios.marketCapCr as number) / 100).toFixed(0)}B`
-                        : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      <div className="text-xs" style={{ color: "var(--text-muted)" }}>{peer.name}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold font-mono metric-mono" style={{ color: "var(--text-primary)" }}>
+                        {Math.round(peer.completeness * 100)}%
+                      </div>
+                      <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>metric coverage</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {completePeers.length === 0 ? (
+                <CoverageNotice
+                  meta={effectiveMeta}
+                  title="No complete peers yet"
+                  message="Comparable names were found, but none clear the completeness threshold for a first-glance table."
+                  action={
+                    incompletePeers.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowIncompletePeers(true)}
+                        className="text-xs font-medium"
+                        style={{ color: "var(--accent-brand)" }}
+                      >
+                        Show incomplete peers
+                      </button>
+                    ) : null
+                  }
+                />
+              ) : null}
+            </div>
+          </div>
         </div>
 
-        <div className="mt-6 border-t pt-6" style={{ borderColor: "var(--border)" }}>
+        {incompletePeers.length > 0 ? (
+          <CoverageNotice
+            meta={effectiveMeta}
+            title={showIncompletePeers ? "Incomplete peers shown" : "Incomplete peers hidden"}
+            message={showIncompletePeers
+              ? `${incompletePeers.length} lower-coverage rows are visible below for completeness, but they should not drive a first decision.`
+              : `${incompletePeers.length} lower-coverage peer rows are hidden by default so the compare table stays decision-ready.`}
+            action={
+              <button
+                type="button"
+                onClick={() => setShowIncompletePeers((value) => !value)}
+                className="text-xs font-medium"
+                style={{ color: "var(--accent-brand)" }}
+              >
+                {showIncompletePeers ? "Hide incomplete peers" : "Show incomplete peers"}
+              </button>
+            }
+          />
+        ) : null}
+
+        <StickyMetricTable
+          ariaLabel="Peer comparison table"
+          columns={tableColumns}
+          rows={tableRows}
+        />
+
+        <div className="border-t pt-6" style={{ borderColor: "var(--border)" }}>
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div>
               <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Peer Price Correlation</h3>
@@ -304,7 +437,7 @@ export function PeersSection({ symbol, currentRatios }: Props) {
                 {[
                   {
                     label: "Moves Most Like",
-                    symbol: correlationData.summary.closestPeer?.symbol ?? "—",
+                    symbol: correlationData.summary.closestPeer?.symbol ?? MISSING_VALUE_LABEL,
                     detail: correlationData.summary.closestPeer?.correlation != null
                       ? `${correlationData.summary.closestPeer.correlation.toFixed(2)} correlation`
                       : "No signal",
@@ -312,7 +445,7 @@ export function PeersSection({ symbol, currentRatios }: Props) {
                   },
                   {
                     label: "Best Diversifier",
-                    symbol: correlationData.summary.diversifier?.symbol ?? "—",
+                    symbol: correlationData.summary.diversifier?.symbol ?? MISSING_VALUE_LABEL,
                     detail: correlationData.summary.diversifier?.correlation != null
                       ? `${correlationData.summary.diversifier.correlation.toFixed(2)} correlation`
                       : "No signal",
@@ -322,20 +455,16 @@ export function PeersSection({ symbol, currentRatios }: Props) {
                     label: "Peer Basket Average",
                     symbol: correlationData.summary.averageCorrelation != null
                       ? correlationData.summary.averageCorrelation.toFixed(2)
-                      : "—",
+                      : MISSING_VALUE_LABEL,
                     detail: correlationData.summary.averageCorrelation != null
                       ? corrLabel(correlationData.summary.averageCorrelation)
                       : "No signal",
                     tone: corrColor(correlationData.summary.averageCorrelation),
                   },
                 ].map((card) => (
-                  <div
-                    key={card.label}
-                    className="rounded-xl border p-4"
-                    style={{ borderColor: "var(--border)", background: card.tone }}
-                  >
+                  <div key={card.label} className="rounded-xl border p-4" style={{ borderColor: "var(--border)", background: card.tone }}>
                     <div className="text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>{card.label}</div>
-                    <div className="mt-2 text-lg font-semibold font-mono" style={{ color: "var(--text-primary)" }}>{card.symbol}</div>
+                    <div className="mt-2 text-lg font-semibold font-mono metric-mono" style={{ color: "var(--text-primary)" }}>{card.symbol}</div>
                     <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>{card.detail}</div>
                   </div>
                 ))}
@@ -363,7 +492,7 @@ export function PeersSection({ symbol, currentRatios }: Props) {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-lg font-semibold font-mono" style={{ color: "var(--text-primary)" }}>
+                          <div className="text-lg font-semibold font-mono metric-mono" style={{ color: "var(--text-primary)" }}>
                             {peer.correlation?.toFixed(2)}
                           </div>
                           <div className="text-[11px]" style={{ color: "var(--text-muted)" }}>Correlation</div>
@@ -404,13 +533,13 @@ export function PeersSection({ symbol, currentRatios }: Props) {
                             return (
                               <td key={`${row}-${col}`} className="p-2">
                                 <div
-                                  className="mx-auto flex h-9 w-12 items-center justify-center rounded-lg font-mono"
+                                  className="mx-auto flex h-9 w-12 items-center justify-center rounded-lg font-mono metric-mono"
                                   style={{
                                     background: corrColor(value),
                                     color: "var(--text-primary)",
                                   }}
                                 >
-                                  {value != null ? value.toFixed(2) : "—"}
+                                  {value != null ? value.toFixed(2) : MISSING_VALUE_LABEL}
                                 </div>
                               </td>
                             );

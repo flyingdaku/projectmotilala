@@ -19,13 +19,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   useKeyboardShortcuts();
 
   return (
-    <div className="min-h-screen bg-[var(--background)]">
+    <div className="min-h-screen overflow-x-hidden bg-[var(--background)]">
       <TopBar />
       <div className="relative flex min-h-[calc(100vh-4rem)]">
         <Sidebar />
         <main
           className={cn(
-            "relative z-0 flex-1"
+            "relative z-0 flex-1 min-w-0 overflow-x-hidden"
           )}
           style={{ marginRight: watchlistWidth }}
         >
@@ -36,9 +36,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="flex w-full justify-center p-8"
+              className="flex w-full min-w-0 justify-center overflow-x-hidden p-4 md:p-8"
             >
-              <div className="w-full">
+              <div className="w-full min-w-0">
                 {children}
               </div>
             </motion.div>

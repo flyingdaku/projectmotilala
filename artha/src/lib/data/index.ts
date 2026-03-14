@@ -28,6 +28,7 @@ export interface StockDetail extends StockSummary {
   nseSymbol?: string;
   bseCode?: string;
   price?: number;
+  priceDate?: string;
   pctChange1d?: number;
   high52w?: number;
   low52w?: number;
@@ -246,6 +247,7 @@ function createMockAdapter(): DataAdapter {
         return {
           ...s,
           price: +(basePrice * (0.95 + Math.random() * 0.1)).toFixed(2),
+          priceDate: new Date().toISOString().slice(0, 10),
           pctChange1d: +((Math.random() - 0.48) * 4).toFixed(2),
           high52w: +(basePrice * 1.35).toFixed(2),
           low52w: +(basePrice * 0.72).toFixed(2),

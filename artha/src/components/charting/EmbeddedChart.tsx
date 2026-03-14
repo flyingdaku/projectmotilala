@@ -11,7 +11,7 @@
  * This replaces the previous recharts-based ChartSection.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useChartStore } from './store/useChartStore';
@@ -24,12 +24,9 @@ import type { IndicatorBase }  from './indicators/IndicatorBase';
 import { DARK_THEME, LIGHT_THEME } from './core/types';
 import type { Timeframe } from './core/types';
 import { Loader2 } from 'lucide-react';
-
-const QUICK_RANGES: { label: string; tf: Timeframe }[] = [
-  { label: '1D',  tf: '1D' },
-  { label: '1W',  tf: '1W' },
-  { label: '1M',  tf: '1M' },
-];
+import { buildDataMeta } from '@/lib/stock/presentation';
+import { DataMetaInline } from '@/components/stock/StockUiPrimitives';
+import { formatCurrency, formatDateLabel, formatSignedChange } from '@/lib/utils/formatters';
 
 const QUICK_PERIODS: { label: string; days: number; tf: Timeframe }[] = [
   { label: '1m',  days: 30,   tf: '1D' },
@@ -54,11 +51,38 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
   const activeInds = useRef<Map<string, IndicatorBase>>(new Map());
   const router = useRouter();
 
-  const { setSymbol, indicators, isDark, timeframe, setTimeframe, chartType, toggleFullscreen } = useChartStore();
+  const { setSymbol, indicators, isDark, timeframe, setTimeframe, chartType } = useChartStore();
+  const initialThemeRef = useRef(isDark);
   const [selectedPeriod, setSelectedPeriod] = useState('1y');
 
   const { bars, loading, error } = useChartData(symbol, timeframe);
-  const theme = isDark ? DARK_THEME : LIGHT_THEME;
+
+  const selectedWindowBars = useMemo(() => {
+    if (bars.length === 0) return [];
+    const config = QUICK_PERIODS.find((period) => period.label === selectedPeriod);
+    if (!config) return bars;
+    const anchorTime = bars[bars.length - 1]?.time ?? 0;
+    const cutoffTime = anchorTime - config.days * 86400;
+    const visible = bars.filter((bar) => bar.time >= cutoffTime);
+    return visible.length > 1 ? visible : bars;
+  }, [bars, selectedPeriod]);
+
+  const periodReturn = useMemo(() => {
+    if (selectedWindowBars.length < 2) return null;
+    const start = selectedWindowBars[0];
+    const end = selectedWindowBars[selectedWindowBars.length - 1];
+    if (!start?.open) return null;
+    return ((end.close - start.open) / start.open) * 100;
+  }, [selectedWindowBars]);
+
+  const chartMeta = useMemo(() => buildDataMeta({
+    asOf: selectedWindowBars[selectedWindowBars.length - 1]
+      ? new Date(selectedWindowBars[selectedWindowBars.length - 1].time * 1000).toISOString()
+      : null,
+    coverage: selectedWindowBars.length > 1 ? 1 : 0,
+    status: selectedWindowBars.length > 1 ? 'delayed' : 'unavailable',
+    note: selectedWindowBars.length > 0 ? `${selectedWindowBars.length} sessions in view` : 'No price history loaded',
+  }), [selectedWindowBars]);
 
   // Sync symbol into the store
   useEffect(() => {
@@ -71,7 +95,8 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
     if (!container) return;
 
     const engine = engineRef.current;
-    const chart  = engine.init(container, isDark);
+    const indicatorRegistry = activeInds.current;
+    const chart  = engine.init(container, initialThemeRef.current);
     pmRef.current = new PaneManager(chart);
     smRef.current = new SeriesManager(chart);
 
@@ -79,9 +104,8 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
       engine.destroy();
       pmRef.current = null;
       smRef.current = null;
-      activeInds.current.clear();
+      indicatorRegistry.clear();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Apply theme ────────────────────────────────────────────────────────────
@@ -155,7 +179,6 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
     } else {
       engine.fitContent();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bars, chartType, isDark, selectedPeriod]);
 
   // ── Sync indicators ────────────────────────────────────────────────────────
@@ -186,7 +209,6 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
     if (bars.length > 0) {
       activeInds.current.forEach(ind => ind.updateData(bars));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [indicators, bars, isDark]);
 
   // ── Period selector handler ────────────────────────────────────────────────
@@ -213,22 +235,38 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: 'var(--text-muted)' }}>Market Structure</div>
               <h2 className="mt-1 text-base font-semibold" style={{ color: 'var(--text-primary)' }}>Price Chart</h2>
+              <div className="mt-2 max-w-xl text-xs" style={{ color: 'var(--text-muted)' }}>
+                {periodReturn != null
+                  ? `${selectedPeriod.toUpperCase()} return ${formatSignedChange(periodReturn)} across ${selectedWindowBars.length} trading sessions.`
+                  : 'Use the compact chart for structure, not indicator overload.'}
+              </div>
             </div>
             {currentPrice != null && (
-              <div className="flex items-center gap-2 rounded-xl border px-3 py-2" style={{ background: 'var(--background)', borderColor: 'var(--border)' }}>
-                <span className="text-base font-bold font-mono" style={{ color: 'var(--text-primary)' }}>
-                  ₹{currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-                {priceChange != null && (
-                  <span className={`text-xs font-semibold font-mono ${isPos ? 'text-emerald-500' : isNeg ? 'text-rose-500' : 'text-muted-foreground'}`}>
-                    {isPos ? '+' : ''}{priceChange.toFixed(2)}%
+              <div className="rounded-xl border px-3 py-2" style={{ background: 'var(--background)', borderColor: 'var(--border)' }}>
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold font-mono metric-mono" style={{ color: 'var(--text-primary)' }}>
+                    {formatCurrency(currentPrice)}
                   </span>
-                )}
+                  {priceChange != null && (
+                    <span className={`text-xs font-semibold font-mono metric-mono ${isPos ? 'text-emerald-500' : isNeg ? 'text-rose-500' : 'text-muted-foreground'}`}>
+                      {formatSignedChange(priceChange)}
+                    </span>
+                  )}
+                </div>
+                {selectedWindowBars.length > 0 ? (
+                  <div className="mt-1 text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                    {formatDateLabel(new Date(selectedWindowBars[0].time * 1000).toISOString())} - {formatDateLabel(new Date(selectedWindowBars[selectedWindowBars.length - 1].time * 1000).toISOString())}
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            <div className="rounded-xl border px-3 py-2" style={{ background: 'var(--background)', borderColor: 'var(--border)' }}>
+              <DataMetaInline meta={chartMeta} />
+            </div>
+
             {/* Period selector */}
             <div className="flex rounded-xl border border-border bg-muted/20 p-0.5">
               {QUICK_PERIODS.map(p => (
@@ -284,7 +322,7 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
         {/* Footer hint */}
         <div className="flex items-center justify-between border-t px-5 py-3" style={{ borderColor: 'var(--border)' }}>
           <div className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
-            Review long-range structure here, then switch to fullscreen for indicators, drawings, and layouts.
+            Review long-range structure here first. Switch to fullscreen only for indicators, drawings, and intraday work.
           </div>
           <button
             onClick={handleOpenFullChart}

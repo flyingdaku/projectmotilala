@@ -4,15 +4,19 @@ import { Building2, Users, Globe, TrendingUp, Award } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { CompanyProfile } from "@/lib/data/types";
 import type { StockDetail } from "@/lib/data";
+import type { DataMeta } from "@/lib/stock/presentation";
+import { CoverageNotice, DataMetaInline } from "@/components/stock/StockUiPrimitives";
+import { formatPercent } from "@/lib/utils/formatters";
 
 const SEGMENT_COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#8B5CF6", "#EF4444", "#F97316", "#06B6D4"];
 
 interface Props {
   stock: StockDetail;
   profile: CompanyProfile | null;
+  meta?: DataMeta | null;
 }
 
-export function OverviewSection({ stock, profile }: Props) {
+export function OverviewSection({ stock, profile, meta }: Props) {
   const segments = profile?.businessSegments ?? [];
   const indexMemberships = profile?.indexMemberships ?? [];
 
@@ -22,6 +26,9 @@ export function OverviewSection({ stock, profile }: Props) {
         <div className="border-b px-5 py-4" style={{ borderColor: "var(--border)" }}>
           <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>Company Snapshot</div>
           <h2 className="mt-1 text-base font-semibold" style={{ color: "var(--text-primary)" }}>Overview</h2>
+          <div className="mt-2">
+            <DataMetaInline meta={meta ?? null} />
+          </div>
         </div>
         <div className="grid gap-4 p-5 xl:grid-cols-2">
           <div
@@ -155,24 +162,19 @@ export function OverviewSection({ stock, profile }: Props) {
                       <span style={{ color: "var(--text-secondary)" }}>{s.name}</span>
                     </div>
                     <span className="font-mono font-medium" style={{ color: "var(--text-primary)" }}>
-                      {s.revenuePct?.toFixed(1)}%
+                      {formatPercent(s.revenuePct, 1, { signed: false })}
                     </span>
                   </li>
                 ))}
               </ul>
             </div>
           ) : (
-            <div
+            <CoverageNotice
+              meta={meta ?? null}
+              title="Revenue mix unavailable"
+              message="Segment-level revenue contribution is not available for this company yet, so the donut is hidden until coverage improves."
               className="rounded-xl border p-5"
-              style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-            >
-              <h3 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                Revenue Mix
-              </h3>
-              <div className="flex h-[234px] items-center justify-center rounded-xl border border-dashed text-sm" style={{ borderColor: "var(--border)", color: "var(--text-muted)", background: "var(--surface-elevated)" }}>
-                Revenue mix data is not available.
-              </div>
-            </div>
+            />
           )}
         </div>
       </div>

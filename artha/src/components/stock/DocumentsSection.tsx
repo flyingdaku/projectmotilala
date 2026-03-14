@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import { FileText, Mic, Megaphone, Star, Download, ExternalLink, ChevronDown, ChevronUp, TrendingUp, Building2, Award } from "lucide-react";
 import type { CompanyDocument } from "@/lib/data/types";
+import type { DataMeta } from "@/lib/stock/presentation";
+import { buildDataMeta } from "@/lib/stock/presentation";
+import { CoverageNotice, DataMetaInline } from "@/components/stock/StockUiPrimitives";
 
 const DOC_TABS = [
   { key: "announcements", label: "Corporate Announcements", icon: Megaphone },
@@ -116,16 +119,32 @@ interface Props {
 
 export function DocumentsSection({ symbol }: Props) {
   const [documents, setDocuments] = useState<CompanyDocument[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("announcements");
+  const [meta, setMeta] = useState<DataMeta | null>(null);
+  const requestKey = `${symbol}-${activeTab}`;
 
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/stocks/${symbol}/documents?category=${activeTab}`)
       .then((r) => r.json())
-      .then((d) => setDocuments(d.documents ?? []))
-      .finally(() => setLoading(false));
-  }, [symbol, activeTab]);
+      .then((d) => {
+        setDocuments(d.documents ?? []);
+        setMeta(d.meta ?? null);
+        setLoadedKey(requestKey);
+      })
+      .catch(() => {
+        setDocuments([]);
+        setMeta(null);
+        setLoadedKey(requestKey);
+      });
+  }, [symbol, activeTab, requestKey]);
+
+  const effectiveMeta = meta ?? buildDataMeta({
+    asOfCandidates: [documents[0]?.docDate],
+    coverage: documents.length > 0 ? 1 : 0,
+    status: documents.length > 0 ? "partial" : "unavailable",
+  });
+  const loading = loadedKey !== requestKey;
 
   return (
     <section id="documents" className="scroll-mt-28">
@@ -137,6 +156,9 @@ export function DocumentsSection({ symbol }: Props) {
             <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>Documents & Filings</h2>
           </div>
           <p className="text-sm mt-1" style={{ color: "var(--text-muted)" }}>Corporate announcements, annual reports, concalls, and credit ratings</p>
+          <div className="mt-2">
+            <DataMetaInline meta={effectiveMeta} />
+          </div>
         </div>
 
         {/* Tabs */}
@@ -146,6 +168,7 @@ export function DocumentsSection({ symbol }: Props) {
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
+                aria-pressed={activeTab === key}
                 className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-all ${activeTab === key ? "" : "hover:bg-[var(--surface-elevated)]"}`}
                 style={{
                   borderColor: activeTab === key ? "var(--accent-brand)" : "transparent",
@@ -165,17 +188,21 @@ export function DocumentsSection({ symbol }: Props) {
               <div className="animate-spin w-8 h-8 rounded-full border-2 border-[var(--accent-brand)] border-t-transparent" />
             </div>
           ) : documents.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-48 gap-3">
-              {activeTab === "announcements" && <Megaphone size={40} style={{ color: "var(--text-muted)", opacity: 0.3 }} />}
-              {activeTab === "reports" && <FileText size={40} style={{ color: "var(--text-muted)", opacity: 0.3 }} />}
-              {activeTab === "concalls" && <Mic size={40} style={{ color: "var(--text-muted)", opacity: 0.3 }} />}
-              {activeTab === "ratings" && <Award size={40} style={{ color: "var(--text-muted)", opacity: 0.3 }} />}
-              {activeTab === "presentations" && <TrendingUp size={40} style={{ color: "var(--text-muted)", opacity: 0.3 }} />}
-              <div className="text-center">
-                <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>No {DOC_TABS.find(t => t.key === activeTab)?.label.toLowerCase()} available</p>
-                <p className="text-xs mt-1" style={{ color: "var(--text-muted)" }}>Data will be fetched from BSE India and other sources</p>
-              </div>
-            </div>
+            <CoverageNotice
+              meta={effectiveMeta}
+              title={`No ${DOC_TABS.find((tab) => tab.key === activeTab)?.label.toLowerCase()} yet`}
+              message={
+                activeTab === "announcements"
+                  ? "Corporate announcements have not been fetched for this company view yet."
+                  : activeTab === "reports"
+                    ? "Annual report coverage is missing or the latest filings have not been ingested."
+                    : activeTab === "concalls"
+                      ? "Concalls and transcripts are not connected for this issuer yet."
+                      : activeTab === "ratings"
+                        ? "Credit ratings are not available from the current document pipeline."
+                        : "Investor presentations are not available from the current pipeline."
+              }
+            />
           ) : (
             <div className="space-y-3">
               {documents.map((doc) => (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, Settings, BarChart2, User } from "lucide-react";
+import { Search, BarChart2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -12,7 +12,6 @@ export function TopBar() {
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<{ id: number; symbol: string; name: string }[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { toggleWatchlist } = useWatchlist();
@@ -20,7 +19,6 @@ export function TopBar() {
   useEffect(() => {
     if (!search.trim()) { setSearchResults([]); setSearchOpen(false); return; }
     const timer = setTimeout(async () => {
-      setSearchLoading(true);
       try {
         const res = await fetch(`/api/search?q=${encodeURIComponent(search)}&limit=8`);
         if (res.ok) {
@@ -28,7 +26,7 @@ export function TopBar() {
           setSearchResults(data.results ?? []);
           setSearchOpen(true);
         }
-      } finally { setSearchLoading(false); }
+      } finally { /* noop */ }
     }, 250);
     return () => clearTimeout(timer);
   }, [search]);
@@ -44,11 +42,11 @@ export function TopBar() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between h-14 px-4 border-b shrink-0"
+    <header className="sticky top-0 z-40 flex h-14 w-full min-w-0 items-center justify-between overflow-hidden border-b px-3 md:px-4 shrink-0"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
 
       {/* Left: Logo */}
-      <div className="flex items-center gap-2 min-w-[180px]">
+      <div className="flex min-w-0 shrink-0 items-center gap-2">
         <Link href="/dashboard" className="flex items-center gap-2 group">
           <Logo className="text-[var(--accent-brand)]" />
           <span className="font-bold text-[17px] tracking-tight" style={{ color: "var(--text-primary)" }}>
@@ -58,7 +56,7 @@ export function TopBar() {
       </div>
 
       {/* Center: Search */}
-      <div className="flex-1 flex justify-center max-w-2xl px-4">
+      <div className="flex min-w-0 flex-1 justify-center px-2 md:px-4">
         <div ref={searchRef} className="relative w-full max-w-md">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
             style={{ color: "var(--text-muted)" }} />
@@ -87,20 +85,13 @@ export function TopBar() {
       </div>
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-1.5 min-w-[200px] justify-end">
+      <div className="flex shrink-0 items-center gap-1.5 justify-end">
         {/* Watchlist */}
         <button
           onClick={toggleWatchlist}
           className="relative p-2 rounded-lg transition-all hover:bg-[var(--surface-elevated)] active:scale-95 group"
           style={{ color: "var(--text-muted)" }} title="Watchlist">
           <BarChart2 size={18} className="transition-colors group-hover:text-[var(--accent-brand)]" />
-        </button>
-
-        {/* Profile */}
-        <button
-          className="relative p-2 rounded-lg transition-all hover:bg-[var(--surface-elevated)] active:scale-95 group"
-          style={{ color: "var(--text-muted)" }} title="Profile">
-          <User size={18} className="transition-colors group-hover:text-[var(--accent-brand)]" />
         </button>
 
         {/* User initials / Avatar small */}
