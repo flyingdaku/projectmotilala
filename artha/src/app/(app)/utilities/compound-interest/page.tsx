@@ -117,7 +117,7 @@ export default function CompoundInterestPage() {
         {PRESETS.map((p, i) => (
           <Button
             key={p.label}
-            variant={presetIdx === i ? "default" : "outline"}
+            variant={presetIdx === i ? "selected" : "outline"}
             onClick={() => {
               setPresetIdx(i);
               setRate(p.rate);

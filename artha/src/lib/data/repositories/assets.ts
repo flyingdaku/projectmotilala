@@ -43,10 +43,10 @@ export class AssetRepository extends BaseRepository {
         const q = `%${query.toLowerCase()}%`;
         const rows = this.db.queryAll<{
             id: string; nse_symbol: string | null; bse_code: string | null;
-            name: string; sector: string | null; industry: string | null;
-            isin: string | null;
+            name: string; sector: string | null; industry_group: string | null;
+            industry: string | null; sub_industry: string | null; isin: string | null;
         }>(
-            `SELECT id, nse_symbol, bse_code, name, sector, industry, isin
+            `SELECT id, nse_symbol, bse_code, name, sector, industry_group, industry, sub_industry, isin
              FROM assets WHERE is_active = 1 AND (
                LOWER(nse_symbol) LIKE ? OR LOWER(name) LIKE ? OR bse_code LIKE ?
              ) ORDER BY
@@ -70,7 +70,9 @@ export class AssetRepository extends BaseRepository {
                 name: r.name,
                 exchange: r.nse_symbol ? "NSE" : "BSE",
                 sector: r.sector ?? undefined,
+                industryGroup: r.industry_group ?? undefined,
                 industry: r.industry ?? undefined,
+                subIndustry: r.sub_industry ?? undefined,
                 isin: r.isin ?? undefined,
                 assetClass: "EQUITY",
             });

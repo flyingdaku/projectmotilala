@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Calendar, Clock, TrendingUp, AlertCircle, ExternalLink } from "lucide-react";
-import { formatINR } from "@/lib/utils";
+import { Calendar, Clock, AlertCircle } from "lucide-react";
 
 type IpoStatus = "OPEN" | "UPCOMING" | "LISTED" | "CLOSED";
 
@@ -237,7 +236,7 @@ export default function IPOPage() {
                   )}
                   {(ipo.status === "OPEN" || ipo.status === "UPCOMING") && (
                     <button className="mt-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-                      style={{ background: "var(--accent-brand)", color: "#000" }}>
+                      style={{ background: "var(--accent-brand)", color: "var(--accent-foreground)" }}>
                       {ipo.status === "OPEN" ? "Apply Now" : "Set Reminder"}
                     </button>
                   )}

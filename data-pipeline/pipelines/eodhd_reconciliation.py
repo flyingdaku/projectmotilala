@@ -155,116 +155,116 @@ def reconcile_prices(trade_date: date, alert_on_major: bool = True) -> Dict[str,
     """
     logger.info(f"Reconciling prices for {trade_date}...")
     
-    conn = get_connection()
-    
-    # Get all assets with EODHD mappings
-    assets = conn.execute("""
-        SELECT DISTINCT a.id, a.nse_symbol, a.name
-        FROM assets a
-        JOIN eodhd_symbol_mapping esm ON a.id = esm.asset_id
-        WHERE a.is_active = 1 AND esm.is_active = 1
-    """).fetchall()
-    
-    logger.info(f"Reconciling {len(assets)} assets...")
-    
-    stats = {
-        "total": len(assets),
-        "match": 0,
-        "minor_deviation": 0,
-        "major_deviation": 0,
-        "missing_source": 0,
-        "eodhd_only": 0
-    }
-    
-    major_deviations = []
-    
-    for asset in assets:
-        asset_id = asset["id"]
-        nse_symbol = asset["nse_symbol"]
-        name = asset["name"]
+    with get_connection() as conn:
         
-        # Get price data from all sources
-        nse_data = get_price_data(conn, asset_id, trade_date, "NSE")
-        bse_data = get_price_data(conn, asset_id, trade_date, "BSE")
-        eodhd_nse_data = get_price_data(conn, asset_id, trade_date, "EODHD_NSE")
-        eodhd_bse_data = get_price_data(conn, asset_id, trade_date, "EODHD_BSE")
+        # Get all assets with EODHD mappings
+        assets = conn.execute("""
+            SELECT DISTINCT a.id, a.nse_symbol, a.name
+            FROM assets a
+            JOIN eodhd_symbol_mapping esm ON a.id = esm.asset_id
+            WHERE a.is_active = 1 AND esm.is_active = 1
+        """).fetchall()
         
-        # Determine status and flags
-        status, flags = determine_status_and_flags(
-            nse_data, bse_data, eodhd_nse_data, eodhd_bse_data
-        )
+        logger.info(f"Reconciling {len(assets)} assets...")
         
-        # Calculate deviations for storage
-        close_deviation = None
-        adj_close_deviation = None
+        stats = {
+            "total": len(assets),
+            "match": 0,
+            "minor_deviation": 0,
+            "major_deviation": 0,
+            "missing_source": 0,
+            "eodhd_only": 0
+        }
         
-        if nse_data and eodhd_nse_data:
-            close_deviation = calculate_deviation_pct(nse_data["close"], eodhd_nse_data["close"])
-            if nse_data["adj_close"] and eodhd_nse_data["adj_close"]:
-                adj_close_deviation = calculate_deviation_pct(
-                    nse_data["adj_close"], eodhd_nse_data["adj_close"]
-                )
+        major_deviations = []
         
-        # Insert reconciliation record
-        conn.execute("""
-            INSERT OR REPLACE INTO price_reconciliation
-            (id, asset_id, date, nse_close, bse_close, eodhd_nse_close, eodhd_bse_close,
-             internal_adj_close, eodhd_adj_close, close_deviation_pct, adj_close_deviation_pct,
-             volume_nse, volume_eodhd, status, flags, reconciled_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            generate_id(),
-            asset_id,
-            trade_date.isoformat(),
-            nse_data["close"] if nse_data else None,
-            bse_data["close"] if bse_data else None,
-            eodhd_nse_data["close"] if eodhd_nse_data else None,
-            eodhd_bse_data["close"] if eodhd_bse_data else None,
-            nse_data["adj_close"] if nse_data else None,
-            eodhd_nse_data["adj_close"] if eodhd_nse_data else None,
-            close_deviation,
-            adj_close_deviation,
-            nse_data["volume"] if nse_data else None,
-            eodhd_nse_data["volume"] if eodhd_nse_data else None,
-            status,
-            json.dumps(flags),
-            datetime.now().isoformat()
-        ))
+        for asset in assets:
+            asset_id = asset["id"]
+            nse_symbol = asset["nse_symbol"]
+            name = asset["name"]
+            
+            # Get price data from all sources
+            nse_data = get_price_data(conn, asset_id, trade_date, "NSE")
+            bse_data = get_price_data(conn, asset_id, trade_date, "BSE")
+            eodhd_nse_data = get_price_data(conn, asset_id, trade_date, "EODHD_NSE")
+            eodhd_bse_data = get_price_data(conn, asset_id, trade_date, "EODHD_BSE")
+            
+            # Determine status and flags
+            status, flags = determine_status_and_flags(
+                nse_data, bse_data, eodhd_nse_data, eodhd_bse_data
+            )
+            
+            # Calculate deviations for storage
+            close_deviation = None
+            adj_close_deviation = None
+            
+            if nse_data and eodhd_nse_data:
+                close_deviation = calculate_deviation_pct(nse_data["close"], eodhd_nse_data["close"])
+                if nse_data["adj_close"] and eodhd_nse_data["adj_close"]:
+                    adj_close_deviation = calculate_deviation_pct(
+                        nse_data["adj_close"], eodhd_nse_data["adj_close"]
+                    )
+            
+            # Insert reconciliation record
+            conn.execute("""
+                INSERT OR REPLACE INTO price_reconciliation
+                (id, asset_id, date, nse_close, bse_close, eodhd_nse_close, eodhd_bse_close,
+                 internal_adj_close, eodhd_adj_close, close_deviation_pct, adj_close_deviation_pct,
+                 volume_nse, volume_eodhd, status, flags, reconciled_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                generate_id(),
+                asset_id,
+                trade_date.isoformat(),
+                nse_data["close"] if nse_data else None,
+                bse_data["close"] if bse_data else None,
+                eodhd_nse_data["close"] if eodhd_nse_data else None,
+                eodhd_bse_data["close"] if eodhd_bse_data else None,
+                nse_data["adj_close"] if nse_data else None,
+                eodhd_nse_data["adj_close"] if eodhd_nse_data else None,
+                close_deviation,
+                adj_close_deviation,
+                nse_data["volume"] if nse_data else None,
+                eodhd_nse_data["volume"] if eodhd_nse_data else None,
+                status,
+                json.dumps(flags),
+                datetime.now().isoformat()
+            ))
+            
+            # Update stats
+            if status == "MATCH":
+                stats["match"] += 1
+            elif status == "MINOR_DEVIATION":
+                stats["minor_deviation"] += 1
+            elif status == "MAJOR_DEVIATION":
+                stats["major_deviation"] += 1
+                major_deviations.append({
+                    "symbol": nse_symbol or name,
+                    "nse_close": nse_data["close"] if nse_data else None,
+                    "eodhd_close": eodhd_nse_data["close"] if eodhd_nse_data else None,
+                    "deviation_pct": close_deviation,
+                    "flags": flags
+                })
+            elif status == "MISSING_SOURCE":
+                stats["missing_source"] += 1
+            elif status == "EODHD_ONLY":
+                stats["eodhd_only"] += 1
         
-        # Update stats
-        if status == "MATCH":
-            stats["match"] += 1
-        elif status == "MINOR_DEVIATION":
-            stats["minor_deviation"] += 1
-        elif status == "MAJOR_DEVIATION":
-            stats["major_deviation"] += 1
-            major_deviations.append({
-                "symbol": nse_symbol or name,
-                "nse_close": nse_data["close"] if nse_data else None,
-                "eodhd_close": eodhd_nse_data["close"] if eodhd_nse_data else None,
-                "deviation_pct": close_deviation,
-                "flags": flags
-            })
-        elif status == "MISSING_SOURCE":
-            stats["missing_source"] += 1
-        elif status == "EODHD_ONLY":
-            stats["eodhd_only"] += 1
-    
-    conn.commit()
-    conn.close()
-    
-    # Log results
-    logger.info("=" * 60)
-    logger.info(f"Price Reconciliation Results for {trade_date}:")
-    logger.info(f"  Total assets:       {stats['total']}")
-    logger.info(f"  Match:              {stats['match']}")
-    logger.info(f"  Minor deviations:   {stats['minor_deviation']}")
-    logger.info(f"  Major deviations:   {stats['major_deviation']}")
-    logger.info(f"  Missing source:     {stats['missing_source']}")
-    logger.info(f"  EODHD only:         {stats['eodhd_only']}")
-    logger.info("=" * 60)
-    
-    # Alert on major deviations
+        
+        
+        
+        # Log results
+        logger.info("=" * 60)
+        logger.info(f"Price Reconciliation Results for {trade_date}:")
+        logger.info(f"  Total assets:       {stats['total']}")
+        logger.info(f"  Match:              {stats['match']}")
+        logger.info(f"  Minor deviations:   {stats['minor_deviation']}")
+        logger.info(f"  Major deviations:   {stats['major_deviation']}")
+        logger.info(f"  Missing source:     {stats['missing_source']}")
+        logger.info(f"  EODHD only:         {stats['eodhd_only']}")
+        logger.info("=" * 60)
+        
+        # Alert on major deviations
     if alert_on_major and major_deviations:
         alert_msg = f"⚠️ EODHD Price Reconciliation Alert - {trade_date}\n\n"
         alert_msg += f"Found {len(major_deviations)} major deviations:\n\n"

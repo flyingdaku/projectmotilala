@@ -11,12 +11,12 @@ export interface NavSection {
 
 const SECTIONS: NavSection[] = [
   { id: "overview", label: "Overview" },
-  { id: "chart", label: "Chart" },
+  { id: "chart", label: "Price Chart" },
   { id: "financials", label: "Financials" },
   { id: "ownership", label: "Ownership" },
   { id: "documents", label: "Docs" },
   { id: "analytics", label: "Analytics" },
-  { id: "peers", label: "Peers" },
+  { id: "peers", label: "Peer Comparison" },
 ];
 
 export function SectionNav() {
@@ -60,7 +60,7 @@ export function SectionNav() {
 
   return (
     <nav
-      className="sticky top-14 z-40 border-b px-6 backdrop-blur-xl"
+      className="sticky top-[56px] z-30 border-b px-6 backdrop-blur-xl -mx-4 md:-mx-8 -mt-4 md:-mt-8 mb-4 md:mb-8"
       style={{ background: "color-mix(in srgb, var(--background) 94%, transparent)", borderColor: "var(--border)" }}
     >
       {/* Desktop nav */}

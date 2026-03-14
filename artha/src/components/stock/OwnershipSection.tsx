@@ -303,7 +303,7 @@ export function OwnershipSection({ symbol }: Props) {
                   { label: "Independent Directors", val: data.governance.independentDirectorsPct, suffix: "%" },
                   { label: "Board Size", val: data.governance.boardSize, suffix: "" },
                   { label: "CEO Tenure", val: data.governance.ceoTenureYears, suffix: " yrs" },
-                  { label: "Audit Opinion", val: null, text: data.governance.auditOpinion ?? "Unavailable" },
+                  { label: "Audit Opinion", val: null, text: data.governance.auditOpinion ?? "-" },
                 ].map((item) => (
                   <div key={item.label} className="flex justify-between">
                     <span style={{ color: "var(--text-muted)" }}>{item.label}</span>

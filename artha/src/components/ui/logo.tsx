@@ -8,8 +8,8 @@ interface LogoProps extends React.SVGProps<SVGSVGElement> {
 
 export function Logo({ className, gradient = false, ...props }: LogoProps) {
   return (
-    <svg 
-      viewBox="0 0 100 100" 
+    <svg
+      viewBox="0 0 96 96"
       fill="none" 
       xmlns="http://www.w3.org/2000/svg"
       className={cn("w-8 h-8", className)}
@@ -17,26 +17,32 @@ export function Logo({ className, gradient = false, ...props }: LogoProps) {
     >
       {gradient && (
         <defs>
-          <linearGradient id="artha-amber" x1="0" y1="0" x2="100" y2="100">
-            <stop offset="0%" stopColor="#F59E0B" />
-            <stop offset="100%" stopColor="#D97706" />
+          <linearGradient id="artha-signal" x1="12" y1="12" x2="84" y2="84">
+            <stop offset="0%" stopColor="#6366F1" />
+            <stop offset="100%" stopColor="#4338CA" />
           </linearGradient>
         </defs>
       )}
-      
-      <circle cx="50" cy="50" r="48" fill="var(--background)" />
-      
-      <g stroke={gradient ? 'url(#artha-amber)' : 'currentColor'} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-        {/* Core 8-pointed star/chakra arcs */}
-        <path d="M50 15 L50 35 M50 65 L50 85" />
-        <path d="M15 50 L35 50 M65 50 L85 50" />
-        
-        <path d="M25 25 L40 40 M60 60 L75 75" />
-        <path d="M75 25 L60 40 M40 60 L25 75" />
-        
-        {/* Inner connecting arcs */}
-        <circle cx="50" cy="50" r="18" fill="none" strokeWidth="2" />
-        <circle cx="50" cy="50" r="6" fill={gradient ? 'url(#artha-amber)' : 'currentColor'} stroke="none" />
+
+      <rect x="8" y="8" width="80" height="80" rx="24" fill="currentColor" opacity="0.12" />
+
+      <g
+        stroke={gradient ? "url(#artha-signal)" : "currentColor"}
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M18 59C24 59 26 42 32 42C37 42 38 51 44 51C50 51 50 29 58 29C65 29 64 44 72 44" />
+        <path d="M20 68L74 68" opacity="0.28" />
+        <path d="M62 22L74 22L74 34" />
+        <path d="M58 38L74 22" />
+      </g>
+
+      <g fill={gradient ? "url(#artha-signal)" : "currentColor"}>
+        <circle cx="32" cy="42" r="3.25" />
+        <circle cx="44" cy="51" r="3.25" />
+        <circle cx="58" cy="29" r="3.25" />
+        <circle cx="72" cy="44" r="3.25" />
       </g>
     </svg>
   )

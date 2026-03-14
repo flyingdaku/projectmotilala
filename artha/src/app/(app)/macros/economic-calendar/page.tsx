@@ -67,7 +67,7 @@ export default function EconomicCalendarPage() {
               className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors"
               style={{
                 background: filter === c ? "var(--accent-brand)" : "var(--surface-elevated)",
-                color: filter === c ? "#000" : "var(--text-secondary)",
+                color: filter === c ? "var(--accent-foreground)" : "var(--text-secondary)",
                 border: "1px solid var(--border)",
               }}>
               {c === "ALL" ? "All Countries" : c === "IN" ? "🇮🇳 India" : "🇺🇸 US"}

@@ -197,7 +197,7 @@ export default function FeedPage() {
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
             <span className="px-2.5 py-1 rounded-full text-xs font-bold"
-              style={{ background: "var(--accent-brand)", color: "black" }}>
+              style={{ background: "var(--accent-brand)", color: "var(--accent-foreground)" }}>
               {unreadCount} unread
             </span>
           )}
@@ -229,7 +229,7 @@ export default function FeedPage() {
           <span className="text-xs flex-shrink-0" style={{ color: "var(--text-muted)" }}>Severity:</span>
           {severities.map((s) => (
             <button key={s} onClick={() => setFilterSeverity(s)}
-              className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterSeverity === s ? "text-black" : ""}`}
+              className={`flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterSeverity === s ? "text-[var(--accent-foreground)]" : ""}`}
               style={{
                 background: filterSeverity === s ? "var(--accent-brand)" : "var(--surface-elevated)",
                 color: filterSeverity === s ? "black" : "var(--text-secondary)",
@@ -285,7 +285,7 @@ export default function FeedPage() {
           {feed.length === 0 && (
             <Link href="/screener"
               className="px-4 py-2 rounded-lg text-sm font-semibold"
-              style={{ background: "var(--accent-brand)", color: "black" }}>
+              style={{ background: "var(--accent-brand)", color: "var(--accent-foreground)" }}>
               Discover Companies
             </Link>
           )}

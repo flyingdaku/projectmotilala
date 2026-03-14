@@ -218,7 +218,7 @@ export default function BacktestPage() {
             <div className="flex gap-1">
               {(["lumpsum", "sip"] as const).map((m) => (
                 <button key={m} onClick={() => setMode(m)} className="flex-1 py-1.5 rounded-md text-xs font-medium transition-all"
-                  style={mode === m ? { background: "var(--accent-brand)", color: "var(--accent-foreground)" } : { background: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+                  style={mode === m ? { background: "var(--selection-bg)", color: "var(--selection-text)", border: "1px solid var(--selection-border)" } : { background: "var(--surface)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
                   {m === "sip" ? "SIP" : "Lump Sum"}
                 </button>
               ))}
@@ -391,7 +391,7 @@ export default function BacktestPage() {
                         <span className="text-xs" style={{ color: "var(--text-muted)" }}>Window:</span>
                         {[3, 5, 7, 10].map((w) => (
                           <button key={w} onClick={() => setRollingWindow(w)} className="px-2.5 py-1 rounded text-xs font-medium"
-                            style={rollingWindow === w ? { background: "var(--accent-brand)", color: "var(--accent-foreground)" } : { background: "var(--surface-elevated)", color: "var(--text-muted)" }}>
+                            style={rollingWindow === w ? { background: "var(--selection-bg)", color: "var(--selection-text)", border: "1px solid var(--selection-border)" } : { background: "var(--surface-elevated)", color: "var(--text-muted)", border: "1px solid transparent" }}>
                             {w}Y
                           </button>
                         ))}

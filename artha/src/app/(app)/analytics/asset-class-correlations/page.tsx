@@ -12,6 +12,7 @@ import {
   START_YEAR, END_YEAR, ANNUAL_RETURNS, INDIA_CPI,
   assetCorrelation, computeAssetMetrics
 } from "@/lib/india-historical-data";
+import { Switch } from "@/components/ui/switch";
 import { formatINR } from "@/lib/utils";
 
 // Distinct colors for up to 6 assets
@@ -250,32 +251,12 @@ export default function AssetCorrelationsPage() {
 
               <div className="pt-2 border-t space-y-3" style={{ borderColor: "var(--border)" }}>
                 <label className="flex items-center gap-2 text-sm cursor-pointer group">
-                  <div className="relative flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={inflationAdjusted}
-                      onChange={(e) => setInflationAdjusted(e.target.checked)}
-                      className="peer sr-only"
-                    />
-                    <div className="w-10 h-5 bg-[var(--surface-elevated)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-[var(--background)] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[var(--background)] after:border-[var(--border)] after:border after:rounded-full after:h-4 after:w-4 after:transition-all"
-                         style={inflationAdjusted ? { background: "var(--accent-brand)" } : {}}
-                    ></div>
-                  </div>
+                  <Switch checked={inflationAdjusted} onChange={(e) => setInflationAdjusted(e.target.checked)} />
                   <span style={{ color: "var(--text-primary)" }}>Inflation Adjusted (Real)</span>
                 </label>
                 
                 <label className="flex items-center gap-2 text-sm cursor-pointer group">
-                  <div className="relative flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={logScale}
-                      onChange={(e) => setLogScale(e.target.checked)}
-                      className="peer sr-only"
-                    />
-                    <div className="w-10 h-5 bg-[var(--surface-elevated)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-[var(--background)] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[var(--background)] after:border-[var(--border)] after:border after:rounded-full after:h-4 after:w-4 after:transition-all"
-                         style={logScale ? { background: "var(--accent-brand)" } : {}}
-                    ></div>
-                  </div>
+                  <Switch checked={logScale} onChange={(e) => setLogScale(e.target.checked)} />
                   <span style={{ color: "var(--text-primary)" }}>Logarithmic Scale</span>
                 </label>
               </div>

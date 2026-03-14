@@ -84,9 +84,9 @@ export function FollowButton({ symbol }: Props) {
       <button
         onClick={handleToggle}
         disabled={loading}
-        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all active:scale-95 ${
+        className={`flex items-center gap-2 h-9 px-4 rounded-lg text-sm font-semibold transition-all active:scale-95 ${
           isFollowing
-            ? "bg-[var(--accent-brand)] text-black"
+            ? "bg-[var(--accent-brand)] text-[var(--accent-foreground)]"
             : "border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)] hover:text-[var(--text-primary)]"
         }`}
       >
@@ -106,7 +106,7 @@ export function FollowButton({ symbol }: Props) {
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
-            className="p-2 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-lg border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-elevated)] transition-colors"
             title="Alert settings"
           >
             <Bell size={14} />

@@ -1,4 +1,4 @@
-const DEFAULT_FALLBACK = "Unavailable";
+const DEFAULT_FALLBACK = "-";
 
 const DATE_FORMATTER = new Intl.DateTimeFormat("en-IN", {
   day: "2-digit",

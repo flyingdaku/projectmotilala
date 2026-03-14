@@ -39,7 +39,9 @@ export interface StockSummary {
   name: string;
   exchange?: string;
   sector?: string;
+  industryGroup?: string;
   industry?: string;
+  subIndustry?: string;
   isin?: string;
   assetClass?: string;
 }
@@ -171,6 +173,9 @@ export interface CashFlow {
   cashFromInvesting?: number | null;
   financingCF?: number | null;
   cashFromFinancing?: number | null;
+  netChangeInCash?: number | null;
+  cashBeginOfYear?: number | null;
+  cashEndOfYear?: number | null;
   freeCF?: number | null;
   freeCashFlow?: number | null;
   capex?: number | null;

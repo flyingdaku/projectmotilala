@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 UNIFIED_FIELDS = [
     'revenue', 'operating_profit', 'ebit', 'interest', 'pbt', 'tax', 'pat', 'eps',
     'total_assets', 'total_equity', 'total_debt', 'cash_equivalents', 'trade_receivables',
-    'cfo', 'cash_from_investing', 'cash_from_financing', 'capex', 'fcf',
-    'book_value_per_share', 'shares_outstanding'
+    'cfo', 'cash_from_investing', 'cash_from_financing', 'net_change_in_cash', 'cash_begin_of_year', 'cash_end_of_year',
+    'capex', 'fcf', 'book_value_per_share', 'shares_outstanding'
 ]
 
 def map_nse_field(row: Dict, field: str) -> Optional[float]:
@@ -96,6 +96,9 @@ def map_msi_field(q: Dict, bs: Dict, cf: Dict, ratios: Dict, field: str) -> Opti
     if field == 'cfo': return cf.get('net_cash_operating') if cf else None
     if field == 'cash_from_investing': return cf.get('net_cash_investing') if cf else None
     if field == 'cash_from_financing': return cf.get('net_cash_financing') if cf else None
+    if field == 'net_change_in_cash': return cf.get('net_change_in_cash') if cf else None
+    if field == 'cash_begin_of_year': return cf.get('cash_begin_of_year') if cf else None
+    if field == 'cash_end_of_year': return cf.get('cash_end_of_year') if cf else None
     if field == 'capex':
         if not cf:
             return None
@@ -156,6 +159,9 @@ def map_screener_field(q: Dict, bs: Dict, cf: Dict, field: str) -> Optional[floa
     if field == 'cfo': return cf.get('cash_from_operating') if cf else None
     if field == 'cash_from_investing': return cf.get('cash_from_investing') if cf else None
     if field == 'cash_from_financing': return cf.get('cash_from_financing') if cf else None
+    if field == 'net_change_in_cash': return cf.get('net_cash_flow') if cf else None
+    if field == 'cash_begin_of_year': return None
+    if field == 'cash_end_of_year': return None
     if field == 'capex': return cf.get('cash_from_investing') if cf else None
     if field == 'fcf':
         if cf and cf.get('cash_from_operating') is not None and cf.get('cash_from_investing') is not None:
@@ -172,6 +178,9 @@ def _ensure_fundamentals_columns(conn):
         'trade_receivables': 'REAL',
         'cash_from_investing': 'REAL',
         'cash_from_financing': 'REAL',
+        'net_change_in_cash': 'REAL',
+        'cash_begin_of_year': 'REAL',
+        'cash_end_of_year': 'REAL',
     }
     for column, col_type in wanted.items():
         if column not in existing:

@@ -18,11 +18,10 @@ export function StickyMetricsBar({ stock, meta, visible }: Props) {
 
   return (
     <div
-      className={`sticky top-0 z-40 w-full transition-transform duration-300 ${visible ? "translate-y-0" : "-translate-y-full h-0 overflow-hidden"
+      className={`w-full transition-all duration-300 ${visible ? "h-auto opacity-100 py-3" : "h-0 opacity-0 overflow-hidden py-0"
         }`}
       style={{
-        background: "var(--surface)",
-        backdropFilter: "blur(8px)",
+        borderBottom: visible ? "1px solid var(--border)" : "none"
       }}
     >
       <div className="mx-auto w-full max-w-[1180px] px-4 py-3 md:px-6">

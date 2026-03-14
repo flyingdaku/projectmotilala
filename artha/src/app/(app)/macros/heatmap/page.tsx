@@ -114,10 +114,10 @@ export default function HeatmapPage() {
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Returns</label>
           <div className="flex gap-1">
-            <Button onClick={() => setInflationAdjusted(false)} variant={!inflationAdjusted ? "default" : "outline"} className="text-xs h-8 px-3">
+            <Button onClick={() => setInflationAdjusted(false)} variant={!inflationAdjusted ? "selected" : "outline"} className="text-xs h-8 px-3">
               Nominal
             </Button>
-            <Button onClick={() => setInflationAdjusted(true)} variant={inflationAdjusted ? "default" : "outline"} className="text-xs h-8 px-3">
+            <Button onClick={() => setInflationAdjusted(true)} variant={inflationAdjusted ? "selected" : "outline"} className="text-xs h-8 px-3">
               Real (CPI-adjusted)
             </Button>
           </div>

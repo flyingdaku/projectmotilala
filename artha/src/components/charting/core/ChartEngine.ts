@@ -17,7 +17,7 @@ import {
   type ChartOptions,
 } from 'lightweight-charts';
 import type { ChartTheme, CrosshairData, OHLCVBar } from './types';
-import { LIGHT_THEME, DARK_THEME } from './types';
+import { LIGHT_THEME } from './types';
 
 type CrosshairSubscriber = (data: CrosshairData) => void;
 
@@ -26,16 +26,16 @@ export class ChartEngine {
   private _container: HTMLElement | null = null;
   private _resizeObserver: ResizeObserver | null = null;
   private _crosshairSubs: Set<CrosshairSubscriber> = new Set();
-  private _theme: ChartTheme = DARK_THEME;
+  private _theme: ChartTheme = LIGHT_THEME;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
   /** Initialise the chart into the given DOM container. */
-  init(container: HTMLElement, dark = true): IChartApi {
+  init(container: HTMLElement, theme: ChartTheme = LIGHT_THEME): IChartApi {
     if (this._chart) this.destroy();
 
     this._container = container;
-    this._theme = dark ? DARK_THEME : LIGHT_THEME;
+    this._theme = theme;
 
     this._chart = createChart(container, this._buildOptions(this._theme));
 
@@ -98,8 +98,8 @@ export class ChartEngine {
   // ── Theme ──────────────────────────────────────────────────────────────────
 
   /** Switch between light and dark themes at runtime. */
-  applyTheme(dark: boolean): void {
-    this._theme = dark ? DARK_THEME : LIGHT_THEME;
+  applyTheme(theme: ChartTheme): void {
+    this._theme = theme;
     this._chart?.applyOptions(this._buildOptions(this._theme));
   }
 

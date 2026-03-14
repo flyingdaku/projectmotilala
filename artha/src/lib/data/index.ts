@@ -44,6 +44,8 @@ export interface StockDetail extends StockSummary {
   faceValue?: number;
   isin?: string;
   listedDate?: string;
+  industryGroup?: string;
+  subIndustry?: string;
 }
 
 // ── Mock data stores ─────────────────────────────────────────────────────────

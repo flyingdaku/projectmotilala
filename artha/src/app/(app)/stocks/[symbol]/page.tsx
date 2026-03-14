@@ -3,23 +3,21 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Globe, Building2, Users, Award } from "lucide-react";
 import { SectionNav } from "@/components/stock/SectionNav";
 import { EmbeddedChart } from "@/components/charting/EmbeddedChart";
-import { OverviewSection } from "@/components/stock/OverviewSection";
 import { FinancialsSection } from "@/components/stock/FinancialsSection";
 import { OwnershipSection } from "@/components/stock/OwnershipSection";
 import { DocumentsSection } from "@/components/stock/DocumentsSection";
 import { AnalyticsSection } from "@/components/stock/AnalyticsSection";
 import { PeersSection } from "@/components/stock/PeersSection";
 import { FollowButton } from "@/components/stock/FollowButton";
-import { StickyMetricsBar } from "@/components/stock/StickyMetricsBar";
 import { FloatingNavButton } from "@/components/stock/FloatingNavButton";
 import { getSectorEmoji } from "@/lib/utils/emojis";
 import type { StockDetail } from "@/lib/data";
 import type { CompanyProfile } from "@/lib/data/types";
 import type { DataMeta } from "@/lib/stock/presentation";
-import { DataMetaInline, MetricValue } from "@/components/stock/StockUiPrimitives";
+import { DataMetaInline, DataValue } from "@/components/stock/StockUiPrimitives";
 import {
   formatCurrency,
   formatMetricRange,
@@ -48,7 +46,6 @@ export default function StockPage() {
   const [overviewMeta, setOverviewMeta] = useState<OverviewResponse["meta"]>(null);
   const [loadedSymbol, setLoadedSymbol] = useState("");
   const [notFound, setNotFound] = useState(false);
-  const [showStickyBar, setShowStickyBar] = useState(false);
   const [showFullDescription, setShowFullDescription] = useState(false);
 
   useEffect(() => {
@@ -77,15 +74,6 @@ export default function StockPage() {
         setLoadedSymbol(symbol);
       });
   }, [symbol]);
-
-  // Scroll detection for sticky bar
-  useEffect(() => {
-    const handleScroll = () => {
-      setShowStickyBar(window.scrollY > 200);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   const loading = loadedSymbol !== symbol;
 
@@ -128,26 +116,24 @@ export default function StockPage() {
   ];
   const identityChips = [
     stock.sector ? `${getSectorEmoji(stock.sector)} ${stock.sector}` : null,
+    stock.industryGroup ?? null,
     stock.industry ?? null,
+    stock.subIndustry ?? null,
     stock.exchange ?? (stock.nseSymbol || stock.bseCode ? "NSE/BSE" : null),
-    ...(profile?.indexMemberships?.slice(0, 3) ?? []),
   ].filter(Boolean) as string[];
   const summaryText = profile?.descriptionShort
     ?? `${stock.name} is a listed Indian company${stock.industry ? ` operating in ${stock.industry}` : ""}${stock.sector ? ` within the ${stock.sector} sector` : ""}.`;
 
   return (
     <div className="w-full min-w-0 pb-12">
-      {/* Sticky Metrics Bar */}
-      {stock && <StickyMetricsBar stock={stock} meta={overviewMeta?.hero ?? null} visible={showStickyBar} />}
-
       <SectionNav />
 
       {/* Floating Navigation Button (Mobile) */}
       <FloatingNavButton />
 
-      <div className="mx-auto mt-6 w-full max-w-[1180px] overflow-hidden rounded-[28px] border" style={{ background: "var(--surface)", borderColor: "var(--border)", boxShadow: "0 18px 40px rgba(10,15,28,0.06)" }}>
+      <div className="mx-auto mt-6 w-full max-w-[1180px]">
         {/* Stock Header */}
-        <div className="border-b px-6 pb-8 pt-6" style={{ background: "linear-gradient(180deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 88%, transparent) 100%)", borderColor: "var(--border)" }}>
+        <div className="rounded-xl border px-6 pb-8 pt-6 mb-10" style={{ background: "#fff", borderColor: "var(--border)" }}>
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -180,6 +166,40 @@ export default function StockPage() {
                           </span>
                         ))}
                       </div>
+
+                      {/* Key Facts merged from OverviewSection */}
+                      <div className="mt-3 flex items-center gap-4 flex-wrap text-xs">
+                        {profile?.website && (
+                          <a href={profile.website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors">
+                            <Globe size={13} className="text-[var(--accent-brand)]" />
+                            {profile.website.replace(/^https?:\/\//, "")}
+                          </a>
+                        )}
+                        {profile?.foundedYear && (
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Building2 size={13} className="text-[var(--accent-brand)]" />
+                            Founded {profile.foundedYear}
+                          </span>
+                        )}
+                        {profile?.employees && (
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Users size={13} className="text-[var(--accent-brand)]" />
+                            {profile.employees} employees
+                          </span>
+                        )}
+                        {profile?.headquarters && (
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Building2 size={13} className="text-[var(--accent-brand)]" />
+                            HQ: {profile.headquarters}
+                          </span>
+                        )}
+                        {profile?.creditRating && (
+                          <span className="flex items-center gap-1.5 text-muted-foreground">
+                            <Award size={13} className="text-[var(--accent-brand)]" />
+                            Rating: {profile.creditRating} {profile.creditRatingAgency ? `(${profile.creditRatingAgency})` : ""}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -188,14 +208,10 @@ export default function StockPage() {
                       {formatCurrency(stock.price)}
                     </span>
                     {stock.pctChange1d != null && (
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold font-mono ${isPos ? "text-emerald-500 bg-emerald-500/10" : isNeg ? "text-rose-500 bg-rose-500/10" : "text-muted-foreground bg-muted/20"}`}>
-                        {isPos ? <TrendingUp size={14} /> : isNeg ? <TrendingDown size={14} /> : <Minus size={14} />}
+                      <div className="flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold font-mono" style={{ color: "var(--text-primary)" }}>
                         {formatSignedChange(stock.pctChange1d)}
-                      </span>
+                      </div>
                     )}
-                  </div>
-                  <div className="mt-2">
-                    <DataMetaInline meta={overviewMeta?.hero ?? null} />
                   </div>
                 </div>
 
@@ -209,30 +225,12 @@ export default function StockPage() {
                   <div key={metric.label} className="rounded-xl border px-4 py-3" style={{ background: "var(--background)", borderColor: "var(--border)" }}>
                     <div className="text-[10px] font-semibold uppercase tracking-[0.18em]" style={{ color: "var(--text-muted)" }}>{metric.label}</div>
                     <div className="mt-2 text-base font-semibold" style={{ color: "var(--text-primary)" }}>
-                      <MetricValue value={metric.value} reason={metric.reason} className="metric-mono" />
+                      <DataValue value={metric.value} reason={metric.reason} className="metric-mono" />
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="mt-5 rounded-xl border px-4 py-4" style={{ background: "var(--surface-elevated)", borderColor: "var(--border)" }}>
-                <p className={`text-sm leading-6 ${showFullDescription ? "" : "line-clamp-2"}`} style={{ color: "var(--text-secondary)" }}>
-                  {summaryText}
-                </p>
-                {summaryText.length > 140 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowFullDescription((value) => !value)}
-                    className="mt-2 text-xs font-medium"
-                    style={{ color: "var(--accent-brand)" }}
-                  >
-                    {showFullDescription ? "Show less" : "Read more"}
-                  </button>
-                )}
-                <div className="mt-2">
-                  <DataMetaInline meta={overviewMeta?.overview ?? null} />
-                </div>
-              </div>
 
               {profile?.analystRatings && (
                 <div className="mt-5 rounded-xl border px-4 py-4" style={{ background: "var(--background)", borderColor: "var(--border)" }}>
@@ -263,10 +261,7 @@ export default function StockPage() {
         </div>
 
         {/* Page content */}
-        <div className="px-6 py-8 space-y-10">
-          {/* Overview */}
-          <OverviewSection stock={stock} profile={profile} meta={overviewMeta?.overview ?? null} />
-
+        <div className="space-y-10">
           {/* Chart */}
           <EmbeddedChart symbol={symbol} currentPrice={stock.price ?? null} priceChange={stock.pctChange1d ?? null} />
 

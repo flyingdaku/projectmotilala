@@ -282,7 +282,7 @@ export function PeersSection({ symbol, currentRatios }: Props) {
       <div className="p-6 rounded-xl border space-y-6" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
         <div className="flex items-start justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Competitive Positioning</h2>
+            <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Peer Comparison</h2>
             <div className="mt-2">
               <DataMetaInline meta={effectiveMeta} />
             </div>

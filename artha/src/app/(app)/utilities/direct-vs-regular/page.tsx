@@ -147,7 +147,7 @@ export default function DirectVsRegularPage() {
           <label className="text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>Investment</label>
           <div className="flex gap-1 mb-1">
             {(["sip", "lumpsum"] as InvestmentMode[]).map((m) => (
-              <Button key={m} onClick={() => setMode(m)} variant={mode === m ? "default" : "outline"} className="flex-1 text-xs">
+              <Button key={m} onClick={() => setMode(m)} variant={mode === m ? "selected" : "outline"} className="flex-1 text-xs">
                 {m === "sip" ? "Monthly SIP" : "Lump Sum"}
               </Button>
             ))}
@@ -250,9 +250,7 @@ export default function DirectVsRegularPage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Already in a Regular Plan? Switch Analysis</h2>
           <label className="flex items-center gap-2 cursor-pointer">
-            <div className="relative w-9 h-5 rounded-full transition-colors" style={{ background: currentInRegular ? "var(--accent-brand)" : "var(--border-strong)" }} onClick={() => setCurrentInRegular(!currentInRegular)}>
-              <div className="absolute top-0.5 w-4 h-4 rounded-full bg-[var(--background)] transition-transform shadow-sm" style={{ transform: currentInRegular ? "translateX(18px)" : "translateX(2px)" }} />
-            </div>
+            <Switch checked={currentInRegular} onChange={(e) => setCurrentInRegular(e.target.checked)} />
             <span className="text-xs" style={{ color: "var(--text-secondary)" }}>I hold a Regular plan</span>
           </label>
         </div>
@@ -274,7 +272,7 @@ export default function DirectVsRegularPage() {
                 <label className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Gain type</label>
                 <div className="flex gap-1">
                   {[{ label: "LTCG (12.5%)", val: true }, { label: "STCG (20%)", val: false }].map((opt) => (
-                    <Button key={String(opt.val)} onClick={() => setIsLTCG(opt.val)} variant={isLTCG === opt.val ? "default" : "outline"} className="flex-1 text-xs">
+                    <Button key={String(opt.val)} onClick={() => setIsLTCG(opt.val)} variant={isLTCG === opt.val ? "selected" : "outline"} className="flex-1 text-xs">
                       {opt.label}
                     </Button>
                   ))}

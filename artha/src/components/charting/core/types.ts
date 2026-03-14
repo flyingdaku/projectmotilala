@@ -138,42 +138,48 @@ export interface ChartTheme {
   volumeUpColor: string;
   volumeDownColor: string;
   crosshairColor: string;
+  areaFillColor: string;
 }
 
-export const LIGHT_THEME: ChartTheme = {
-  background:       '#FFFFFF',
-  text:             '#0A0F1C',
-  grid:             '#E7E5E4',
-  border:           '#E7E5E4',
-  upColor:          '#22C55E',
-  downColor:        '#EF4444',
-  wickUpColor:      '#22C55E',
-  wickDownColor:    '#EF4444',
-  volumeUpColor:    'rgba(34,197,94,0.4)',
-  volumeDownColor:  'rgba(239,68,68,0.4)',
-  crosshairColor:   '#A8A29E',
-};
+export type ChartContrastMode = 'balanced' | 'vivid';
 
-export const DARK_THEME: ChartTheme = {
-  background:       '#0B1220',
-  text:             '#F1F5F9',
-  grid:             '#1E293B',
-  border:           '#1E293B',
-  upColor:          '#10B981',
-  downColor:        '#EF4444',
-  wickUpColor:      '#10B981',
-  wickDownColor:    '#EF4444',
-  volumeUpColor:    'rgba(16,185,129,0.35)',
-  volumeDownColor:  'rgba(239,68,68,0.35)',
-  crosshairColor:   '#64748B',
-};
+export function getChartTheme(
+  mode: 'light' | 'dark',
+  contrast: ChartContrastMode = 'balanced'
+): ChartTheme {
+  const isDark = mode === 'dark';
+  const fillOpacity = contrast === 'vivid'
+    ? (isDark ? 0.15 : 0.12)
+    : (isDark ? 0.10 : 0.07);
+
+  return {
+    background: isDark ? '#1E293B' : '#FFFFFF',
+    text: isDark ? '#F1F5F9' : '#0F172A',
+    grid: isDark ? '#334155' : '#F1F5F9',
+    border: isDark ? '#475569' : '#E2E8F0',
+    upColor: isDark ? '#10B981' : '#059669',
+    downColor: isDark ? '#EF4444' : '#DC2626',
+    wickUpColor: isDark ? '#10B981' : '#059669',
+    wickDownColor: isDark ? '#EF4444' : '#DC2626',
+    volumeUpColor: isDark ? 'rgba(16,185,129,0.70)' : 'rgba(5,150,105,0.70)',
+    volumeDownColor: isDark ? 'rgba(239,68,68,0.70)' : 'rgba(220,38,38,0.70)',
+    crosshairColor: isDark ? '#94A3B8' : '#475569',
+    areaFillColor: isDark
+      ? `rgba(59,130,246,${fillOpacity})`
+      : `rgba(67,56,202,${fillOpacity})`,
+  };
+}
+
+export const LIGHT_THEME: ChartTheme = getChartTheme('light');
+
+export const DARK_THEME: ChartTheme = getChartTheme('dark');
 
 // ── Crosshair Data (emitted on mouse move) ────────────────────────────────────
 
 export interface CrosshairData {
   time: number | null;
   bar: OHLCVBar | null;
-  seriesData: Map<any, any>;
+  seriesData: Map<unknown, unknown>;
   x: number;
   y: number;
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Info, IndianRupee } from "lucide-react";
+import { Info } from "lucide-react";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -51,6 +51,8 @@ const LOAN_TYPES = [
   { label: "Custom", rate: 10.0, tenure: 10 },
 ];
 
+const COLORS = ["var(--accent-brand)", "var(--negative)"];
+
 function computeEMI(principal: number, annualRate: number, tenureYears: number): number {
   const r = annualRate / 100 / 12;
   const n = tenureYears * 12;
@@ -95,7 +97,7 @@ export default function LoanCalculatorPage() {
   const [tenure, setTenure] = useState(LOAN_TYPES[0].tenure);
   const [mounted] = useState(true);
 
-  const { monthly, yearly, emi } = useMemo(
+  const { yearly, emi } = useMemo(
     () => buildAmortization(principal, rate, tenure),
     [principal, rate, tenure]
   );
@@ -124,7 +126,7 @@ export default function LoanCalculatorPage() {
         {LOAN_TYPES.map((lt, i) => (
           <Button
             key={lt.label}
-            variant={loanTypeIdx === i ? "default" : "outline"}
+            variant={loanTypeIdx === i ? "selected" : "outline"}
             onClick={() => {
               setLoanTypeIdx(i);
               if (lt.label !== "Custom") {
@@ -205,9 +207,10 @@ export default function LoanCalculatorPage() {
               <div style={{ width: 160, height: 160, flexShrink: 0 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={72} dataKey="value" strokeWidth={0}>
-                      <Cell fill="var(--accent-brand)" />
-                      <Cell fill="var(--negative)" />
+                    <Pie data={pieData} dataKey="value" innerRadius="60%" outerRadius="85%" paddingAngle={3} cornerRadius={4} stroke="var(--surface)" strokeWidth={2}>
+                      {pieData.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
                     </Pie>
                     <Tooltip content={<PieTooltip />} />
                   </PieChart>
@@ -292,7 +295,7 @@ export default function LoanCalculatorPage() {
               </tr>
             </thead>
             <tbody>
-              {yearly.map((row, i) => (
+              {yearly.map((row) => (
                 <tr key={row.year} className="border-t" style={{ borderColor: "var(--border)" }}>
                   <td className="px-4 py-2.5 font-medium" style={{ color: "var(--text-secondary)" }}>Year {row.year}</td>
                   <td className="px-4 py-2.5 font-mono" style={{ color: "var(--accent-brand)" }}>{formatINR(row.principal)}</td>

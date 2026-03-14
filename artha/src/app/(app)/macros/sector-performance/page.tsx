@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TrendingUp, TrendingDown, Minus, ChevronRight, BarChart3, Activity } from "lucide-react";
+import { TrendingUp, ChevronRight, BarChart3, Activity } from "lucide-react";
 import { SectorHeatmap } from "@/components/charts/SectorHeatmap";
 import { RRGPlot } from "@/components/charts/RRGPlot";
 import type { RRGDataPoint } from "@/lib/utils/rrg";
@@ -32,15 +32,6 @@ const LEVEL_LABELS = {
   sub_industry: "Sub-Industries",
 };
 
-function colorForReturn(r: number) {
-  if (r > 5) return "#10B981";
-  if (r > 2) return "#34D399";
-  if (r > 0) return "#6EE7B7";
-  if (r > -2) return "#FCA5A5";
-  if (r > -5) return "#F87171";
-  return "#EF4444";
-}
-
 export default function SectorPerformancePage() {
   const [period, setPeriod] = useState<Period>("1M");
   const [currentLevel, setCurrentLevel] = useState<HierarchyLevel>("sector");
@@ -52,11 +43,11 @@ export default function SectorPerformancePage() {
 
   // Fetch hierarchy data
   useEffect(() => {
-    setLoading(true);
     const levelParam = currentLevel;
     const pathParam = selectedPath.join("/");
-    
-    fetch(`/api/sectors/hierarchy?level=${levelParam}&path=${pathParam}&period=${period}`)
+    const timer = window.setTimeout(() => setLoading(true), 0);
+
+    void fetch(`/api/sectors/hierarchy?level=${levelParam}&path=${pathParam}&period=${period}`)
       .then(r => r.json())
       .then(result => {
         setData(result.nodes || []);
@@ -68,6 +59,8 @@ export default function SectorPerformancePage() {
         setRRGData([]);
       })
       .finally(() => setLoading(false));
+
+    return () => window.clearTimeout(timer);
   }, [currentLevel, selectedPath, period]);
 
   const handleDrillDown = (nodeId: string) => {
@@ -155,9 +148,9 @@ export default function SectorPerformancePage() {
             <button key={p} onClick={() => setPeriod(p)}
               className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors"
               style={{
-                background: period === p ? "var(--accent-brand)" : "var(--surface-elevated)",
-                color: period === p ? "#000" : "var(--text-secondary)",
-                border: "1px solid var(--border)",
+                background: period === p ? "var(--selection-bg)" : "var(--surface-elevated)",
+                color: period === p ? "var(--selection-text)" : "var(--text-secondary)",
+                border: `1px solid ${period === p ? "var(--selection-border)" : "var(--border)"}`,
               }}>
               {p}
             </button>
@@ -173,12 +166,12 @@ export default function SectorPerformancePage() {
           ].map(v => (
             <button
               key={v.id}
-              onClick={() => setView(v.id as any)}
+              onClick={() => setView(v.id as "heatmap" | "table" | "rrg")}
               className="px-3 py-1.5 rounded-md text-xs font-semibold transition-colors flex items-center gap-1.5"
               style={{
-                background: view === v.id ? "var(--accent-brand)" : "var(--surface-elevated)",
-                color: view === v.id ? "#000" : "var(--text-secondary)",
-                border: "1px solid var(--border)",
+                background: view === v.id ? "var(--selection-bg)" : "var(--surface-elevated)",
+                color: view === v.id ? "var(--selection-text)" : "var(--text-secondary)",
+                border: `1px solid ${view === v.id ? "var(--selection-border)" : "var(--border)"}`,
               }}
             >
               <v.icon size={14} />

@@ -67,7 +67,7 @@ export function CoverageNotice({
   );
 }
 
-export function MetricValue({
+export function DataValue({
   value,
   reason,
   className,
@@ -76,7 +76,7 @@ export function MetricValue({
   reason?: string | null;
   className?: string;
 }) {
-  const isUnavailable = typeof value === "string" && value === "Unavailable";
+  const isUnavailable = typeof value === "string" && value === "-";
   return (
     <div className={cn(isUnavailable ? "data-value data-value--empty" : "data-value", className)}>
       <span>{value}</span>

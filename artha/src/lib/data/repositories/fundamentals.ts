@@ -36,6 +36,9 @@ type CompanyDataRow = {
      cfo: number | null;
      cash_from_investing: number | null;
      cash_from_financing: number | null;
+     net_change_in_cash: number | null;
+     cash_begin_of_year: number | null;
+     cash_end_of_year: number | null;
      capex: number | null;
      fcf: number | null;
      book_value_per_share: number | null;
@@ -62,6 +65,9 @@ type CompanyDataRow = {
      cfo: number | null;
      cash_from_investing: number | null;
      cash_from_financing: number | null;
+     net_change_in_cash: number | null;
+     cash_begin_of_year: number | null;
+     cash_end_of_year: number | null;
      capex: number | null;
      fcf: number | null;
      shares_outstanding: number | null;
@@ -136,6 +142,9 @@ export class FundamentalsRepository extends BaseRepository {
                     cf.net_cash_operating as cfo,
                     cf.net_cash_investing as cash_from_investing,
                     cf.net_cash_financing as cash_from_financing,
+                    cf.net_change_in_cash,
+                    cf.cash_begin_of_year,
+                    cf.cash_end_of_year,
                     CASE
                         WHEN cf.capex IS NOT NULL THEN ABS(cf.capex)
                         WHEN cf.net_cash_investing IS NOT NULL THEN ABS(cf.net_cash_investing)
@@ -233,7 +242,8 @@ export class FundamentalsRepository extends BaseRepository {
             `SELECT period_end_date, fiscal_quarter, fiscal_year, is_consolidated,
                     revenue, operating_profit, ebit, interest, pbt, tax, pat, eps,
                     total_assets, total_equity, total_debt, cash_equivalents, trade_receivables,
-                    cfo, cash_from_investing, cash_from_financing, capex, fcf, book_value_per_share, shares_outstanding, source
+                    cfo, cash_from_investing, cash_from_financing, net_change_in_cash, cash_begin_of_year, cash_end_of_year,
+                    capex, fcf, book_value_per_share, shares_outstanding, source
              FROM fundamentals
              WHERE asset_id = ? AND is_consolidated = ?`,
             [assetId, isConsolidated ? 1 : 0]
@@ -278,6 +288,9 @@ export class FundamentalsRepository extends BaseRepository {
                     cfo: row.cfo ?? null,
                     cash_from_investing: row.cash_from_investing ?? null,
                     cash_from_financing: row.cash_from_financing ?? null,
+                    net_change_in_cash: row.net_change_in_cash ?? null,
+                    cash_begin_of_year: row.cash_begin_of_year ?? null,
+                    cash_end_of_year: row.cash_end_of_year ?? null,
                     capex: row.capex ?? null,
                     fcf: row.fcf ?? null,
                     shares_outstanding: row.shares_outstanding,
@@ -300,6 +313,9 @@ export class FundamentalsRepository extends BaseRepository {
             if (row.cfo != null) existing.cfo = (existing.cfo ?? 0) + row.cfo;
             if (row.cash_from_investing != null) existing.cash_from_investing = (existing.cash_from_investing ?? 0) + row.cash_from_investing;
             if (row.cash_from_financing != null) existing.cash_from_financing = (existing.cash_from_financing ?? 0) + row.cash_from_financing;
+            if (row.net_change_in_cash != null) existing.net_change_in_cash = (existing.net_change_in_cash ?? 0) + row.net_change_in_cash;
+            existing.cash_begin_of_year = existing.cash_begin_of_year ?? row.cash_begin_of_year;
+            existing.cash_end_of_year = row.cash_end_of_year ?? existing.cash_end_of_year;
             if (row.capex != null) existing.capex = (existing.capex ?? 0) + row.capex;
             if (row.fcf != null) existing.fcf = (existing.fcf ?? 0) + row.fcf;
         }
@@ -483,6 +499,9 @@ export class FundamentalsRepository extends BaseRepository {
                 cashFromInvesting: invCF,
                 financingCF: finCF,
                 cashFromFinancing: finCF,
+                netChangeInCash: r.net_change_in_cash ?? null,
+                cashBeginOfYear: r.cash_begin_of_year ?? null,
+                cashEndOfYear: r.cash_end_of_year ?? null,
                 freeCF: r.fcf ?? null,
                 freeCashFlow: r.fcf ?? null,
                 capex,

@@ -5,8 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   Home, PieChart, Target, Search, Layers, BarChart2,
-  Wrench, History, Activity, ChevronLeft, ChevronRight, Bell,
-  Globe, ChevronDown
+  Wrench, History, Activity, Bell, Globe
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
@@ -133,10 +132,14 @@ export function Sidebar() {
   return (
     <div
       className={cn(
-        "app-nav-theme sticky top-14 z-20 flex h-[calc(100vh-3.5rem)] shrink-0 flex-col border-r border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98)_0%,rgba(250,250,249,0.96)_100%)] shadow-[0_10px_30px_rgba(10,15,28,0.06)] backdrop-blur-xl transition-all duration-300 ease-in-out",
+        "app-nav-theme sticky top-16 z-20 flex h-[calc(100vh-4rem)] shrink-0 flex-col border-r backdrop-blur-xl transition-all duration-300 ease-in-out",
         collapsed ? "w-16" : "w-[220px]"
       )}
-      style={{ borderColor: "var(--nav-border)" }}
+      style={{
+        borderColor: "var(--nav-border)",
+        background: "var(--nav-bg)",
+        boxShadow: "var(--shadow-card)",
+      }}
     >
       <ScrollArea className="min-h-0 flex-1 py-4">
         <div className="px-2 space-y-0.5">
@@ -171,7 +174,7 @@ export function Sidebar() {
                     <AccordionTrigger
                       className={cn(
                         "rounded-xl px-3 py-2.5 hover:no-underline transition-colors duration-150",
-                        isActiveCategory ? "bg-[var(--accent-subtle)]" : "hover:bg-[var(--nav-hover-bg)]"
+                        isActiveCategory ? "bg-[var(--nav-active-bg)] text-[var(--brand-primary)]" : "hover:bg-[var(--nav-hover-bg)]"
                       )}
                       style={{ color: "var(--nav-text)" }}
                     >
@@ -181,7 +184,7 @@ export function Sidebar() {
                       </span>
                     </AccordionTrigger>
                     <AccordionContent className="pb-1 pt-0.5">
-                      <div className="ml-5 flex flex-col gap-1 border-l pl-3" style={{ borderColor: "rgba(245,158,11,0.16)" }}>
+                      <div className="ml-5 flex flex-col gap-1 border-l pl-3" style={{ borderColor: "color-mix(in srgb, var(--brand-primary) 18%, var(--border) 82%)" }}>
                         {items.map(item => {
                           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                           return (
@@ -189,11 +192,12 @@ export function Sidebar() {
                               key={item.href}
                               href={item.href}
                               className={cn(
-                                "rounded-lg px-2.5 py-1.5 text-[13px] font-medium leading-tight transition-colors duration-150",
+                                "rounded-lg border-l-[3px] border-transparent px-2.5 py-1.5 text-[13px] font-medium leading-tight transition-colors duration-150",
                                 isActive
-                                  ? "bg-[var(--accent-subtle)] text-[var(--accent-dark)]"
+                                  ? "bg-[var(--nav-active-bg)] text-[var(--brand-primary)]"
                                   : "text-[color:var(--nav-text-muted)] hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text)]"
                               )}
+                              style={isActive ? { borderLeftColor: "var(--brand-primary)" } : undefined}
                             >
                               {item.label}
                             </Link>
@@ -215,10 +219,10 @@ export function Sidebar() {
                     onClick={() => setCollapsed(false)}
                     title={title}
                     className={cn(
-                      "flex h-9 w-full items-center justify-center rounded-xl p-2 transition-colors duration-150",
-                      isActiveCategory ? "bg-[var(--accent-subtle)] text-[var(--accent-dark)]" : "hover:bg-[var(--nav-hover-bg)]"
+                      "flex h-10 w-full items-center justify-center rounded-xl border-l-[3px] border-transparent p-2 transition-colors duration-150",
+                      isActiveCategory ? "bg-[var(--nav-active-bg)] text-[var(--brand-primary)]" : "hover:bg-[var(--nav-hover-bg)]"
                     )}
-                    style={{ color: "var(--nav-text)" }}
+                    style={{ color: "var(--nav-text)", borderLeftColor: isActiveCategory ? "var(--brand-primary)" : "transparent" }}
                   >
                     <Icon size={15} />
                   </button>
@@ -250,16 +254,21 @@ function NavItem({
       href={href}
       title={collapsed ? label : undefined}
       className={cn(
-        "flex h-9 items-center gap-2.5 rounded-xl px-3 py-2 text-[13.5px] font-semibold transition-colors duration-150",
+        "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[12.5px] font-semibold tracking-tight transition-colors duration-150",
         collapsed && "justify-center px-0",
         active
-          ? "bg-[var(--accent-subtle)] text-[var(--accent-dark)]"
+          ? "bg-[var(--nav-active-bg)] text-[var(--brand-primary)]"
           : "hover:bg-[var(--nav-hover-bg)]"
       )}
-      style={{ color: active ? "var(--accent-dark)" : "var(--nav-text)" }}
+      style={{ color: active ? "var(--brand-primary)" : "var(--nav-text)" }}
     >
-      <Icon size={15} strokeWidth={active ? 2.5 : 2} className="shrink-0" />
-      {!collapsed && <span className="truncate tracking-tight">{label}</span>}
+      <Icon
+        size={15}
+        strokeWidth={active ? 2.5 : 2}
+        className="shrink-0 opacity-80"
+        style={{ color: active ? "var(--brand-primary)" : "var(--text-muted)" }}
+      />
+      {!collapsed && <span>{label}</span>}
     </Link>
   );
 }

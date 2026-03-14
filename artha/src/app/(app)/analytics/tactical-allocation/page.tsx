@@ -13,6 +13,7 @@ import {
   runBacktest, BacktestResult, rollingReturns,
   computeAssetMetrics, computeTopDrawdowns, computeRollingStats, assetCorrelation
 } from "@/lib/india-historical-data";
+import { Switch } from "@/components/ui/switch";
 import { formatINR } from "@/lib/utils";
 
 // Theme-aware colors
@@ -326,10 +327,7 @@ export default function TacticalAllocationPage() {
           <div className="flex items-center gap-4">
              <label className="flex items-center gap-2 text-sm cursor-pointer group">
                 <span style={{ color: "var(--text-secondary)" }}>Inflation Adjusted (Real)</span>
-                <div className="relative flex items-center">
-                  <input type="checkbox" checked={inflationAdjusted} onChange={(e) => setInflationAdjusted(e.target.checked)} className="peer sr-only" />
-                  <div className="w-10 h-5 bg-[var(--surface-elevated)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-[var(--background)] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[var(--background)] after:border-[var(--border)] after:border after:rounded-full after:h-4 after:w-4 after:transition-all" style={inflationAdjusted ? { background: "var(--accent-brand)" } : {}}></div>
-                </div>
+                <Switch checked={inflationAdjusted} onChange={(e) => setInflationAdjusted(e.target.checked)} />
               </label>
             <div className="flex items-center gap-2 text-sm">
               <span style={{ color: "var(--text-secondary)" }}>Time Period:</span>
@@ -614,10 +612,7 @@ export default function TacticalAllocationPage() {
           <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Portfolio Growth (₹10,000)</h2>
           <label className="flex items-center gap-2 text-sm cursor-pointer group">
             <span style={{ color: "var(--text-secondary)" }}>Log Scale</span>
-            <div className="relative flex items-center">
-              <input type="checkbox" checked={logScale} onChange={(e) => setLogScale(e.target.checked)} className="peer sr-only" />
-              <div className="w-10 h-5 bg-[var(--surface-elevated)] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-[var(--background)] after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[var(--background)] after:border-[var(--border)] after:border after:rounded-full after:h-4 after:w-4 after:transition-all" style={logScale ? { background: "var(--accent-brand)" } : {}}></div>
-            </div>
+            <Switch checked={logScale} onChange={(e) => setLogScale(e.target.checked)} />
           </label>
         </div>
         <div className="h-[400px]">

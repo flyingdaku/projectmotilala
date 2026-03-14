@@ -71,7 +71,7 @@ function EquityScreener() {
               className="px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 whitespace-nowrap"
               style={
                 sector === s
-                  ? { background: "var(--accent-brand)", color: "var(--accent-foreground)", borderColor: "var(--accent-brand)" }
+                  ? { background: "var(--selection-bg)", color: "var(--selection-text)", borderColor: "var(--selection-border)" }
                   : { color: "var(--text-muted)", borderColor: "var(--border)", background: "transparent" }
               }
             >
@@ -222,7 +222,7 @@ function FundScreener() {
               className="px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-150 whitespace-nowrap"
               style={
                 assetClass === s
-                  ? { background: "var(--accent-brand)", color: "var(--accent-foreground)", borderColor: "var(--accent-brand)" }
+                  ? { background: "var(--selection-bg)", color: "var(--selection-text)", borderColor: "var(--selection-border)" }
                   : { color: "var(--text-muted)", borderColor: "var(--border)", background: "transparent" }
               }
             >

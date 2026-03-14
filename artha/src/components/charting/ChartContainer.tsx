@@ -15,7 +15,7 @@
  * When isFullscreen=true the whole shell is portal'd to a fixed overlay.
  */
 
-import { useEffect, useRef, useCallback, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { useChartStore } from './store/useChartStore';
 import { ChartEngine }    from './core/ChartEngine';
@@ -35,8 +35,9 @@ import { DEFAULT_WATCHLIST_CONFIG } from './widgets/WatchlistPanel';
 import { getWatchlistPanelWidth } from './widgets/WatchlistPanel';
 import type { WatchlistConfig } from './widgets/WatchlistPanel';
 import type { CrosshairData, OHLCVBar } from './core/types';
-import { DARK_THEME, LIGHT_THEME } from './core/types';
+import { getChartTheme } from './core/types';
 import { Loader2, X } from 'lucide-react';
+import { useTheme } from '@/contexts/theme-context';
 
 interface ChartContainerProps {
   symbol: string;
@@ -67,16 +68,21 @@ function ChartContent({
   const [crosshair, setCrosshair]         = useState<CrosshairData | null>(null);
   const [paneRects, setPaneRects]         = useState<Array<{ id: string; index: number; top: number; height: number; indicators: string[] }>>([]);
   const [watchlistConfig, setWatchlistConfig] = useState<WatchlistConfig>(DEFAULT_WATCHLIST_CONFIG);
+  const { appearance } = useTheme();
 
   const {
     timeframe, chartType, isDark, indicators, drawings,
     activeTool, addDrawing, updateDrawing, removeDrawing,
-    showDataWindow, showLayoutPanel, showWatchlist,
+    showLayoutPanel, showWatchlist,
     removeIndicator,
   } = useChartStore();
 
   const { bars, loading, error } = useChartData(symbol, timeframe);
-  const theme = isDark ? DARK_THEME : LIGHT_THEME;
+  const theme = useMemo(
+    () => getChartTheme(isDark ? 'dark' : 'light', appearance.chartContrast),
+    [appearance.chartContrast, isDark]
+  );
+  const hasBars = bars.length > 0;
   const watchlistWidth = showWatchlist ? getWatchlistPanelWidth(watchlistConfig) : 0;
 
   // ── 1. Initialise chart engine ────────────────────────────────────────────
@@ -86,7 +92,8 @@ function ChartContent({
     if (!container) return;
 
     const engine = engineRef.current;
-    const chart  = engine.init(container, isDark);
+    const indicatorRegistry = activeInds.current;
+    const chart  = engine.init(container, theme);
 
     pmRef.current = new PaneManager(chart);
     smRef.current = new SeriesManager(chart);
@@ -103,17 +110,15 @@ function ChartContent({
       engine.destroy();
       pmRef.current  = null;
       smRef.current  = null;
-      activeInds.current.clear();
+      indicatorRegistry.clear();
     };
-    // Only re-init on mount/unmount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── 2. Apply theme changes ────────────────────────────────────────────────
 
   useEffect(() => {
-    engineRef.current.applyTheme(isDark);
-  }, [isDark]);
+    engineRef.current.applyTheme(theme);
+  }, [theme]);
 
   // ── 3. Render main series when bars or chart type changes ─────────────────
 
@@ -126,7 +131,7 @@ function ChartContent({
     sm.remove('main');
     sm.remove('volume');
 
-    const th = isDark ? DARK_THEME : LIGHT_THEME;
+    const th = theme;
 
     // Add main series by chart type
     if (chartType === 'candlestick') {
@@ -146,14 +151,15 @@ function ChartContent({
       });
       sm.setOHLCVData('main', bars);
     } else if (chartType === 'line') {
-      sm.addLine('main', 0, {
-        color: theme.upColor, lineWidth: 2,
+          sm.addLine('main', 0, {
+        color: isDark ? '#3B82F6' : '#4338CA', lineWidth: 2,
         priceLineVisible: false, lastValueVisible: true,
       });
       sm.setOHLCVData('main', bars);
     } else if (chartType === 'area') {
       sm.addArea('main', 0, {
-        lineColor: theme.upColor, topColor: `${theme.upColor}33`,
+        lineColor: isDark ? '#3B82F6' : '#4338CA',
+        topColor: theme.areaFillColor,
         bottomColor: 'transparent', lineWidth: 2,
         priceLineVisible: false, lastValueVisible: true,
       });
@@ -179,8 +185,7 @@ function ChartContent({
     sm.setVolumeData('volume', bars, th.volumeUpColor, th.volumeDownColor);
 
     engine.fitContent();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bars, chartType, isDark]);
+  }, [bars, chartType, isDark, theme]);
 
   // ── 4. Init DrawingManager once after main series exists ──────────────────
 
@@ -188,7 +193,7 @@ function ChartContent({
     const sm = smRef.current;
     const engine = engineRef.current;
     const container = canvasRef.current;
-    if (!sm || !engine.isInitialised || !container || dmRef.current) return;
+    if (!hasBars || !sm || !engine.isInitialised || !container || dmRef.current) return;
 
     const mainSeries = sm.get('main');
     if (!mainSeries) return;
@@ -208,8 +213,7 @@ function ChartContent({
     }
     // Apply current tool
     if (activeTool) dmRef.current.setTool(activeTool);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bars.length > 0]);
+  }, [activeTool, addDrawing, drawings, hasBars, removeDrawing, updateDrawing]);
 
   // ── 4a. Sync active drawing tool to DrawingManager ───────────────────────
 
@@ -225,7 +229,6 @@ function ChartContent({
     if (drawings.length === 0 && dmRef.current) {
       dmRef.current.clearAll();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawings.length]);
 
   // ── 5. Sync indicators (add new / remove deleted) ─────────────────────────
@@ -235,7 +238,7 @@ function ChartContent({
     const pm = pmRef.current;
     if (!sm || !pm) return;
 
-    const th = isDark ? DARK_THEME : LIGHT_THEME;
+    const th = theme;
     const currentIds = new Set(indicators.map(c => c.id));
 
     // Remove detached indicators
@@ -277,8 +280,7 @@ function ChartContent({
       }
     }, 50);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indicators, bars, isDark]);
+  }, [bars, indicators, theme]);
 
   // ── 5. Screenshot ────────────────────────────────────────────────────────
 
@@ -362,8 +364,13 @@ function ChartContent({
                   if (crosshair?.seriesData) {
                     for (const entry of entries) {
                       const data = crosshair.seriesData.get(entry.api);
-                      if (data && 'value' in data) {
-                        valStr = (data.value as number).toFixed(2);
+                      if (
+                        data &&
+                        typeof data === 'object' &&
+                        'value' in data &&
+                        typeof (data as { value?: unknown }).value === 'number'
+                      ) {
+                        valStr = ((data as { value: number }).value).toFixed(2);
                         break;
                       }
                     }

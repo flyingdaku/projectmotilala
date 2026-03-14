@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Plus, Bell, BellOff, Trash2, Star, TrendingUp, TrendingDown } from "lucide-react";
+import { Search, Plus, Bell, BellOff, Trash2, Star } from "lucide-react";
 import Link from "next/link";
 import { PnLBadge } from "@/components/ui/pnl-badge";
-import { formatINR } from "@/lib/utils";
 import { getIndustryGroupEmoji } from "@/lib/utils/emojis";
 
 interface WatchItem {
@@ -51,8 +50,8 @@ export default function WatchlistPage() {
   const filtered = items
     .filter(i => search === "" || i.symbol.toLowerCase().includes(search.toLowerCase()) || i.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
-      let valA = a[sortKey];
-      let valB = b[sortKey];
+      const valA = a[sortKey];
+      const valB = b[sortKey];
 
       // Handle nulls (like P/E) safely for TypeScript
       const safeValA = valA === null || valA === undefined ? -Infinity : valA;
@@ -78,10 +77,10 @@ export default function WatchlistPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold mb-1" style={{ color: "var(--text-primary)" }}>Watchlist</h1>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Track stocks you're interested in across all your watchlists.</p>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>Track stocks you&apos;re interested in across all your watchlists.</p>
         </div>
         <button className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-          style={{ background: "var(--accent-brand)", color: "#000" }}>
+          style={{ background: "var(--accent-brand)", color: "var(--accent-foreground)" }}>
           <Plus size={14} />
           Add Stock
         </button>

@@ -72,7 +72,7 @@ export function PerformanceChart({ data }: PerformanceChartProps) {
             className="px-3 py-1 rounded-full text-xs font-medium transition-colors duration-150"
             style={
               activeRange === r
-                ? { background: "var(--accent-brand)", color: "var(--accent-foreground)" }
+                ? { background: "var(--selection-bg)", color: "var(--selection-text)", border: "1px solid var(--selection-border)" }
                 : { color: "var(--text-muted)", background: "transparent" }
             }
           >

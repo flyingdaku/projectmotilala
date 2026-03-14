@@ -130,7 +130,7 @@ export default function TaxPage() {
                 className="px-3 py-1 rounded-full text-xs font-medium border transition-all duration-150"
                 style={
                   filter === f.id
-                    ? { background: "var(--accent-brand)", color: "var(--accent-foreground)", borderColor: "var(--accent-brand)" }
+                    ? { background: "var(--selection-bg)", color: "var(--selection-text)", borderColor: "var(--selection-border)" }
                     : { color: "var(--text-muted)", borderColor: "var(--border)", background: "transparent" }
                 }
               >
