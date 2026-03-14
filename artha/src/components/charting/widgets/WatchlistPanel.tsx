@@ -593,8 +593,13 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
                 )}
                 style={{ gridTemplateColumns }}
               >
-                <div className={cn('min-w-0 truncate text-[12px] font-semibold', isActive ? 'text-amber-500' : 'text-foreground')}>
-                  {item.symbol}
+                <div className="min-w-0 flex flex-col justify-center truncate">
+                  <div className={cn('min-w-0 truncate text-[12px] font-semibold leading-tight', isActive ? 'text-amber-500' : 'text-foreground')}>
+                    {item.symbol}
+                  </div>
+                  <div className="min-w-0 truncate text-[10px] text-muted-foreground leading-tight" title={item.name}>
+                    {item.name}
+                  </div>
                 </div>
 
                 {config.industryIcon.enabled && (

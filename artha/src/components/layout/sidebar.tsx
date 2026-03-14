@@ -104,7 +104,6 @@ const CATEGORIES = [
     items: [
       { label: "Portfolio Simulation", href: "/analytics/monte-carlo" },
       { label: "Financial Goals", href: "/analytics/financial-goals" },
-      { label: "Goals Tracker", href: "/goals" },
     ],
   },
   {
