@@ -57,7 +57,6 @@ const TOOL_CATEGORIES = [
       { name: "Efficient Frontier", href: "/analytics/efficient-frontier", icon: TrendingUp, desc: "Optimize portfolio weights." },
       { name: "Monte Carlo Simulation", href: "/analytics/monte-carlo", icon: Activity, desc: "Simulate future portfolio paths." },
       { name: "Financial Goals", href: "/goals", icon: Target, desc: "Model retirement and withdrawal." },
-      { name: "Asset Liability Modeling", href: "/analytics/asset-liability", icon: PieChart, desc: "Match assets to future liabilities." },
     ],
   },
 ];
