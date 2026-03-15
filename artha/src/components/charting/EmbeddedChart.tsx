@@ -272,9 +272,6 @@ export function EmbeddedChart({ symbol, currentPrice, priceChange }: EmbeddedCha
                   </span>
                 ) : null}
               </div>
-              <div className="mt-1">
-                <DataMetaInline meta={chartMeta} />
-              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">

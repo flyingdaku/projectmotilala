@@ -91,6 +91,10 @@ def run_eodhd_daily(trade_date: date):
     from pipelines.daily.eodhd_daily import run_daily_eodhd
     return run_daily_eodhd(trade_date)
 
+def run_eodhd_intraday_daily(trade_date: date):
+    from pipelines.daily.eodhd_intraday_daily import run_intraday_daily
+    return run_intraday_daily(trade_date)
+
 def run_eodhd_reconciliation(trade_date: date):
     from pipelines.eodhd_reconciliation import reconcile_prices
     return reconcile_prices(trade_date, alert_on_major=True)
@@ -105,11 +109,12 @@ def run_daily_pipeline(trade_date: date, skip_bse: bool = False, skip_metrics: b
 
     step("1. NSE Bhavcopy", run_nse_bhavcopy, trade_date)
     step("2. BSE Bhavcopy", run_bse_bhavcopy, trade_date, skip=skip_bse)
-    step("3. EODHD Daily", run_eodhd_daily, trade_date)
-    step("4. EODHD Reconciliation", run_eodhd_reconciliation, trade_date)
-    step("5. Adj Close Recomputation", run_adj_close)
-    step("6. Asset Metrics", run_metrics, skip=skip_metrics)
-    step("7. Verification", run_verification, trade_date)
+    step("3. EODHD Daily EOD", run_eodhd_daily, trade_date)
+    step("4. EODHD Daily Intraday", run_eodhd_intraday_daily, trade_date)
+    step("5. EODHD Reconciliation", run_eodhd_reconciliation, trade_date)
+    step("6. Adj Close Recomputation", run_adj_close)
+    step("7. Asset Metrics", run_metrics, skip=skip_metrics)
+    step("8. Verification", run_verification, trade_date)
 
     # Print summary
     print("\n" + "=" * 60)

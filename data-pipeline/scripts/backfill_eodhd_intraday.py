@@ -79,10 +79,15 @@ def backfill_symbol_intraday(
     with get_connection() as conn:
         # Check existing data to potentially skip
         existing = conn.execute("""
-            SELECT MIN(timestamp) as min_ts, MAX(timestamp) as max_ts
+            SELECT 1 as has_data
             FROM eodhd_intraday_prices
             WHERE asset_id = ? AND resolution = ? AND exchange = ?
+            LIMIT 1
         """, (asset_id, interval, exchange)).fetchone()
+        
+        if existing:
+            logger.debug(f"Skipping {eodhd_symbol} {interval} - already has data")
+            return eodhd_symbol, 0, 1
         
         # If we have complete coverage, we could skip (simplified skipping here)
         # Ideally, we chunk the date range into 120-day spans

@@ -60,11 +60,11 @@ export function SectionNav() {
 
   return (
     <nav
-      className="sticky top-[56px] z-30 border-b px-6 backdrop-blur-xl -mx-4 md:-mx-8 -mt-4 md:-mt-8 mb-4 md:mb-8"
+      className="sticky top-[64px] z-30 w-full border-b backdrop-blur-xl -mx-4 md:-mx-8 -mt-4 md:-mt-8 mb-4 md:mb-8"
       style={{ background: "color-mix(in srgb, var(--background) 94%, transparent)", borderColor: "var(--border)" }}
     >
       {/* Desktop nav */}
-      <div className="mx-auto hidden max-w-[1600px] md:block">
+      <div className="mx-auto px-6 md:px-8 hidden md:block">
         <div className="flex items-center gap-8 overflow-x-auto">
         {SECTIONS.map((s) => (
           <button

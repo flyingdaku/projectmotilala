@@ -193,7 +193,7 @@ export default function HeatmapPage() {
             {START_YEARS.map((sy, ri) => (
               <tr key={sy}>
                 <td
-                  className="sticky left-0 z-10 px-3 py-1 font-medium border-r cursor-pointer transition-colors"
+                  className="sticky left-0 z-10 px-2 py-1 font-medium border-r cursor-pointer transition-colors"
                   style={{
                     background: highlightRow === ri ? "var(--accent-subtle)" : "var(--surface)",
                     borderColor: "var(--border)",

@@ -121,9 +121,6 @@ export function AnalyticsSection({ symbol }: Props) {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <div>
             <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Valuation Band</h2>
-            <div className="mt-2">
-              <DataMetaInline meta={meta} />
-            </div>
           </div>
           <div className="flex bg-muted/20 p-0.5 rounded-lg border border-border gap-0.5">
             {Object.entries(METRIC_LABELS).map(([key, label]) => (
