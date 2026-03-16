@@ -53,7 +53,8 @@ export const INDICATOR_CATEGORIES: IndicatorCategory[] = [
 export type RhsType =
     | 'number'      // plain numeric value
     | 'indicator'   // another indicator expression
-    | 'number_or_indicator'; // either
+    | 'number_or_indicator' // either
+    | 'enum';       // fixed string value from a known list
 
 export interface IndicatorDef {
     id: string;
@@ -64,6 +65,8 @@ export interface IndicatorDef {
     params: IndicatorParam[];
     /** What the RHS (right-hand side) of a condition can be */
     rhsType: RhsType;
+    /** Fixed options for enum rhsType */
+    enumOptions?: { value: string; label: string }[];
     /** Short description shown as tooltip */
     description?: string;
     /** Whether this indicator is backed in our DB (false = UI only, blocked from running) */
@@ -75,18 +78,47 @@ export const INDICATORS: IndicatorDef[] = [
     // ── Universe ──────────────────────────────────────────────────────────
     {
         id: 'uni_mcap_bucket',  label: 'Market Cap Bucket', categoryId: 'universe',
-        dslName: 'caps', params: [], rhsType: 'number', supported: true,
-        description: 'micro / small / mid / large cap bucket filter',
+        dslName: 'caps', params: [], rhsType: 'enum', supported: true,
+        enumOptions: [
+            { value: 'large',  label: 'Large Cap  (>₹20,000 Cr)' },
+            { value: 'mid',    label: 'Mid Cap    (₹5,000–20,000 Cr)' },
+            { value: 'small',  label: 'Small Cap  (₹500–5,000 Cr)' },
+            { value: 'micro',  label: 'Micro Cap  (<₹500 Cr)' },
+        ],
+        description: 'Filter by market cap bucket',
     },
     {
         id: 'uni_sector', label: 'Sector', categoryId: 'universe',
-        dslName: 'sector', params: [], rhsType: 'number', supported: true,
+        dslName: 'sector', params: [], rhsType: 'enum', supported: true,
+        enumOptions: [], // populated dynamically from DB
         description: 'Filter by industry sector',
     },
     {
         id: 'uni_index', label: 'Index Membership', categoryId: 'universe',
-        dslName: 'index', params: [], rhsType: 'number', supported: true,
-        description: 'nifty50, nifty200, nifty500, sensex, etc.',
+        dslName: 'index', params: [], rhsType: 'enum', supported: true,
+        enumOptions: [
+            { value: 'nifty50',     label: 'Nifty 50' },
+            { value: 'next50',      label: 'Nifty Next 50' },
+            { value: 'nifty100',    label: 'Nifty 100' },
+            { value: 'nifty200',    label: 'Nifty 200' },
+            { value: 'nifty500',    label: 'Nifty 500' },
+            { value: 'niftybank',   label: 'Nifty Bank' },
+            { value: 'midcap150',   label: 'Nifty Midcap 150' },
+            { value: 'smallcap250', label: 'Nifty Smallcap 250' },
+            { value: 'sensex',      label: 'BSE Sensex' },
+        ],
+        description: 'Filter by index membership (nifty50, nifty200, sensex, etc.)',
+    },
+    {
+        id: 'uni_instrument_type', label: 'Instrument Type', categoryId: 'universe',
+        dslName: 'type', params: [], rhsType: 'enum', supported: true,
+        enumOptions: [
+            { value: 'equity', label: 'Equity' },
+            { value: 'etf',    label: 'ETF' },
+            { value: 'reit',   label: 'REIT' },
+            { value: 'invit',  label: 'InvIT' },
+        ],
+        description: 'Filter by instrument type',
     },
 
     // ── Math Operations ───────────────────────────────────────────────────
@@ -308,7 +340,7 @@ export const INDICATORS: IndicatorDef[] = [
     },
     {
         id: 'wpr',          label: 'Williams %R',       categoryId: 'oscillators',
-        dslName: 'wpr',     params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
+        dslName: 'willr',   params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
         rhsType: 'number',  description: "Williams' Percent Range", supported: true,
     },
     {
@@ -362,12 +394,12 @@ export const INDICATORS: IndicatorDef[] = [
     },
     {
         id: 'dip',          label: '+DI',               categoryId: 'trend',
-        dslName: 'dip',     params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
+        dslName: 'di_plus', params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
         rhsType: 'number_or_indicator', description: 'Positive Directional Indicator', supported: true,
     },
     {
         id: 'dim',          label: '-DI',               categoryId: 'trend',
-        dslName: 'dim',     params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
+        dslName: 'di_minus', params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
         rhsType: 'number_or_indicator', description: 'Negative Directional Indicator', supported: true,
     },
     {
@@ -515,7 +547,7 @@ export const INDICATORS: IndicatorDef[] = [
     },
     {
         id: 'bb_bw',        label: 'BB Width',          categoryId: 'channels',
-        dslName: 'bb',      params: [
+        dslName: 'bbwidth', params: [
             { name: 'period', label: 'Period', defaultValue: 20 },
             { name: 'stddev', label: 'Std Dev', defaultValue: 2, step: 0.5 },
         ],
@@ -628,7 +660,7 @@ export const INDICATORS: IndicatorDef[] = [
     },
     {
         id: 'rs63',         label: 'RS 3-Month',        categoryId: 'relstrength',
-        dslName: 'rs68',    params: [],                  rhsType: 'number',
+        dslName: 'rs63',    params: [],                  rhsType: 'number',
         description: '3-Month Relative Strength', supported: false,
     },
     {
@@ -673,7 +705,7 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'mcap',         label: 'Market Cap (₹ Cr)', categoryId: 'fundamental',
         dslName: 'mcap',    params: [],                  rhsType: 'number',
-        description: 'Market Capitalisation', supported: true,
+        description: 'Market Capitalisation in ₹ Crores', supported: true,
     },
     {
         id: 'pe',           label: 'P/E (TTM)',         categoryId: 'fundamental',
@@ -682,52 +714,92 @@ export const INDICATORS: IndicatorDef[] = [
     },
     {
         id: 'pb',           label: 'P/B',               categoryId: 'fundamental',
-        dslName: 'pb_ratio', params: [],                  rhsType: 'number',
-        description: 'Price-to-Book', supported: true,
+        dslName: 'pb',      params: [],                  rhsType: 'number',
+        description: 'Price-to-Book Ratio', supported: true,
     },
     {
         id: 'ev_ebitda',    label: 'EV/EBITDA',         categoryId: 'fundamental',
         dslName: 'ev_ebitda', params: [],                 rhsType: 'number',
-        description: 'EV to EBITDA', supported: true,
+        description: 'Enterprise Value to EBITDA', supported: true,
     },
     {
         id: 'div_yield',    label: 'Dividend Yield %',  categoryId: 'fundamental',
-        dslName: 'divyield', params: [],                  rhsType: 'number',
-        description: 'Dividend Yield', supported: true,
+        dslName: 'dvd_yield', params: [],                  rhsType: 'number',
+        description: 'Dividend Yield %', supported: true,
+    },
+    {
+        id: 'eps_ttm',      label: 'EPS (TTM)',         categoryId: 'fundamental',
+        dslName: 'eps',     params: [],                  rhsType: 'number',
+        description: 'Earnings Per Share (TTM)', supported: true,
+    },
+    {
+        id: 'ebitda_ttm',   label: 'EBITDA (₹ Cr)',    categoryId: 'fundamental',
+        dslName: 'ebitda',  params: [],                  rhsType: 'number',
+        description: 'EBITDA (TTM, ₹ Crores)', supported: true,
     },
     {
         id: 'pat_margin',   label: 'PAT Margin %',      categoryId: 'fundamental',
         dslName: 'pat_margin', params: [],                rhsType: 'number',
-        description: 'Net Profit Margin', supported: true,
+        description: 'Net Profit Margin %', supported: true,
     },
     {
         id: 'op_margin',    label: 'Operating Margin %', categoryId: 'fundamental',
         dslName: 'op_margin', params: [],                 rhsType: 'number',
-        description: 'Operating Margin', supported: true,
+        description: 'Operating (EBIT) Margin %', supported: true,
+    },
+    {
+        id: 'gross_margin', label: 'Gross Margin %',    categoryId: 'fundamental',
+        dslName: 'gross_margin', params: [],              rhsType: 'number',
+        description: 'Gross Profit Margin % (from MSI ratios)', supported: true,
     },
 
     // ── Financial Health ──────────────────────────────────────────────────
     {
         id: 'de',           label: 'Debt / Equity',     categoryId: 'financial_health',
-        dslName: 'de',      params: [],                  rhsType: 'number',
-        description: 'Debt to Equity Ratio', supported: true,
+        dslName: 'debt_equity', params: [],              rhsType: 'number',
+        description: 'Total Debt to Equity Ratio', supported: true,
     },
     {
         id: 'ic',           label: 'Interest Coverage', categoryId: 'financial_health',
-        dslName: 'ic',      params: [],                  rhsType: 'number',
-        description: 'Interest Coverage Ratio', supported: true,
+        dslName: 'interest_coverage', params: [],         rhsType: 'number',
+        description: 'EBIT / Interest Expense', supported: true,
     },
     {
         id: 'current_ratio', label: 'Current Ratio',   categoryId: 'financial_health',
         dslName: 'current_ratio', params: [],            rhsType: 'number',
-        description: 'Current Ratio', supported: true,
+        description: 'Current Assets / Current Liabilities', supported: true,
+    },
+    {
+        id: 'quick_ratio',  label: 'Quick Ratio',       categoryId: 'financial_health',
+        dslName: 'quick_ratio', params: [],              rhsType: 'number',
+        description: '(Current Assets − Inventory) / Current Liabilities', supported: true,
+    },
+    {
+        id: 'altman_z',     label: 'Altman Z-Score',    categoryId: 'financial_health',
+        dslName: 'altman_z_score', params: [],            rhsType: 'number',
+        description: 'Altman Z-Score (>3 safe, <1.8 distress)', supported: true,
+    },
+    {
+        id: 'beneish_m',    label: 'Beneish M-Score',   categoryId: 'financial_health',
+        dslName: 'beneish_m_score', params: [],           rhsType: 'number',
+        description: 'Earnings manipulation indicator (<-2.22 = low risk)', supported: true,
+    },
+    {
+        id: 'promoter_pct', label: 'Promoter Holding %', categoryId: 'financial_health',
+        dslName: 'promoter_pct', params: [],              rhsType: 'number',
+        description: 'Promoter shareholding percentage', supported: true,
+    },
+    {
+        id: 'pledged_pct',  label: 'Pledged Shares %',  categoryId: 'financial_health',
+        dslName: 'pledged_pct', params: [],               rhsType: 'number',
+        description: 'Promoter pledged shares as % of total shares', supported: true,
     },
 
     // ── Growth ────────────────────────────────────────────────────────────
     {
         id: 'rev_g1y',      label: 'Revenue Growth 1Y %', categoryId: 'growth',
         dslName: 'rev_g1y', params: [],                  rhsType: 'number',
-        description: '1-Year Revenue Growth', supported: true,
+        description: '1-Year Revenue Growth (YoY)', supported: true,
     },
     {
         id: 'rev_g3y',      label: 'Revenue Growth 3Y %', categoryId: 'growth',
@@ -737,24 +809,39 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'pat_g1y',      label: 'PAT Growth 1Y %',   categoryId: 'growth',
         dslName: 'pat_g1y', params: [],                  rhsType: 'number',
-        description: '1-Year Profit Growth', supported: true,
+        description: '1-Year Net Profit Growth (YoY)', supported: true,
+    },
+    {
+        id: 'pat_g3y',      label: 'PAT Growth 3Y %',   categoryId: 'growth',
+        dslName: 'pat_g3y', params: [],                  rhsType: 'number',
+        description: '3-Year Net Profit CAGR', supported: true,
     },
     {
         id: 'eps_g1y',      label: 'EPS Growth 1Y %',   categoryId: 'growth',
         dslName: 'eps_g1y', params: [],                  rhsType: 'number',
-        description: '1-Year EPS Growth', supported: true,
+        description: '1-Year EPS Growth (YoY)', supported: true,
+    },
+    {
+        id: 'fcf',          label: 'Free Cash Flow (₹ Cr)', categoryId: 'growth',
+        dslName: 'fcf',     params: [],                  rhsType: 'number',
+        description: 'Free Cash Flow (Operating CF − Capex)', supported: true,
     },
 
     // ── Valuation ─────────────────────────────────────────────────────────
     {
         id: 'roce',         label: 'ROCE %',            categoryId: 'valuation',
         dslName: 'roce',    params: [],                  rhsType: 'number',
-        description: 'Return on Capital Employed', supported: true,
+        description: 'Return on Capital Employed %', supported: true,
     },
     {
         id: 'roe',          label: 'ROE %',             categoryId: 'valuation',
         dslName: 'roe',     params: [],                  rhsType: 'number',
-        description: 'Return on Equity', supported: true,
+        description: 'Return on Equity %', supported: true,
+    },
+    {
+        id: 'book_value',   label: 'Book Value/Share',  categoryId: 'valuation',
+        dslName: 'book_value', params: [],               rhsType: 'number',
+        description: 'Book Value per Share (₹)', supported: true,
     },
 
     // ── Quality & Rank ────────────────────────────────────────────────────
@@ -762,6 +849,11 @@ export const INDICATORS: IndicatorDef[] = [
         id: 'quality_score', label: 'Quality Score',   categoryId: 'quality',
         dslName: 'quality',  params: [],                 rhsType: 'number',
         description: 'Composite Quality Score (0-100)', supported: true,
+    },
+    {
+        id: 'piotroski',    label: 'Piotroski F-Score', categoryId: 'quality',
+        dslName: 'piotroski_f_score', params: [],         rhsType: 'number',
+        description: 'Piotroski F-Score (0-9, higher = stronger)', supported: true,
     },
 
     // ── Factor Exposure (IIMA Carhart 4-Factor) ───────────────────────────
@@ -846,7 +938,13 @@ export const OPERATORS: OperatorDef[] = [
     // New high/low (technical only)
     { id: 'new_high', label: 'New High Over',     dslOp: 'new_high', verb: 'new high over',     valueConfig: { type: 'days', label: 'Days' },               rhsCanBeIndicator: false, technicalOnly: true },
     { id: 'new_low',  label: 'New Low Over',      dslOp: 'new_low',  verb: 'new low over',      valueConfig: { type: 'days', label: 'Days' },               rhsCanBeIndicator: false, technicalOnly: true },
+
+    // Universe match (for enum indicators)
+    { id: 'eq',       label: 'Is',               dslOp: 'eq',       verb: 'is',                valueConfig: { type: 'number', label: 'Value' },           rhsCanBeIndicator: false, technicalOnly: false },
 ];
+
+// ─── Universe DSL names that emit function-call syntax ──────────────────────
+const UNIVERSE_DSL_NAMES = new Set(['index', 'sector', 'caps', 'type']);
 
 // ─── DSL Helpers ────────────────────────────────────────────────────────────
 
@@ -864,17 +962,22 @@ export function dslExpr(ind: IndicatorDef, paramValues: (number | string)[]): st
     return `${ind.dslName}(${args.join(',')})`;
 }
 
-// ... (rest of the code remains the same)
 /**
  * Build a full DSL criterion string.
- * e.g. "rsi(14) > 70" or "ema(7) ca ema(50)" or "price trend_up 20"
+ * Universe enum indicators emit function-call syntax: index("nifty50")
+ * Normal numeric indicators: rsi(14) > 70
  */
 export function buildDslCriterion(
     lhsExpr: string,
     op: OperatorDef,
     rhsExpr: string,
     value2?: number,
+    lhsInd?: IndicatorDef,
 ): string {
+    // Universe filters use DSL function syntax: index("nifty50"), sector("IT")
+    if (lhsInd && lhsInd.rhsType === 'enum' && UNIVERSE_DSL_NAMES.has(lhsInd.dslName)) {
+        return `${lhsInd.dslName}("${rhsExpr}")`;
+    }
     if (op.id === 'between') {
         return `${lhsExpr} >= ${rhsExpr} AND ${lhsExpr} <= ${value2}`;
     }

@@ -43,9 +43,8 @@ logger = logging.getLogger(__name__)
 
 # EODHD valid Indian exchanges:
 # - NSE: all Indian equities (NSE-listed + some BSE-only) + MFs/ETFs
-# - MCX: commodity futures (NATURALGAS, CRUDEOIL, GOLD, etc.)
 # BSE is NOT a valid EODHD exchange code (returns 404).
-EXCHANGES = ["NSE", "MCX"]
+EXCHANGES = ["NSE"]
 
 
 def _norm(s: str) -> str:

@@ -156,18 +156,42 @@ const PLAIN_MAP: Record<string, ColInfo> = {
     roic:               { sql: 'cr.roce',               table: 'cr' }, // approximation
     eps:                { sql: 'cr.eps_ttm',            table: 'cr' },
     ebitda:             { sql: 'cr.ebitda_ttm',         table: 'cr' },
+    // Margins
     pat_margin:         { sql: 'cr.pat_margin',         table: 'cr' },
     op_margin:          { sql: 'cr.operating_margin',   table: 'cr' },
+    gross_margin:       { sql: 'cr.gross_margin',       table: 'cr' },
+
+    // Debt / Solvency
     debt_equity:        { sql: 'cr.debt_equity',        table: 'cr' },
     price_book_ratio:   { sql: 'cr.pb',                 table: 'cr' },
     current_ratio:      { sql: 'cr.current_ratio',      table: 'cr' },
+    quick_ratio:        { sql: 'cr.quick_ratio',        table: 'cr' },
     interest_coverage:  { sql: 'cr.interest_coverage',  table: 'cr' },
+
+    // Quality / Solvency scores
     quality_score:      { sql: 'cr.quality_score',      table: 'cr' },
     piotroski_f_score:  { sql: 'cr.quality_score',      table: 'cr' }, // best proxy
     altman_z_score:     { sql: 'cr.altman_z',           table: 'cr' },
+    altman_z:           { sql: 'cr.altman_z',           table: 'cr' },
     beneish_m_score:    { sql: 'cr.beneish_m',          table: 'cr' },
+    beneish_m:          { sql: 'cr.beneish_m',          table: 'cr' },
 
     // Growth
+    rev_g1y:            { sql: 'cr.revenue_growth_1y',  table: 'cr' },
+    rev_g3y:            { sql: 'cr.revenue_growth_3y',  table: 'cr' },
+    pat_g1y:            { sql: 'cr.pat_growth_1y',      table: 'cr' },
+    pat_g3y:            { sql: 'cr.pat_growth_3y',      table: 'cr' },
+    eps_g1y:            { sql: 'cr.eps_growth_1y',      table: 'cr' },
+    fcf:                { sql: 'cr.free_cash_flow',     table: 'cr' },
+
+    // Valuation extras
+    book_value:         { sql: 'cr.book_value_per_share', table: 'cr' },
+
+    // Shareholding / Governance
+    promoter_pct:       { sql: 'cr.promoter_holding',   table: 'cr' },
+    pledged_pct:        { sql: 'cr.pledged_shares_pct', table: 'cr' },
+
+    // Legacy / generic growth aliases
     eps_yoy:            { sql: 'cr.eps_growth_1y',      table: 'cr' },
     revenue_qoq:        { sql: 'cr.revenue_growth_1y',  table: 'cr' }, // approx
     net_income_5y_growth: { sql: 'cr.pat_growth_1y',   table: 'cr' }, // approx
@@ -246,6 +270,7 @@ const CALL_MAP: Record<string, CallResolver> = {
     bblb:    ([p=20,dev=2])  => ({ sql: 'ti.bb_lower',  table: 'ti' }),
     bbwidth: ([p=20,dev=2])  => ({ sql: 'ti.bb_width',  table: 'ti' }),
     bbpctb:  ([p=20,dev=2])  => ({ sql: 'ti.bb_pct_b',  table: 'ti' }),
+    bbmb:    ([p=20,dev=2])  => ({ sql: 'ti.bb_middle', table: 'ti' }),
 
     // Volume
     avol:  ([p=21]) => ({ sql: 'ti.volume_ma_20', table: 'ti' }),
@@ -259,11 +284,31 @@ const CALL_MAP: Record<string, CallResolver> = {
     mfi:   ([p=14]) => ({ sql: 'ti.mfi_14', table: 'ti' }),
 
     // Fundamental
-    pe:    ()       => ({ sql: 'cr.pe_ttm',         table: 'cr' }),
-    pb:    ()       => ({ sql: 'cr.pb',             table: 'cr' }),
-    eps:   ()       => ({ sql: 'cr.eps_ttm',        table: 'cr' }),
-    ebitda:()       => ({ sql: 'cr.ebitda_ttm',     table: 'cr' }),
-    cap:   ()       => ({ sql: 'cr.market_cap_cr',  table: 'cr' }),
+    pe:    ()       => ({ sql: 'cr.pe_ttm',               table: 'cr' }),
+    pb:    ()       => ({ sql: 'cr.pb',                   table: 'cr' }),
+    eps:   ()       => ({ sql: 'cr.eps_ttm',              table: 'cr' }),
+    ebitda:()       => ({ sql: 'cr.ebitda_ttm',           table: 'cr' }),
+    cap:   ()       => ({ sql: 'cr.market_cap_cr',        table: 'cr' }),
+    dvd_yield: ()   => ({ sql: 'cr.dividend_yield',       table: 'cr' }),
+    book_value: ()  => ({ sql: 'cr.book_value_per_share', table: 'cr' }),
+    fcf:   ()       => ({ sql: 'cr.free_cash_flow',       table: 'cr' }),
+    promoter_pct: () => ({ sql: 'cr.promoter_holding',   table: 'cr' }),
+    pledged_pct: ()  => ({ sql: 'cr.pledged_shares_pct', table: 'cr' }),
+    altman_z_score: () => ({ sql: 'cr.altman_z',         table: 'cr' }),
+    beneish_m_score: () => ({ sql: 'cr.beneish_m',       table: 'cr' }),
+    piotroski_f_score: () => ({ sql: 'cr.quality_score', table: 'cr' }), // best proxy
+    gross_margin: () => ({ sql: 'cr.gross_margin',        table: 'cr' }),
+    quick_ratio: () => ({ sql: 'cr.quick_ratio',          table: 'cr' }),
+    debt_equity: () => ({ sql: 'cr.debt_equity',          table: 'cr' }),
+    interest_coverage: () => ({ sql: 'cr.interest_coverage', table: 'cr' }),
+    rev_g1y: ()     => ({ sql: 'cr.revenue_growth_1y',   table: 'cr' }),
+    rev_g3y: ()     => ({ sql: 'cr.revenue_growth_3y',   table: 'cr' }),
+    pat_g1y: ()     => ({ sql: 'cr.pat_growth_1y',        table: 'cr' }),
+    pat_g3y: ()     => ({ sql: 'cr.pat_growth_3y',        table: 'cr' }),
+    eps_g1y: ()     => ({ sql: 'cr.eps_growth_1y',        table: 'cr' }),
+    pat_margin: ()  => ({ sql: 'cr.pat_margin',           table: 'cr' }),
+    op_margin: ()   => ({ sql: 'cr.operating_margin',     table: 'cr' }),
+    book_value_per_share: () => ({ sql: 'cr.book_value_per_share', table: 'cr' }),
 
     // Price performance % over N days
     pp:    ([p=5])  => {

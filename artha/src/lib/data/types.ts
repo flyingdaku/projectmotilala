@@ -376,6 +376,7 @@ export interface ScreenerFilters {
   // Universe / classification
   sector?: string[];
   assetClass?: string[];
+  indexMembership?: string[];
 
   // Factor exposure (IIMA Carhart 4-Factor)
   ffBeta?: RangeFilter;

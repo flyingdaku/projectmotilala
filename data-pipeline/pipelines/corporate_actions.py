@@ -289,7 +289,8 @@ def process_corporate_action(raw: dict) -> bool:
     """
     isin = raw.get("isin", "").strip()
     symbol = raw.get("symbol", "").strip()
-    purpose = raw.get("purpose", "").strip()
+    # Handle both 'purpose' (API) and 'subject' (raw JSON files)
+    purpose = raw.get("purpose", raw.get("subject", "")).strip()
     ex_date_str = raw.get("exDate", raw.get("ex_date", "")).strip()
 
     if not isin or not ex_date_str:

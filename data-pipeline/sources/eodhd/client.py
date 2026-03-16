@@ -64,7 +64,7 @@ BASE_BACKOFF  = 2      # seconds; doubled each retry
 # All Indian equities (NSE-listed AND BSE-only that EODHD has) appear under NSE.
 # MCX is valid for Indian commodity futures.
 INDIAN_EXCHANGES = ["NSE"]          # Equity + MF + ETF
-INDIAN_EXCHANGES_ALL = ["NSE", "MCX"]  # Including commodities
+INDIAN_EXCHANGES_ALL = ["NSE"]  # Including commodities
 
 
 class EODHDClient:

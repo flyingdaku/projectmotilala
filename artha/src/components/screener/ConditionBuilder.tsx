@@ -45,19 +45,21 @@ export interface Criterion {
 
 const INDICATOR_TO_FILTER_KEY: Record<string, keyof ScreenerFilters> = {
     mcap: 'marketCapCr', pe: 'peTtm', pb: 'pb', ev_ebitda: 'evEbitda',
-    div_yield: 'dividendYield', roce: 'roce', roe: 'roe',
+    div_yield: 'dividendYield', eps_ttm: 'epsGrowth1y',
+    roce: 'roce', roe: 'roe',
     pat_margin: 'patMargin', op_margin: 'operatingMargin',
     rev_g1y: 'revenueGrowth1y', rev_g3y: 'revenueGrowth3y',
-    pat_g1y: 'patGrowth1y', eps_g1y: 'epsGrowth1y',
+    pat_g1y: 'patGrowth1y', pat_g3y: 'patGrowth1y', eps_g1y: 'epsGrowth1y',
     de: 'debtEquity', ic: 'interestCoverage',
     current_ratio: 'currentRatio', quality_score: 'qualityScore',
-    rsi: 'rsi14', pct52wHigh: 'pctFrom52wHigh', pct52wLow: 'pctFrom52wLow',
+    rsi: 'rsi14', pctFrom52wHigh: 'pctFrom52wHigh', pct55wLow: 'pctFrom52wLow',
 };
 
 const UNIVERSE_OPTIONS: Record<string, { filterKey: keyof ScreenerFilters; options: string[] }> = {
-    uni_mcap_bucket: { filterKey: 'marketCapBucket', options: ['large', 'mid', 'small', 'micro'] },
-    uni_sector:      { filterKey: 'sector',          options: [] },
-    uni_instrument_type: { filterKey: 'assetClass',  options: ['EQUITY', 'ETF', 'REIT', 'INVIT'] },
+    uni_mcap_bucket:      { filterKey: 'marketCapBucket', options: ['large', 'mid', 'small', 'micro'] },
+    uni_sector:           { filterKey: 'sector',          options: [] },
+    uni_instrument_type:  { filterKey: 'assetClass',      options: ['equity', 'etf', 'reit', 'invit'] },
+    uni_index:            { filterKey: 'indexMembership', options: ['nifty50','next50','nifty100','nifty200','nifty500','niftybank','midcap150','smallcap250','sensex'] },
 };
 
 // ─── Props ───────────────────────────────────────────────────────────────────
@@ -143,7 +145,8 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
 
     // Active criteria
     const [criteria, setCriteria]   = useState<Criterion[]>([]);
-    const [showDsl, setShowDsl]     = useState(false);
+    // DSL input mode — separate state, persisted alongside criteria
+    const [dslInput, setDslInput]   = useState('');
 
     // ── Save ─────────────────────────────────────────────────────────────
     const [saveScreenName, setSaveScreenName] = useState('');
@@ -155,7 +158,13 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
     const selectedOp      = selectedOpId  ? OPERATORS.find(o => o.id === selectedOpId)   ?? null : null;
     const FUND_CATS       = new Set(['fundamental','financial_health','growth','valuation','quality','universe']);
     const isLhsFund       = lhsInd ? FUND_CATS.has(lhsInd.categoryId) : false;
-    const availableOps    = isLhsFund ? OPERATORS.filter(o => !o.technicalOnly) : OPERATORS;
+    const isLhsEnum       = lhsInd?.rhsType === 'enum';
+    // enum indicators only use the "=" (eq) operator
+    const availableOps    = isLhsEnum
+        ? OPERATORS.filter(o => o.id === 'eq' || o.id === 'gt')
+        : isLhsFund
+            ? OPERATORS.filter(o => !o.technicalOnly)
+            : OPERATORS;
 
     // RHS indicator column: only show when operator expects an indicator or value+indicator
     const vc              = selectedOp?.valueConfig;
@@ -180,8 +189,17 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
         const def: Record<string, number | string> = {};
         lhsInd.params.forEach(p => { def[p.name] = p.defaultValue; });
         setLhsParams(def);
-        const firstOp = isLhsFund ? OPERATORS.find(o => !o.technicalOnly) : OPERATORS[0];
-        if (firstOp) setSelectedOpId(firstOp.id);
+        setRhsNumber('');
+        if (lhsInd.rhsType === 'enum') {
+            // auto-select first enum option
+            const firstOpt = lhsInd.enumOptions?.[0]?.value ?? '';
+            setRhsNumber(firstOpt);
+            const eqOp = OPERATORS.find(o => o.id === 'eq' || o.id === 'gt');
+            if (eqOp) setSelectedOpId(eqOp.id);
+        } else {
+            const firstOp = isLhsFund ? OPERATORS.find(o => !o.technicalOnly) : OPERATORS[0];
+            if (firstOp) setSelectedOpId(firstOp.id);
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedLhsId]);
 
@@ -223,6 +241,7 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
     // ── canAdd ────────────────────────────────────────────────────────────
     const canAdd = (): boolean => {
         if (!lhsInd || !selectedOp) return false;
+        if (lhsInd.rhsType === 'enum') return rhsNumber.trim() !== '';
         const vcl = selectedOp.valueConfig;
         if (vcl.type === 'none') return true;
         if (vcl.type === 'two_numbers') return rhsNumber.trim() !== '' && rhsNumber2.trim() !== '';
@@ -242,21 +261,26 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
             ? `${lhsInd.label}(${lhsInd.params.map(p => lhsParams[p.name] ?? p.defaultValue).join(',')})`
             : lhsInd.label;
         let rhsLabel = rhsExpr;
-        if (rhsMode === 'indicator' && rhsIndId) {
+        if (lhsInd.rhsType === 'enum' && lhsInd.enumOptions) {
+            const opt = lhsInd.enumOptions.find(o => o.value === rhsNumber);
+            if (opt) rhsLabel = opt.label;
+        } else if (rhsMode === 'indicator' && rhsIndId) {
             const rInd = INDICATORS.find(i => i.id === rhsIndId);
             if (rInd) rhsLabel = rInd.params.length > 0
                 ? `${rInd.label}(${rInd.params.map(p => rhsIndParams[p.name] ?? p.defaultValue).join(',')})`
                 : rInd.label;
         }
-        const displayString = vcl.type === 'none'
-            ? `${lhsLabel} ${selectedOp.verb}`
-            : vcl.type === 'two_numbers'
-                ? `${lhsLabel} ${selectedOp.verb} ${rhsNumber} – ${rhsNumber2}`
-                : `${lhsLabel} ${selectedOp.verb} ${rhsLabel}`;
+        const displayString = lhsInd.rhsType === 'enum'
+            ? `${lhsLabel} is ${rhsLabel}`
+            : vcl.type === 'none'
+                ? `${lhsLabel} ${selectedOp.verb}`
+                : vcl.type === 'two_numbers'
+                    ? `${lhsLabel} ${selectedOp.verb} ${rhsNumber} – ${rhsNumber2}`
+                    : `${lhsLabel} ${selectedOp.verb} ${rhsLabel}`;
 
         const dslString = vcl.type === 'two_numbers'
-            ? buildDslCriterion(lhsExpr, selectedOp, rhsNumber, Number(rhsNumber2))
-            : buildDslCriterion(lhsExpr, selectedOp, rhsExpr);
+            ? buildDslCriterion(lhsExpr, selectedOp, rhsNumber, Number(rhsNumber2), lhsInd)
+            : buildDslCriterion(lhsExpr, selectedOp, rhsExpr, undefined, lhsInd);
 
         const newCrit: Criterion = {
             id: `crit-${Date.now()}`,
@@ -293,7 +317,7 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
         rebuildFilters(updated);
     };
 
-    const handleClearAll = () => { setCriteria([]); onChange({}); };
+    const handleClearAll = () => { setCriteria([]); setDslInput(''); onChange({}); };
 
     const handleReorder = (fromIndex: number, toIndex: number) => {
         const updated = [...criteria];
@@ -349,8 +373,45 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
             });
 
         const dslCrs = active.filter(c => !c.simpleKey && !UNIVERSE_OPTIONS[c.indicatorId] && c.dslString);
-        if (dslCrs.length > 0) nf.formula = dslCrs.map(c => c.dslString);
+        // Also include raw DSL lines entered in the DSL input box
+        const rawDslLines = dslInput.split('\n').map(l => l.trim()).filter(Boolean);
+        const allFormula = [...dslCrs.map(c => c.dslString), ...rawDslLines];
+        if (allFormula.length > 0) nf.formula = allFormula;
 
+        onChange(nf);
+    };
+
+    // ── Parse DSL input lines into criteria ───────────────────────────────
+    const handleDslInputChange = (val: string) => {
+        setDslInput(val);
+        // Rebuild filters to keep DSL lines in sync — only pass raw lines, don't parse into chips
+        const active = criteria.filter(c => c.enabled && c.dslString);
+        const nf: ScreenerFilters = {};
+        if (filters.query) nf.query = filters.query;
+        active.filter(c => c.simpleKey && ['gt','lt','gte','lte','between'].includes(c.operatorId))
+            .forEach(c => {
+                const existing = (nf[c.simpleKey!] as RangeFilter | undefined) || {};
+                const v1 = Number(c.rhsValue), v2 = c.rhsValue2 ? Number(c.rhsValue2) : undefined;
+                let m: RangeFilter = { ...existing };
+                if (c.operatorId === 'gt' || c.operatorId === 'gte') m = { ...m, min: v1 };
+                else if (c.operatorId === 'lt' || c.operatorId === 'lte') m = { ...m, max: v1 };
+                else if (c.operatorId === 'between') m = { ...m, min: v1, max: v2 };
+                // @ts-ignore
+                nf[c.simpleKey!] = m;
+            });
+        active.filter(c => UNIVERSE_OPTIONS[c.indicatorId])
+            .forEach(c => {
+                const cfg = UNIVERSE_OPTIONS[c.indicatorId];
+                const existing = (nf[cfg.filterKey] as string[] | undefined) || [];
+                const v = c.rhsValue.trim();
+                if (v && !existing.includes(v)) { // @ts-ignore
+                    nf[cfg.filterKey] = [...existing, v];
+                }
+            });
+        const dslCrs = active.filter(c => !c.simpleKey && !UNIVERSE_OPTIONS[c.indicatorId] && c.dslString);
+        const rawLines = val.split('\n').map(l => l.trim()).filter(Boolean);
+        const allFormula = [...dslCrs.map(c => c.dslString), ...rawLines];
+        if (allFormula.length > 0) nf.formula = allFormula;
         onChange(nf);
     };
 
@@ -375,10 +436,10 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
         if (!lhsInd || !selectedOp) return null;
         const l = buildLhsDsl();
         const r = buildRhsDsl();
-        if (!r && vc?.type !== 'none') return null;
+        if (!r && vc?.type !== 'none' && lhsInd?.rhsType !== 'enum') return null;
         return vc?.type === 'two_numbers' && rhsNumber2
-            ? buildDslCriterion(l, selectedOp, rhsNumber, Number(rhsNumber2))
-            : buildDslCriterion(l, selectedOp, r);
+            ? buildDslCriterion(l, selectedOp, rhsNumber, Number(rhsNumber2), lhsInd ?? undefined)
+            : buildDslCriterion(l, selectedOp, r, undefined, lhsInd ?? undefined);
     })();
 
     // ── Universe dropdown shortcut ────────────────────────────────────────
@@ -459,6 +520,27 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                             <Plus className="w-3.5 h-3.5" /> Add Rule
                         </Button>
                     </div>
+                ) : isLhsEnum && lhsInd?.enumOptions && lhsInd.enumOptions.length > 0 ? (
+                    <div className="flex flex-col h-full">
+                        <ScrollArea className="flex-1">
+                            <div className="p-2 flex flex-col gap-0.5">
+                                {lhsInd.enumOptions.map(opt => (
+                                    <button key={opt.value}
+                                        onClick={() => setRhsNumber(opt.value)}
+                                        className={itemCls(rhsNumber === opt.value)}>
+                                        <span className="text-xs truncate flex-1">{opt.label}</span>
+                                        {rhsNumber === opt.value && <ChevronRight className="w-3 h-3 shrink-0 opacity-50" />}
+                                    </button>
+                                ))}
+                            </div>
+                        </ScrollArea>
+                        <div className="p-3 border-t border-border bg-muted/10">
+                            <Button size="sm" onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }} disabled={!canAdd()}
+                                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-semibold gap-1.5">
+                                <Plus className="w-3.5 h-3.5" /> Add Rule
+                            </Button>
+                        </div>
+                    </div>
                 ) : (
                     <div className="flex flex-col h-full">
                         <div className="p-3 space-y-2">
@@ -530,44 +612,45 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
 
             {/* Content Area */}
             <div className="p-4 relative z-10">
-                {/* ── Formula Builder (Rules) ── */}
-                <div className="flex flex-col">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-foreground"></h3>
-                        <div className="flex items-center gap-2">
-                            {/* Button moved above */}
-                        </div>
-                    </div>
-                    <div className="flex flex-col">
-                        {/* Descriptive text */}
-                        {criteria.length > 0 && (
-                            <p className="text-sm text-muted-foreground mb-4 font-medium">
-                                Stock passes all of the below filters in cash segment:
-                            </p>
+                {rulesViewMode === 'formula' ? (
+                    /* ── DSL Mode: single textarea, no criteria list shown ── */
+                    <div className="flex flex-col gap-2">
+                        <p className="text-xs text-muted-foreground">
+                            Write one DSL expression per line. These are combined with <span className="font-semibold text-foreground">AND</span> logic. Criteria added via the list view also apply.
+                        </p>
+                        <textarea
+                            value={dslInput}
+                            onChange={e => handleDslInputChange(e.target.value)}
+                            placeholder={"rsi(14) < 30\npe > 10 AND pe < 25\nroce > 15"}
+                            rows={6}
+                            spellCheck={false}
+                            className="w-full rounded-md border border-border bg-muted/20 px-3 py-2.5 font-mono text-[12px] text-amber-400 placeholder:text-muted-foreground/40 resize-y focus:outline-none focus:ring-1 focus:ring-amber-500/50 leading-relaxed"
+                        />
+                        {/* Show criteria from list view as read-only context */}
+                        {criteria.filter(c => c.enabled && c.dslString).length > 0 && (
+                            <div className="rounded-md border border-border bg-muted/10 p-2.5">
+                                <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Also active from list view:</div>
+                                <div className="flex flex-col gap-1">
+                                    {criteria.filter(c => c.enabled && c.dslString).map(c => (
+                                        <div key={c.id} className="font-mono text-[11px] text-foreground/70 truncate">
+                                            {c.dslString}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
                         )}
-                        {criteria.length === 0 ? (
+                    </div>
+                ) : (
+                    /* ── List Mode: chip rows ── */
+                    <div className="flex flex-col">
+                        {criteria.length === 0 && !dslInput ? (
                             <div className="flex flex-col items-center justify-center py-8 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
                                 <Code2 className="w-8 h-8 mb-3 text-muted-foreground/40" />
                                 <p className="text-xs text-muted-foreground mb-4 text-center max-w-xs">Add using the formula builder or visual builder to screen stocks</p>
                                 <div className="flex items-center gap-2">
-                                    <Button
-                                        size="sm"
-                                        onClick={() => {
-                                            const newCrit: Criterion = {
-                                                id: `crit-${Date.now()}`,
-                                                indicatorId: '',
-                                                paramValues: {},
-                                                operatorId: '',
-                                                rhsValue: '',
-                                                displayString: '',
-                                                dslString: '',
-                                                supported: true,
-                                                enabled: true,
-                                            };
-                                            setCriteria([newCrit]);
-                                        }}
-                                        className="gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold"
-                                    >
+                                    <Button size="sm" onClick={() => {
+                                        setCriteria([{ id: `crit-${Date.now()}`, indicatorId: '', paramValues: {}, operatorId: '', rhsValue: '', displayString: '', dslString: '', supported: true, enabled: true }]);
+                                    }} className="gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold">
                                         <Plus className="w-3.5 h-3.5" /> Add New Rule
                                     </Button>
                                     <Dialog open={visualBuilderOpen} onOpenChange={setVisualBuilderOpen}>
@@ -580,116 +663,69 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                             <DialogHeader className="px-6 py-4 border-b">
                                                 <DialogTitle>Visual Rule Builder</DialogTitle>
                                             </DialogHeader>
-                                            {/* Visual Builder Content */}
                                             {renderVisualBuilder()}
                                         </DialogContent>
                                     </Dialog>
                                 </div>
                             </div>
-                    ) : rulesViewMode === 'formula' ? (
-                        <div className="flex flex-col gap-3">
-                            {/* Formula Rows */}
-                            <div className="flex flex-col gap-1.5">
-                                {criteria.map((crit, i) => (
-                                    <FormulaCell
-                                        key={crit.id}
-                                        criterion={crit}
-                                        index={i}
-                                        onToggle={handleToggleCriterion}
-                                        onRemove={handleRemove}
-                                        onReorder={handleReorder}
-                                        onUpdate={handleUpdateCriterion}
-                                    />
-                                ))}
-                            </div>
-                            
-                            {/* DSL Output Box */}
-                            <div className="border border-border rounded-lg overflow-hidden flex flex-col bg-card shadow-sm">
-                                <div className={`${COL_HEADER} bg-muted/20 border-b border-border`}>
-                                    Formula Screen
-                                </div>
-                                <div className="p-3 space-y-2">
-                                    <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider px-1 mb-1">DSL Formula</div>
-                                    {criteria.filter(c => c.enabled).map((crit, i) => (
-                                        <div key={crit.id} className="group relative transition-all duration-300 ease-out hover:-translate-y-[1px]">
-                                            <div className="rounded-md bg-muted/40 border border-border px-2.5 py-2 font-mono text-[11px] text-amber-500 break-all leading-relaxed transition-colors group-hover:border-amber-500/30 group-hover:bg-amber-500/5">
-                                                {crit.dslString}
-                                            </div>
-                                            <button onClick={() => handleRemove(crit.id)}
-                                                className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-all duration-200 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90">
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                        </div>
+                        ) : (
+                            <>
+                                {criteria.length > 0 && (
+                                    <p className="text-xs text-muted-foreground mb-3 font-medium">
+                                        Stock passes <span className="font-semibold text-foreground">all</span> of the below filters:
+                                    </p>
+                                )}
+                                <div className="flex flex-col gap-0.5">
+                                    {criteria.map((crit, i) => (
+                                        <FormulaCell
+                                            key={crit.id}
+                                            criterion={crit}
+                                            index={i}
+                                            onToggle={handleToggleCriterion}
+                                            onRemove={handleRemove}
+                                            onReorder={handleReorder}
+                                            onUpdate={handleUpdateCriterion}
+                                        />
                                     ))}
-                                    {criteria.filter(c => !c.enabled).length > 0 && (
-                                        <>
-                                            <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider px-1 mt-3 mb-1 opacity-60">Disabled</div>
-                                            {criteria.filter(c => !c.enabled).map((crit) => (
-                                                <div key={crit.id} className="group relative opacity-50 transition-all duration-300 hover:opacity-80">
-                                                    <div className="rounded-md bg-muted/40 border border-border px-2.5 py-2 font-mono text-[11px] text-amber-500 break-all leading-relaxed line-through transition-colors group-hover:border-border/80">
-                                                        {crit.dslString}
-                                                    </div>
-                                                    <button onClick={() => handleRemove(crit.id)}
-                                                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-all duration-200 p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 active:scale-90">
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </>
+                                </div>
+                                {/* Show DSL lines from formula mode as read-only context */}
+                                {dslInput.trim() && (
+                                    <div className="mt-2 rounded-md border border-border bg-muted/10 p-2.5">
+                                        <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5">Also active from DSL view:</div>
+                                        {dslInput.split('\n').filter(l => l.trim()).map((l, i) => (
+                                            <div key={i} className="font-mono text-[11px] text-amber-500/80 truncate">{l}</div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="mt-3 flex items-center gap-2">
+                                    <Dialog open={visualBuilderOpen} onOpenChange={setVisualBuilderOpen}>
+                                        <DialogTrigger asChild>
+                                            <Button size="sm" variant="outline" className="gap-1.5">
+                                                <Wand2 className="w-3.5 h-3.5" /> Add via Visual Builder
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent className="w-[95vw] max-h-[95vh] p-0">
+                                            <DialogHeader className="px-6 py-4 border-b">
+                                                <DialogTitle>Visual Rule Builder</DialogTitle>
+                                            </DialogHeader>
+                                            {renderVisualBuilder()}
+                                        </DialogContent>
+                                    </Dialog>
+                                    <Button size="sm" onClick={() => {
+                                        setCriteria([...criteria, { id: `crit-${Date.now()}`, indicatorId: '', paramValues: {}, operatorId: '', rhsValue: '', displayString: '', dslString: '', supported: true, enabled: true }]);
+                                    }} className="gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold">
+                                        <Plus className="w-3.5 h-3.5" /> Add New Rule
+                                    </Button>
+                                    {(criteria.length > 0 || dslInput.trim()) && (
+                                        <Button size="sm" variant="ghost" onClick={handleClearAll} className="gap-1 text-muted-foreground hover:text-destructive ml-auto">
+                                            <Trash2 className="w-3 h-3" /> Clear all
+                                        </Button>
                                     )}
                                 </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-1.5 flex-1 overflow-y-auto">
-                            {criteria.map((crit, i) => (
-                                <FormulaCell
-                                    key={crit.id}
-                                    criterion={crit}
-                                    index={i}
-                                    onToggle={handleToggleCriterion}
-                                    onRemove={handleRemove}
-                                    onReorder={handleReorder}
-                                    onUpdate={handleUpdateCriterion}
-                                />
-                            ))}
-                        </div>
-                    )}
-                        {criteria.length > 0 && (
-                            <div className="mt-3 flex items-center gap-2">
-                                <Dialog open={visualBuilderOpen} onOpenChange={setVisualBuilderOpen}>
-                                    <DialogTrigger asChild>
-                                        <Button size="sm" variant="outline" className="gap-1.5">
-                                            <Wand2 className="w-3.5 h-3.5" /> Add via Visual Builder
-                                        </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="w-[95vw] max-h-[95vh] p-0">
-                                        <DialogHeader className="px-6 py-4 border-b">
-                                            <DialogTitle>Visual Rule Builder</DialogTitle>
-                                        </DialogHeader>
-                                        {renderVisualBuilder()}
-                                    </DialogContent>
-                                </Dialog>
-                                <Button size="sm" onClick={() => {
-                                    const newCrit: Criterion = {
-                                        id: `crit-${Date.now()}`,
-                                        indicatorId: '',
-                                        paramValues: {},
-                                        operatorId: '',
-                                        rhsValue: '',
-                                        displayString: '',
-                                        dslString: '',
-                                        supported: true,
-                                        enabled: true,
-                                    };
-                                    setCriteria([...criteria, newCrit]);
-                                }} className="gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold">
-                                    <Plus className="w-3.5 h-3.5" /> Add New Rule
-                                </Button>
-                            </div>
+                            </>
                         )}
                     </div>
-                </div>
+                )}
             </div>
 
             {/* ── Action bar (bottom, always visible) ── */}
