@@ -148,6 +148,7 @@ export function TopBar() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
+              id="topbar-profile-menu-trigger"
               type="button"
               className="ml-1 flex h-10 items-center gap-1 rounded-full border px-1.5 transition-colors"
               style={{
@@ -169,6 +170,7 @@ export function TopBar() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
+            id="topbar-profile-menu-content"
             align="end"
             sideOffset={10}
             className="w-64 rounded-2xl border p-1.5"

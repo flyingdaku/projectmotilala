@@ -292,7 +292,7 @@ export default function BacktestPage() {
                   className="px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-150"
                   style={
                     resultTab === tab.id
-                      ? { background: "var(--surface-elevated)", color: "var(--text-primary)", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }
+                      ? { background: "var(--selection-bg)", color: "var(--selection-text)", border: "1px solid var(--selection-border)", boxShadow: "0 1px 3px rgba(0,0,0,0.12)" }
                       : { color: "var(--text-muted)" }
                   }
                 >

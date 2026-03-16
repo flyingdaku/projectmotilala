@@ -183,8 +183,17 @@ export function Sidebar() {
                         <span className="text-[12.5px] font-semibold tracking-tight">{title}</span>
                       </span>
                     </AccordionTrigger>
-                    <AccordionContent className="pb-1 pt-0.5">
-                      <div className="ml-5 flex flex-col gap-1 border-l pl-3" style={{ borderColor: "color-mix(in srgb, var(--brand-primary) 18%, var(--border) 82%)" }}>
+                    <AccordionContent className="pb-1 pt-1.5">
+                      <div
+                        className="relative ml-3 mt-1 flex flex-col gap-1.5 pl-5"
+                        style={{
+                          ["--submenu-guide" as string]: "color-mix(in srgb, var(--brand-primary) 16%, var(--border) 84%)",
+                        }}
+                      >
+                        <div
+                          className="pointer-events-none absolute bottom-1 left-[9px] top-1 w-[2px] -translate-x-1/2 rounded-full"
+                          style={{ background: "linear-gradient(to bottom, transparent, var(--submenu-guide), transparent)" }}
+                        />
                         {items.map(item => {
                           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
                           return (
@@ -192,13 +201,19 @@ export function Sidebar() {
                               key={item.href}
                               href={item.href}
                               className={cn(
-                                "rounded-lg border-l-[3px] border-transparent px-2.5 py-1.5 text-[13px] font-medium leading-tight transition-colors duration-150",
+                                "group relative rounded-xl px-3 py-2 text-[13px] font-medium leading-tight transition-all duration-150",
                                 isActive
-                                  ? "bg-[var(--nav-active-bg)] text-[var(--brand-primary)]"
+                                  ? "bg-[var(--nav-active-bg)] text-[var(--brand-primary)] shadow-[inset_0_0_0_1px_var(--selection-border)]"
                                   : "text-[color:var(--nav-text-muted)] hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text)]"
                               )}
-                              style={isActive ? { borderLeftColor: "var(--brand-primary)" } : undefined}
                             >
+                              <span
+                                className={cn(
+                                  "absolute left-[-11px] top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-150",
+                                  isActive ? "bg-[var(--brand-primary)]" : "bg-[color:var(--border)] group-hover:bg-[var(--brand-primary)]"
+                                )}
+                                aria-hidden="true"
+                              />
                               {item.label}
                             </Link>
                           );

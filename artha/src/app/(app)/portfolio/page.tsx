@@ -121,8 +121,9 @@ export default function PortfolioPage() {
             style={
               activeTab === tab.id
                 ? {
-                    background: "var(--surface-elevated)",
-                    color: "var(--text-primary)",
+                    background: "var(--selection-bg)",
+                    color: "var(--selection-text)",
+                    border: "1px solid var(--selection-border)",
                     boxShadow: "var(--shadow-card)",
                   }
                 : { color: "var(--text-muted)", background: "transparent" }

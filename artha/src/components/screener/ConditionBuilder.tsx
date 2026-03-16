@@ -127,6 +127,8 @@ function ParamSpinner({ value, onChange, param, onClick }: {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMode, screenName }: ConditionBuilderProps) {
+    const visualBuilderDialogId = 'screener-visual-builder-dialog';
+    const visualBuilderTriggerId = 'screener-visual-builder-trigger';
 
     // ── Visual builder dialog state ──────────────────────────────────────
     const [visualBuilderOpen, setVisualBuilderOpen] = useState(false);
@@ -515,8 +517,13 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                 ) : vc?.type === 'none' ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-4 gap-3">
                         <p className="text-xs text-muted-foreground text-center">No value needed for<br /><span className="font-semibold text-foreground">{selectedOp.label}</span></p>
-                        <Button size="sm" onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }} disabled={!canAdd()}
-                            className="bg-amber-500 hover:bg-amber-400 text-black font-semibold gap-1.5">
+                        <Button
+                            size="sm"
+                            variant="default"
+                            onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
+                            disabled={!canAdd()}
+                            className="gap-1.5"
+                        >
                             <Plus className="w-3.5 h-3.5" /> Add Rule
                         </Button>
                     </div>
@@ -535,8 +542,13 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                             </div>
                         </ScrollArea>
                         <div className="p-3 border-t border-border bg-muted/10">
-                            <Button size="sm" onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }} disabled={!canAdd()}
-                                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-semibold gap-1.5">
+                            <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
+                                disabled={!canAdd()}
+                                className="w-full gap-1.5"
+                            >
                                 <Plus className="w-3.5 h-3.5" /> Add Rule
                             </Button>
                         </div>
@@ -586,8 +598,13 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                     {livePreview}
                                 </div>
                             )}
-                            <Button size="sm" onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }} disabled={!canAdd()}
-                                className="w-full bg-amber-500 hover:bg-amber-400 text-black font-semibold gap-1.5">
+                            <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
+                                disabled={!canAdd()}
+                                className="w-full gap-1.5"
+                            >
                                 <Plus className="w-3.5 h-3.5" /> Add Rule
                             </Button>
                         </div>
@@ -648,18 +665,18 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                 <Code2 className="w-8 h-8 mb-3 text-muted-foreground/40" />
                                 <p className="text-xs text-muted-foreground mb-4 text-center max-w-xs">Add using the formula builder or visual builder to screen stocks</p>
                                 <div className="flex items-center gap-2">
-                                    <Button size="sm" onClick={() => {
+                                    <Button size="sm" variant="secondary" onClick={() => {
                                         setCriteria([{ id: `crit-${Date.now()}`, indicatorId: '', paramValues: {}, operatorId: '', rhsValue: '', displayString: '', dslString: '', supported: true, enabled: true }]);
-                                    }} className="gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold">
+                                    }} className="gap-1.5">
                                         <Plus className="w-3.5 h-3.5" /> Add New Rule
                                     </Button>
                                     <Dialog open={visualBuilderOpen} onOpenChange={setVisualBuilderOpen}>
                                         <DialogTrigger asChild>
-                                            <Button size="sm" variant="outline" className="gap-1.5">
+                                            <Button id={visualBuilderTriggerId} size="sm" variant="outline" className="gap-1.5">
                                                 <Wand2 className="w-3.5 h-3.5" /> Add via Visual Builder
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent className="w-[95vw] max-h-[95vh] p-0">
+                                        <DialogContent id={visualBuilderDialogId} className="w-[95vw] max-h-[95vh] p-0">
                                             <DialogHeader className="px-6 py-4 border-b">
                                                 <DialogTitle>Visual Rule Builder</DialogTitle>
                                             </DialogHeader>
@@ -700,20 +717,20 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                 <div className="mt-3 flex items-center gap-2">
                                     <Dialog open={visualBuilderOpen} onOpenChange={setVisualBuilderOpen}>
                                         <DialogTrigger asChild>
-                                            <Button size="sm" variant="outline" className="gap-1.5">
+                                            <Button id={visualBuilderTriggerId} size="sm" variant="outline" className="gap-1.5">
                                                 <Wand2 className="w-3.5 h-3.5" /> Add via Visual Builder
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent className="w-[95vw] max-h-[95vh] p-0">
+                                        <DialogContent id={visualBuilderDialogId} className="w-[95vw] max-h-[95vh] p-0">
                                             <DialogHeader className="px-6 py-4 border-b">
                                                 <DialogTitle>Visual Rule Builder</DialogTitle>
                                             </DialogHeader>
                                             {renderVisualBuilder()}
                                         </DialogContent>
                                     </Dialog>
-                                    <Button size="sm" onClick={() => {
+                                    <Button size="sm" variant="secondary" onClick={() => {
                                         setCriteria([...criteria, { id: `crit-${Date.now()}`, indicatorId: '', paramValues: {}, operatorId: '', rhsValue: '', displayString: '', dslString: '', supported: true, enabled: true }]);
-                                    }} className="gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold">
+                                    }} className="gap-1.5">
                                         <Plus className="w-3.5 h-3.5" /> Add New Rule
                                     </Button>
                                     {(criteria.length > 0 || dslInput.trim()) && (
@@ -730,8 +747,8 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
 
             {/* ── Action bar (bottom, always visible) ── */}
             <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-muted/10 flex-wrap">
-                <Button size="sm" onClick={onRun}
-                    className="gap-1.5 bg-amber-500 hover:bg-amber-400 text-black font-semibold shrink-0">
+                <Button size="sm" variant="default" onClick={onRun}
+                    className="gap-1.5 shrink-0">
                     <Play className="w-3.5 h-3.5" /> Run Screen
                 </Button>
                 <div className="flex items-center gap-2 ml-auto">
