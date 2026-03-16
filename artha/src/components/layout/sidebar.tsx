@@ -185,13 +185,13 @@ export function Sidebar() {
                     </AccordionTrigger>
                     <AccordionContent className="pb-1 pt-1.5">
                       <div
-                        className="relative ml-3 mt-1 flex flex-col gap-1.5 pl-5"
+                        className="relative ml-3 mt-1 flex flex-col gap-1.5 pl-6"
                         style={{
                           ["--submenu-guide" as string]: "color-mix(in srgb, var(--brand-primary) 16%, var(--border) 84%)",
                         }}
                       >
                         <div
-                          className="pointer-events-none absolute bottom-1 left-[9px] top-1 w-[2px] -translate-x-1/2 rounded-full"
+                          className="pointer-events-none absolute bottom-1 left-2 top-1 w-px -translate-x-1/2 rounded-full"
                           style={{ background: "linear-gradient(to bottom, transparent, var(--submenu-guide), transparent)" }}
                         />
                         {items.map(item => {
@@ -201,7 +201,7 @@ export function Sidebar() {
                               key={item.href}
                               href={item.href}
                               className={cn(
-                                "group relative rounded-xl px-3 py-2 text-[13px] font-medium leading-tight transition-all duration-150",
+                                "group relative rounded-xl px-3 py-2.5 text-[12.5px] font-semibold tracking-tight transition-all duration-150",
                                 isActive
                                   ? "bg-[var(--nav-active-bg)] text-[var(--brand-primary)] shadow-[inset_0_0_0_1px_var(--selection-border)]"
                                   : "text-[color:var(--nav-text-muted)] hover:bg-[var(--nav-hover-bg)] hover:text-[var(--nav-text)]"
@@ -209,7 +209,7 @@ export function Sidebar() {
                             >
                               <span
                                 className={cn(
-                                  "absolute left-[-11px] top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-150",
+                                  "absolute -left-4 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-150",
                                   isActive ? "bg-[var(--brand-primary)]" : "bg-[color:var(--border)] group-hover:bg-[var(--brand-primary)]"
                                 )}
                                 aria-hidden="true"

@@ -440,7 +440,7 @@ export default function TacticalAllocationPage() {
       <div className="p-6 rounded-xl border space-y-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Portfolio Returns</h2>
          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-elevated)" }}>
                   <th className="text-left font-medium py-2 px-3" style={{ color: "var(--text-muted)" }}>Metric</th>
@@ -490,7 +490,7 @@ export default function TacticalAllocationPage() {
       <div className="p-6 rounded-xl border space-y-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Trailing Returns (Annualized)</h2>
          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-elevated)" }}>
                   <th className="text-left font-medium py-2 px-3" style={{ color: "var(--text-muted)" }}>Period</th>
@@ -527,7 +527,7 @@ export default function TacticalAllocationPage() {
       <div className="p-6 rounded-xl border space-y-4" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>Risk & Return Metrics</h2>
          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-elevated)" }}>
                   <th className="text-left font-medium py-2 px-3" style={{ color: "var(--text-muted)" }}>Metric</th>
@@ -685,7 +685,7 @@ export default function TacticalAllocationPage() {
         <div className="space-y-4 pt-4 border-t" style={{ borderColor: "var(--border)" }}>
           <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>Historical Market Stress Periods</h3>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid var(--border)", background: "var(--surface-elevated)" }}>
                   <th className="text-left text-xs font-medium py-2 px-3" style={{ color: "var(--text-muted)" }}>Stress Period</th>
