@@ -65,7 +65,7 @@ export default function ScreenerRunPage() {
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={() => setRulesViewMode(rulesViewMode === 'list' ? 'formula' : 'list')}
-          className="h-7 text-xs gap-1.5">
+          className="h-7 text-xs gap-1.5 cursor-pointer">
           <Code2 className="w-3 h-3" />
           {rulesViewMode === 'list' ? 'Show DSL' : 'Show List'}
         </Button>

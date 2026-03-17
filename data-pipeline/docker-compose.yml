@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: artha_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: artha
+      POSTGRES_PASSWORD: artha_dev_password
+      POSTGRES_DB: artha_relational
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init-postgres.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    command: >
+      postgres
+      -c shared_preload_libraries=pg_stat_statements
+      -c pg_stat_statements.track=all
+      -c max_connections=200
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c work_mem=16MB
+      -c maintenance_work_mem=128MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c random_page_cost=1.1
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artha -d artha_relational"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: artha_timescale
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: artha
+      POSTGRES_PASSWORD: artha_dev_password
+      POSTGRES_DB: artha_timeseries
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./db/init-timescale.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    command: >
+      postgres
+      -c shared_preload_libraries=timescaledb,pg_stat_statements
+      -c timescaledb.telemetry_level=off
+      -c max_connections=200
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c work_mem=32MB
+      -c maintenance_work_mem=256MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=16MB
+      -c random_page_cost=1.1
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artha -d artha_timeseries"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  timescale_data:
+    driver: local

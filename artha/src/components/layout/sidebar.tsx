@@ -26,7 +26,6 @@ const CATEGORIES = [
       { label: "Transactions", href: "/portfolio/transactions" },
       { label: "Performance", href: "/portfolio/performance" },
       { label: "Rebalance", href: "/portfolio/rebalance" },
-      { label: "Tax Report", href: "/tax" },
     ],
   },
   {

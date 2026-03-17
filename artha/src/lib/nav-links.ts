@@ -3,7 +3,6 @@ export const PORTFOLIO_LINKS = [
   { name: "Transactions", href: "/portfolio/transactions" },
   { name: "Performance", href: "/portfolio/performance" },
   { name: "Rebalance", href: "/portfolio/rebalance" },
-  { name: "Tax Report", href: "/tax" },
 ];
 
 export const RESEARCH_LINKS = [

@@ -748,14 +748,14 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
             {/* ── Action bar (bottom, always visible) ── */}
             <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-muted/10 flex-wrap">
                 <Button size="sm" variant="default" onClick={onRun}
-                    className="gap-1.5 shrink-0">
+                    className="gap-1.5 shrink-0 cursor-pointer">
                     <Play className="w-3.5 h-3.5" /> Run Screen
                 </Button>
                 <div className="flex items-center gap-2 ml-auto">
                     <Input value={saveScreenName} onChange={e => setSaveScreenName(e.target.value)}
                         placeholder="Screen name…" className="h-8 w-36 text-xs" />
                     <Button variant="outline" size="sm" onClick={handleSaveScreen}
-                        disabled={isSaving || !saveScreenName.trim()} className="shrink-0 gap-1">
+                        disabled={isSaving || !saveScreenName.trim()} className="shrink-0 gap-1 cursor-pointer">
                         <Save className="w-3.5 h-3.5" />{isSaving ? '…' : 'Save'}
                     </Button>
                 </div>
