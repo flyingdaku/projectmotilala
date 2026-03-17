@@ -181,6 +181,138 @@ def get_connection(db_path: Optional[str] = None) -> Iterator[SqliteConnection]:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PostgreSQL Implementation
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Connection DSN defaults — override via environment variables.
+# artha_relational  →  PG_RELATIONAL_DSN
+# artha_timeseries  →  PG_TIMESERIES_DSN
+_PG_RELATIONAL_DSN_DEFAULT = (
+    "host=localhost port=5432 dbname=artha_relational user=artha password=artha_dev_password"
+)
+_PG_TIMESERIES_DSN_DEFAULT = (
+    "host=localhost port=5433 dbname=artha_timeseries user=artha password=artha_dev_password"
+)
+
+
+class PostgresConnection(DatabaseConnection):
+    """
+    psycopg2-backed connection wrapper that implements the same
+    DatabaseConnection interface as SqliteConnection.
+
+    Features:
+    - RealDictCursor so fetchone/fetchall return plain dicts
+    - Placeholder translation: SQLite ? → psycopg2 %s is handled by callers
+      passing %-style or ? params; this wrapper normalises ? → %s automatically
+    - Autocommit disabled; explicit commit/rollback required (handled by
+      context managers below)
+    """
+
+    def __init__(self, dsn: str):
+        if not _PSYCOPG2_AVAILABLE:
+            raise RuntimeError(
+                "psycopg2 is not installed. Run: pip install psycopg2-binary"
+            )
+        self._raw = psycopg2.connect(dsn)
+        self._raw.autocommit = False
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _normalise_sql(sql: str) -> str:
+        """Replace SQLite-style ? placeholders with psycopg2-style %s."""
+        return sql.replace("?", "%s")
+
+    def _cursor(self):
+        return self._raw.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+    # ------------------------------------------------------------------
+    # DatabaseConnection interface
+    # ------------------------------------------------------------------
+
+    def execute(self, sql: str, params: tuple = ()) -> Any:
+        cur = self._cursor()
+        cur.execute(self._normalise_sql(sql), params or None)
+        return cur
+
+    def executemany(self, sql: str, rows: List[tuple]) -> int:
+        cur = self._cursor()
+        psycopg2.extras.execute_batch(cur, self._normalise_sql(sql), rows)
+        return cur.rowcount
+
+    def fetchone(self, sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
+        cur = self._cursor()
+        cur.execute(self._normalise_sql(sql), params or None)
+        row = cur.fetchone()
+        return dict(row) if row else None
+
+    def fetchall(self, sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
+        cur = self._cursor()
+        cur.execute(self._normalise_sql(sql), params or None)
+        return [dict(r) for r in cur.fetchall()]
+
+    def commit(self) -> None:
+        self._raw.commit()
+
+    def rollback(self) -> None:
+        self._raw.rollback()
+
+    def close(self) -> None:
+        self._raw.close()
+
+    @property
+    def raw_connection(self):
+        """Escape hatch for direct psycopg2 access."""
+        return self._raw
+
+
+@contextmanager
+def get_pg_connection(dsn: Optional[str] = None) -> Iterator[PostgresConnection]:
+    """
+    Context manager for the relational PostgreSQL database (artha_relational).
+
+    Usage:
+        from core.db import get_pg_connection
+        with get_pg_connection() as conn:
+            rows = conn.fetchall("SELECT * FROM assets LIMIT 5")
+    """
+    resolved_dsn = dsn or os.environ.get("PG_RELATIONAL_DSN", _PG_RELATIONAL_DSN_DEFAULT)
+    conn = PostgresConnection(resolved_dsn)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+@contextmanager
+def get_ts_connection(dsn: Optional[str] = None) -> Iterator[PostgresConnection]:
+    """
+    Context manager for the TimescaleDB database (artha_timeseries).
+
+    Usage:
+        from core.db import get_ts_connection
+        with get_ts_connection() as conn:
+            rows = conn.fetchall("SELECT * FROM daily_prices ORDER BY date DESC LIMIT 10")
+    """
+    resolved_dsn = dsn or os.environ.get("PG_TIMESERIES_DSN", _PG_TIMESERIES_DSN_DEFAULT)
+    conn = PostgresConnection(resolved_dsn)
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Backwards-Compatible Helpers (used during migration period)
 # ═══════════════════════════════════════════════════════════════════════════════
 

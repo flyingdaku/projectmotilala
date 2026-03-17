@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/data/db";
+import { pgDb } from "@/lib/data/db-postgres";
 import { INDIA_INDICES } from "@/lib/screener/dsl/column-map";
 
 /**
@@ -10,10 +10,8 @@ import { INDIA_INDICES } from "@/lib/screener/dsl/column-map";
  */
 export async function GET() {
   try {
-    const db = getDb();
-
     // ── Sectors ──────────────────────────────────────────────────────────────
-    const sectorRows = db.queryAll<{ sector: string }>(
+    const sectorRows = await pgDb.queryAll<{ sector: string }>(
       `SELECT DISTINCT sector
        FROM assets
        WHERE is_active = 1
@@ -25,7 +23,7 @@ export async function GET() {
     const sectors = sectorRows.map(r => r.sector);
 
     // ── Indices (check which ones have constituents in DB) ───────────────────
-    const indexNameRows = db.queryAll<{ name: string }>(
+    const indexNameRows = await pgDb.queryAll<{ name: string }>(
       `SELECT DISTINCT a.name
        FROM index_constituents ic
        JOIN assets a ON a.id = ic.index_id

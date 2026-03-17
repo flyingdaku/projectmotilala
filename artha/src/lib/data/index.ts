@@ -571,16 +571,13 @@ function createMockAdapter(): DataAdapter {
 
 // ── Singleton ────────────────────────────────────────────────────────────────
 
-import { createSqliteAdapter } from "./sqlite-adapter";
+import { createPgAdapter } from "./pg-adapter";
 
 let adapterInstance: DataAdapter | null = null;
 
 export async function getDataAdapter(): Promise<DataAdapter> {
   if (!adapterInstance) {
-    // Use real SQLite adapter. To swap to Postgres/Clickhouse:
-    //   replace createSqliteAdapter() with the new adapter
-    //   and update src/lib/data/db.ts accordingly.
-    adapterInstance = createSqliteAdapter() as unknown as DataAdapter;
+    adapterInstance = createPgAdapter() as unknown as DataAdapter;
   }
   return adapterInstance;
 }

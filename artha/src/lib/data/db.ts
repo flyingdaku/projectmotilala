@@ -28,9 +28,8 @@ function createSqliteDb(dbPath: string): Db {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Database = require("better-sqlite3");
     const db = new Database(dbPath, { readonly: true });
-    // Disable WAL mode for readonly connections - WAL requires checkpointing
-    // which cannot be done in readonly mode, causing unbounded WAL file growth
-    db.pragma("journal_mode = DELETE");
+    // Keep WAL mode as set by Python pipeline - readonly connections can safely read WAL
+    // db.pragma("journal_mode = DELETE"); // REMOVED - causes SQLITE_BUSY errors
 
     return {
         queryAll<T extends Row>(sql: string, params: unknown[] = []): T[] {
