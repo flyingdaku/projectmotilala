@@ -17,6 +17,13 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, TypeVar, Generic, Iterator
 
+try:
+    import psycopg2
+    import psycopg2.extras
+    _PSYCOPG2_AVAILABLE = True
+except ImportError:
+    _PSYCOPG2_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
