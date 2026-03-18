@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDataAdapter } from "@/lib/data";
-import { PriceRepository } from "@/lib/data/repositories/prices";
-import type { PeerComparison } from "@/lib/data/types";
+import type { PeerComparison, PriceBar } from "@/lib/data/types";
 
 type Period = "1y" | "3y" | "5y";
 
@@ -22,13 +21,13 @@ function minOverlapForPeriod(period: Period): number {
   return 160;
 }
 
-function buildReturnMap(series: Array<{ date: string; price: number }>): ReturnMap {
+function buildReturnMap(series: PriceBar[]): ReturnMap {
   const returns = new Map<string, number>();
   for (let index = 1; index < series.length; index += 1) {
     const prev = series[index - 1];
     const current = series[index];
-    if (!prev?.price || !current?.price || prev.price <= 0 || current.price <= 0) continue;
-    returns.set(current.date, Math.log(current.price / prev.price));
+    if (!prev?.close || !current?.close || prev.close <= 0 || current.close <= 0) continue;
+    returns.set(current.date, Math.log(current.close / prev.close));
   }
   return returns;
 }
@@ -85,7 +84,6 @@ export async function GET(
     const limit = Math.min(Math.max(Number(req.nextUrl.searchParams.get("limit") ?? "5"), 3), 6);
 
     const adapter = await getDataAdapter();
-    const pricesRepo = new PriceRepository();
 
     const stock = await adapter.stocks.getBySymbol(symbol);
     if (!stock) {
@@ -101,7 +99,7 @@ export async function GET(
     const endDate = new Date().toISOString().split("T")[0];
     const minOverlap = minOverlapForPeriod(resolvedPeriod);
 
-    const subjectSeries = pricesRepo.getAdjustedCloses(String(stock.id), startDate, endDate);
+    const subjectSeries = await adapter.prices.getPrices(stock.id, { startDate, endDate });
     const subjectReturns = buildReturnMap(subjectSeries);
 
     const seriesBySymbol = new Map<string, ReturnMap>();
@@ -114,7 +112,7 @@ export async function GET(
       const peerSummary = await adapter.stocks.getBySymbol(peerSymbol);
       if (!peerSummary) continue;
 
-      const peerSeries = pricesRepo.getAdjustedCloses(String(peerSummary.id), startDate, endDate);
+      const peerSeries = await adapter.prices.getPrices(peerSummary.id, { startDate, endDate });
       const peerReturns = buildReturnMap(peerSeries);
       seriesBySymbol.set(peerSymbol, peerReturns);
 
