@@ -145,7 +145,7 @@ export const INDICATORS: IndicatorDef[] = [
 
     // ── Price / Volume ────────────────────────────────────────────────────
     {
-        id: 'price',        label: 'Price (Close)',      categoryId: 'price',
+        id: 'price',        label: 'Close',      categoryId: 'price',
         dslName: 'price',   params: [],                  rhsType: 'number_or_indicator',
         description: 'Current close price', supported: true,
     },

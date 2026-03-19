@@ -618,7 +618,7 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
     // RENDER
     // ─────────────────────────────────────────────────────────────────────
     return (
-        <div className="flex flex-col rounded-lg border border-border overflow-hidden bg-card text-card-foreground relative">
+        <div className="flex flex-col rounded-lg border border-border bg-card text-card-foreground relative">
             {/* Decorative connecting lines */}
             <div className="absolute inset-0 pointer-events-none">
                 <div className="absolute top-4 left-4 right-4 h-px bg-gradient-to-r from-transparent via-border/30 to-transparent"></div>
@@ -628,7 +628,7 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
             </div>
 
             {/* Content Area */}
-            <div className="p-4 relative z-10">
+            <div className="p-4 relative z-10 overflow-visible">
                 {rulesViewMode === 'formula' ? (
                     /* ── DSL Mode: single textarea, no criteria list shown ── */
                     <div className="flex flex-col gap-2">
@@ -715,6 +715,11 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                     </div>
                                 )}
                                 <div className="mt-3 flex items-center gap-2">
+                                    <Button size="sm" variant="secondary" onClick={() => {
+                                        setCriteria([...criteria, { id: `crit-${Date.now()}`, indicatorId: '', paramValues: {}, operatorId: '', rhsValue: '', displayString: '', dslString: '', supported: true, enabled: true }]);
+                                    }} className="gap-1.5">
+                                        <Plus className="w-3.5 h-3.5" /> Add New Rule
+                                    </Button>
                                     <Dialog open={visualBuilderOpen} onOpenChange={setVisualBuilderOpen}>
                                         <DialogTrigger asChild>
                                             <Button id={visualBuilderTriggerId} size="sm" variant="outline" className="gap-1.5">
@@ -728,11 +733,6 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                             {renderVisualBuilder()}
                                         </DialogContent>
                                     </Dialog>
-                                    <Button size="sm" variant="secondary" onClick={() => {
-                                        setCriteria([...criteria, { id: `crit-${Date.now()}`, indicatorId: '', paramValues: {}, operatorId: '', rhsValue: '', displayString: '', dslString: '', supported: true, enabled: true }]);
-                                    }} className="gap-1.5">
-                                        <Plus className="w-3.5 h-3.5" /> Add New Rule
-                                    </Button>
                                     {(criteria.length > 0 || dslInput.trim()) && (
                                         <Button size="sm" variant="ghost" onClick={handleClearAll} className="gap-1 text-muted-foreground hover:text-destructive ml-auto">
                                             <Trash2 className="w-3 h-3" /> Clear all

@@ -55,7 +55,7 @@ export default function ScreenerRunPage() {
   }, [filters]);
 
   return (
-    <div className="space-y-5 pb-20">
+    <div className="space-y-5 pb-20 overflow-visible">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

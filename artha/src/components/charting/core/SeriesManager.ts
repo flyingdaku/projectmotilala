@@ -204,9 +204,14 @@ export class SeriesManager {
     const entry = this._series.get(id);
     if (!entry || entry.kind !== 'histogram') return;
 
+    const toHistogramValue = (value: OHLCVBar['volume']): number => {
+      const parsed = typeof value === 'number' ? value : Number(value ?? 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
     const data: HistogramData[] = bars.map((b, i) => ({
       time:  b.time as unknown as import('lightweight-charts').Time,
-      value: b.volume ?? 0,
+      value: toHistogramValue(b.volume),
       color: i === 0 ? upColor : b.close >= bars[i - 1].close ? upColor : downColor,
     }));
     (entry.api as ISeriesApi<'Histogram'>).setData(data);

@@ -32,12 +32,18 @@ export function OwnershipSection({ symbol }: Props) {
   } | null>(null);
   const [loadedSymbol, setLoadedSymbol] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<"trend" | "donut">("trend");
+  const shareholding = data?.shareholding ?? [];
+  const governance = data?.governance ?? null;
 
   useEffect(() => {
     fetch(`/api/stocks/${symbol}/ownership`)
       .then((r) => r.json())
       .then((payload) => {
-        setData(payload);
+        setData({
+          shareholding: Array.isArray(payload?.shareholding) ? payload.shareholding : [],
+          governance: payload?.governance ?? null,
+          meta: payload?.meta,
+        });
         setLoadedSymbol(symbol);
       })
       .catch(() => {
@@ -47,8 +53,8 @@ export function OwnershipSection({ symbol }: Props) {
   }, [symbol]);
 
   const trendData = useMemo(() => {
-    if (!data) return [];
-    return [...data.shareholding].reverse().map((s) => ({
+    if (shareholding.length === 0) return [];
+    return [...shareholding].reverse().map((s) => ({
       quarter: (s.quarterEnd ?? s.quarter ?? "").slice(0, 7),
       Promoter: s.promoterPct ?? 0,
       FII: s.fiiPct ?? 0,
@@ -56,11 +62,11 @@ export function OwnershipSection({ symbol }: Props) {
       MF: s.mfPct ?? 0,
       Public: s.publicPct ?? 0,
     }));
-  }, [data]);
+  }, [shareholding]);
 
   const latestDonut = useMemo(() => {
-    if (!data || data.shareholding.length === 0) return [];
-    const s = data.shareholding[0];
+    if (shareholding.length === 0) return [];
+    const s = shareholding[0];
     return [
       { name: "Promoter", value: s.promoterPct ?? 0, color: SH_COLORS.Promoter },
       { name: "FII", value: s.fiiPct ?? 0, color: SH_COLORS.FII },
@@ -68,32 +74,32 @@ export function OwnershipSection({ symbol }: Props) {
       { name: "MF", value: s.mfPct ?? 0, color: SH_COLORS.MF },
       { name: "Public", value: s.publicPct ?? 0, color: SH_COLORS.Public },
     ].filter((d) => d.value > 0);
-  }, [data]);
+  }, [shareholding]);
 
   const pledgeHistory = useMemo(() => {
-    if (!data) return [];
-    return [...data.shareholding].reverse().map((s) => ({
+    if (shareholding.length === 0) return [];
+    return [...shareholding].reverse().map((s) => ({
       quarter: (s.quarterEnd ?? s.quarter ?? "").slice(0, 7),
       "Promoter %": s.promoterPct ?? 0,
       "Pledge %": s.promoterPledgePct ?? 0,
     }));
-  }, [data]);
+  }, [shareholding]);
 
-  const latestSh = data?.shareholding?.[0];
+  const latestSh = shareholding[0];
   const pledgePct = latestSh?.promoterPledgePct ?? 0;
   
   // Calculate QoQ changes for institutional holdings
-  const promoterQoQ = data && data.shareholding.length >= 2
-    ? (data.shareholding[0].promoterChangeQoq ?? ((data.shareholding[0].promoterPct ?? 0) - (data.shareholding[1].promoterPct ?? 0)))
+  const promoterQoQ = shareholding.length >= 2
+    ? (shareholding[0].promoterChangeQoq ?? ((shareholding[0].promoterPct ?? 0) - (shareholding[1].promoterPct ?? 0)))
     : null;
-  const fiiQoQ = data && data.shareholding.length >= 2
-    ? (data.shareholding[0].fiiChangeQoq ?? ((data.shareholding[0].fiiPct ?? 0) - (data.shareholding[1].fiiPct ?? 0)))
+  const fiiQoQ = shareholding.length >= 2
+    ? (shareholding[0].fiiChangeQoq ?? ((shareholding[0].fiiPct ?? 0) - (shareholding[1].fiiPct ?? 0)))
     : null;
-  const diiQoQ = data && data.shareholding.length >= 2
-    ? (data.shareholding[0].diiChangeQoq ?? ((data.shareholding[0].diiPct ?? 0) - (data.shareholding[1].diiPct ?? 0)))
+  const diiQoQ = shareholding.length >= 2
+    ? (shareholding[0].diiChangeQoq ?? ((shareholding[0].diiPct ?? 0) - (shareholding[1].diiPct ?? 0)))
     : null;
-  const mfQoQ = data && data.shareholding.length >= 2
-    ? (data.shareholding[0].mfPct ?? 0) - (data.shareholding[1].mfPct ?? 0)
+  const mfQoQ = shareholding.length >= 2
+    ? (shareholding[0].mfPct ?? 0) - (shareholding[1].mfPct ?? 0)
     : null;
   
   // Identify significant changes (>1% absolute change)
@@ -113,10 +119,10 @@ export function OwnershipSection({ symbol }: Props) {
 
   const axisStyle = { fontSize: 11, fill: "var(--text-muted)" };
   const meta = data?.meta ?? buildDataMeta({
-    asOfCandidates: [data?.shareholding?.[0]?.quarterEnd, data?.shareholding?.[0]?.quarter],
+    asOfCandidates: [shareholding[0]?.quarterEnd, shareholding[0]?.quarter],
     coverage: getCoverage([
-      data?.shareholding?.length ? data.shareholding : null,
-      data?.governance,
+      shareholding.length ? shareholding : null,
+      governance,
     ]),
     note: "Ownership updates are quarterly.",
   });
@@ -243,7 +249,7 @@ export function OwnershipSection({ symbol }: Props) {
                 { label: "Promoter", val: promoterQoQ, current: latestSh?.promoterPct },
                 { label: "FII", val: fiiQoQ, current: latestSh?.fiiPct },
                 { label: "DII", val: diiQoQ, current: latestSh?.diiPct },
-                { label: "Public", val: data && data.shareholding.length >= 2 ? (data.shareholding[0].publicPct ?? 0) - (data.shareholding[1].publicPct ?? 0) : null, current: latestSh?.publicPct },
+                { label: "Public", val: shareholding.length >= 2 ? (shareholding[0].publicPct ?? 0) - (shareholding[1].publicPct ?? 0) : null, current: latestSh?.publicPct },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between text-sm">
                   <span style={{ color: "var(--text-secondary)" }}>{item.label}</span>
@@ -292,7 +298,7 @@ export function OwnershipSection({ symbol }: Props) {
           </div>
 
           {/* Governance Score */}
-          {data?.governance && (
+          {governance && (
             <div className="p-5 rounded-xl border" style={{ background: "var(--surface)", borderColor: "var(--border)" }}>
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
                 <Shield size={14} style={{ color: "var(--accent-brand)" }} />
@@ -300,10 +306,10 @@ export function OwnershipSection({ symbol }: Props) {
               </h3>
               <div className="space-y-2 text-xs">
                 {[
-                  { label: "Independent Directors", val: data.governance.independentDirectorsPct, suffix: "%" },
-                  { label: "Board Size", val: data.governance.boardSize, suffix: "" },
-                  { label: "CEO Tenure", val: data.governance.ceoTenureYears, suffix: " yrs" },
-                  { label: "Audit Opinion", val: null, text: data.governance.auditOpinion ?? "-" },
+                  { label: "Independent Directors", val: governance.independentDirectorsPct, suffix: "%" },
+                  { label: "Board Size", val: governance.boardSize, suffix: "" },
+                  { label: "CEO Tenure", val: governance.ceoTenureYears, suffix: " yrs" },
+                  { label: "Audit Opinion", val: null, text: governance.auditOpinion ?? "-" },
                 ].map((item) => (
                   <div key={item.label} className="flex justify-between">
                     <span style={{ color: "var(--text-muted)" }}>{item.label}</span>
@@ -312,17 +318,17 @@ export function OwnershipSection({ symbol }: Props) {
                     </span>
                   </div>
                 ))}
-                {data.governance.relatedPartyTxnFlag && (
+                {governance.relatedPartyTxnFlag && (
                   <div className="flex items-center gap-1 mt-2 text-yellow-400">
                     <AlertTriangle size={11} />
                     <span>Related party transactions flagged</span>
                   </div>
                 )}
-                {data.governance.overallScore !== null && (
+                {governance.overallScore !== null && governance.overallScore !== undefined && (
                   <div className="mt-2 pt-2 border-t flex justify-between items-center" style={{ borderColor: "var(--border)" }}>
                     <span style={{ color: "var(--text-muted)" }}>Overall Score</span>
-                    <span className="font-bold font-mono" style={{ color: (data.governance.overallScore ?? 0) >= 60 ? "#10B981" : "#F59E0B" }}>
-                      {data.governance.overallScore?.toFixed(0)}/100
+                    <span className="font-bold font-mono" style={{ color: (governance.overallScore ?? 0) >= 60 ? "#10B981" : "#F59E0B" }}>
+                      {governance.overallScore?.toFixed(0)}/100
                     </span>
                   </div>
                 )}

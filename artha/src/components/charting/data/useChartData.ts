@@ -30,11 +30,16 @@ function dateStrToUnix(dateStr: string): number {
 
 interface PriceBarRaw {
   date: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume?: number;
+  open: number | string;
+  high: number | string;
+  low: number | string;
+  close: number | string;
+  volume?: number | string | null;
+}
+
+function toFiniteNumber(value: number | string | null | undefined, fallback = 0): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 export interface UseChartDataResult {
@@ -72,11 +77,11 @@ export function useChartData(symbol: string, timeframe: Timeframe): UseChartData
         const mapped: OHLCVBar[] = (data.prices ?? [])
           .map(p => ({
             time:   dateStrToUnix(p.date),
-            open:   p.open,
-            high:   p.high,
-            low:    p.low,
-            close:  p.close,
-            volume: p.volume ?? 0,
+            open:   toFiniteNumber(p.open),
+            high:   toFiniteNumber(p.high),
+            low:    toFiniteNumber(p.low),
+            close:  toFiniteNumber(p.close),
+            volume: toFiniteNumber(p.volume, 0),
           }))
           // ascending by time (lwc requirement)
           .sort((a, b) => a.time - b.time);

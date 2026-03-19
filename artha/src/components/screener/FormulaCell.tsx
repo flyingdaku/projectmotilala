@@ -34,7 +34,7 @@ interface TokenState {
     rhsType: 'number' | 'indicator';
     rhsValue: string;              // number string or indicator id
     rhsParams: (number | string)[];
-    timeframe: 'Daily' | 'Weekly' | 'Monthly';
+    timeframe: '1min' | '2min' | '3min' | '5min' | '10min' | '15min' | '30min' | '1hour' | '75min' | '2hour' | '125min' | '3hour' | '4hour' | 'Daily' | '1 day ago' | '2 day ago' | '3 day ago' | '4 day ago' | 'Weekly' | '1 week ago' | '2 week ago' | '3 week ago' | '4 week ago' | 'Monthly' | '1 month ago' | '2 month ago' | '3 month ago' | '4 month ago' | 'Quarterly' | '1 quarter ago' | '2 quarter ago' | '3 quarter ago' | '4 quarter ago' | 'Yearly' | '1 year ago' | '2 year ago' | '3 year ago' | '4 year ago';
 }
 
 function buildDslFromTokens(t: TokenState): string {
@@ -91,6 +91,7 @@ function Chip({
     onClick,
     onKeyDown,
     compact = false,
+    isOperator = false,
 }: {
     label?: string;
     placeholder: string;
@@ -100,6 +101,7 @@ function Chip({
     onClick: (e: React.MouseEvent) => void;
     onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
     compact?: boolean;
+    isOperator?: boolean;
 }) {
     const isEmpty = !label && !active;
     
@@ -107,12 +109,14 @@ function Chip({
         <div className="relative inline-flex">
             <button
                 onMouseDown={e => { e.stopPropagation(); onClick(e); }}
-                className={`inline-flex items-center gap-1 rounded cursor-pointer ${compact ? 'px-1 py-0.5 text-[11px]' : 'px-1.5 py-0.5 text-[13px]'} font-medium transition-all duration-200 active:scale-[0.97] select-none ${compact ? 'min-h-[20px]' : 'min-h-[24px]'}
+                className={`inline-flex items-center gap-1 rounded cursor-pointer ${compact ? 'px-0 py-0.5 text-[13px]' : 'px-0 py-0.5 text-[15px]'} font-medium transition-all duration-200 active:scale-[0.97] select-none ${compact ? 'min-h-[20px]' : 'min-h-[24px]'} leading-none
                     ${isEmpty
-                        ? 'border border-dashed border-border text-muted-foreground/50 hover:border-amber-500/50 hover:text-amber-500/70'
+                        ? 'border border-dashed border-border text-primary/50 hover:border-primary/50 hover:text-primary/70'
                         : active
-                            ? 'bg-amber-500/10 text-amber-500 border border-amber-500/40 ring-1 ring-amber-500/30'
-                            : 'text-foreground hover:bg-muted/50'
+                            ? 'bg-primary/10 text-primary border border-primary/40 ring-1 ring-primary/30'
+                            : isOperator
+                                ? 'text-primary hover:bg-muted/50'
+                                : 'text-foreground hover:bg-muted/50'
                     }`}
             >
                 {active && onQueryChange !== undefined ? (
@@ -121,12 +125,12 @@ function Chip({
                         value={query ?? ''}
                         onChange={e => onQueryChange(e.target.value)}
                         onKeyDown={onKeyDown}
-                        className="bg-transparent outline-none min-w-[80px] w-full text-amber-500 placeholder:text-amber-500/50 font-mono"
+                        className="bg-transparent outline-none min-w-[0px] w-full text-primary placeholder:text-primary/50 font-mono text-[13px] leading-none"
                         placeholder={placeholder}
                         onMouseDown={e => e.stopPropagation()} 
                     />
                 ) : isEmpty ? (
-                    <span className="italic">{placeholder}</span>
+                    <span className="italic text-primary/70">{placeholder}</span>
                 ) : (
                     <span className={active ? '' : 'font-bold'}>{label}</span>
                 )}
@@ -179,7 +183,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
     function openSlot(slot: ActiveSlot, el: HTMLElement) {
         requestAnimationFrame(() => {
             const r = el.getBoundingClientRect();
-            // Use viewport coords only — dropdown is position:fixed so no scroll offset needed
+            // Use viewport coords with fixed positioning to break out of overflow constraints
             setDropdownPos({ top: r.bottom + 6, left: r.left });
             setActiveSlot(slot);
             setSearchQuery('');
@@ -283,7 +287,34 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
 
     const [tfOpen, setTfOpen] = useState(false);
     const tfRef = useRef<HTMLDivElement>(null);
-    const TIMEFRAMES = ['Daily', 'Weekly', 'Monthly'] as const;
+    const [tfDropdownPos, setTfDropdownPos] = useState({ top: 0, left: 0 });
+    
+    const TIMEFRAME_CATEGORIES = {
+        'Intraday': [
+            '1min', '2min', '3min', '5min', '10min', '15min', '30min', 
+            '1hour', '75min', '2hour', '125min', '3hour', '4hour'
+        ],
+        'Daily': ['Daily', '1 day ago', '2 day ago', '3 day ago', '4 day ago'],
+        'Weekly': ['Weekly', '1 week ago', '2 week ago', '3 week ago', '4 week ago'],
+        'Monthly': ['Monthly', '1 month ago', '2 month ago', '3 month ago', '4 month ago'],
+        'Quarterly': ['Quarterly', '1 quarter ago', '2 quarter ago', '3 quarter ago', '4 quarter ago'],
+        'Yearly': ['Yearly', '1 year ago', '2 year ago', '3 year ago', '4 year ago']
+    } as const;
+    
+    // Calculate dropdown width based on longest string
+    const allTimeframes = [
+        ...TIMEFRAME_CATEGORIES.Intraday,
+        ...TIMEFRAME_CATEGORIES.Daily,
+        ...TIMEFRAME_CATEGORIES.Weekly,
+        ...TIMEFRAME_CATEGORIES.Monthly,
+        ...TIMEFRAME_CATEGORIES.Quarterly,
+        ...TIMEFRAME_CATEGORIES.Yearly,
+        ...Object.keys(TIMEFRAME_CATEGORIES)
+    ];
+    const longestString = allTimeframes.reduce((longest, current) => 
+        current.length > longest.length ? current : longest, ''
+    );
+    const dropdownWidth = Math.max(longestString.length * 8 + 40, 100); // 8px per character + padding
 
     // close timeframe dropdown on outside click
     useEffect(() => {
@@ -315,31 +346,69 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
         }
 
         return (
-            <span className="inline-flex items-center gap-0.5 group/chip">
+            <span className="inline-flex items-center gap-0 group/chip">
                 {/* Timeframe selector — only on LHS */}
                 {prefix === 'lhs' && (
                     <div ref={tfRef} className="relative">
                         <button
-                            onMouseDown={e => { e.stopPropagation(); setTfOpen(v => !v); }}
-                            className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60 hover:bg-muted/60 hover:text-foreground transition-colors"
+                            onMouseDown={e => {
+                                e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                const dropdownHeight = 300;
+                                const dropdownWidth = Math.max(longestString.length * 8 + 40, 100);
+                                const viewportHeight = window.innerHeight;
+                                const viewportWidth = window.innerWidth;
+                                
+                                let top = rect.bottom + 6;
+                                let left = rect.left;
+                                
+                                // Check if dropdown would go below viewport
+                                if (top + dropdownHeight > viewportHeight) {
+                                    // Position above the button instead
+                                    top = rect.top - dropdownHeight - 6;
+                                }
+                                
+                                // Check if dropdown would go beyond right edge
+                                if (left + dropdownWidth > viewportWidth) {
+                                    // Align to right edge
+                                    left = viewportWidth - dropdownWidth - 10;
+                                }
+                                
+                                setTfDropdownPos({ top, left });
+                                setTfOpen(v => !v);
+                            }}
+                            className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60 hover:bg-muted/60 hover:text-foreground transition-colors leading-none"
                         >
                             {tokens.timeframe}
-                            <ChevronDown className="w-2.5 h-2.5" />
                         </button>
                         {tfOpen && (
-                            <div className="absolute top-full left-0 mt-1 z-50 bg-popover border border-border rounded-md shadow-lg overflow-hidden min-w-[90px]">
-                                {TIMEFRAMES.map(tf => (
-                                    <button key={tf}
-                                        onMouseDown={e => { e.stopPropagation(); setTokens(prev => ({ ...prev, timeframe: tf })); setTfOpen(false); }}
-                                        className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                                            tokens.timeframe === tf
-                                                ? 'bg-amber-500/10 text-amber-500 font-medium'
-                                                : 'text-foreground hover:bg-accent'
-                                        }`}
-                                    >
-                                        {tf}
-                                    </button>
-                                ))}
+                            <div className="fixed z-[9999] bg-popover border border-border rounded-md shadow-lg"
+                                style={{ 
+                                    top: `${tfDropdownPos.top}px`, 
+                                    left: `${tfDropdownPos.left}px`,
+                                    width: `${dropdownWidth}px`
+                                }}>
+                                <div className="overflow-hidden max-h-[300px] overflow-y-auto">
+                                    {Object.entries(TIMEFRAME_CATEGORIES).map(([category, options]) => (
+                                        <div key={category} className="border-b border-border last:border-b-0">
+                                            <div className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/80 bg-muted/30">
+                                                {category}
+                                            </div>
+                                            {options.map(tf => (
+                                                <button key={tf}
+                                                    onMouseDown={e => { e.stopPropagation(); setTokens(prev => ({ ...prev, timeframe: tf })); setTfOpen(false); }}
+                                                    className={`w-full text-left px-3 py-1.5 text-[13px] transition-colors ${
+                                                        tokens.timeframe === tf
+                                                            ? 'bg-primary/10 text-primary font-medium'
+                                                            : 'text-foreground hover:bg-accent'
+                                                    }`}
+                                                >
+                                                    {tf}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                     </div>
@@ -354,12 +423,13 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                         onQueryChange={setSearchQuery}
                         onKeyDown={handleKeyDown}
                         onClick={e => openSlot(prefix, e.currentTarget as HTMLElement)}
+                        compact={true}
                     />
                 </div>
 
                 {ind.params.length > 0 && (
                     <>
-                        <span className="text-muted-foreground/50 font-mono text-[11px]">(</span>
+                        <span className="text-foreground font-mono text-[13px]">(</span>
                         {ind.params.map((p, i) => {
                             const val = params[i] ?? p.defaultValue;
                             const slotName = `${prefix}-param-${i}` as ActiveSlot;
@@ -372,7 +442,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
 
                             return (
                                 <React.Fragment key={i}>
-                                    {i > 0 && <span className="text-muted-foreground/50 font-mono text-[11px]">,</span>}
+                                    {i > 0 && <span className="text-foreground font-mono text-[13px]">,</span>}
                                     <Chip
                                         label={displayVal}
                                         placeholder={p.name}
@@ -386,7 +456,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                                 </React.Fragment>
                             );
                         })}
-                        <span className="text-muted-foreground/50 font-mono text-[11px]">)</span>
+                        <span className="text-foreground font-mono text-[13px]">)</span>
                     </>
                 )}
             </span>
@@ -404,7 +474,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`group flex items-center gap-2 px-1 py-0.5 transition-all duration-300 ease-out ${
+            className={`group flex items-center gap-0 px-1 py-0.5 transition-all duration-300 ease-out ${
                 !criterion.enabled ? 'opacity-50' : ''
             } ${isDragging ? 'opacity-40 scale-[0.98]' : ''} ${
                 isDragOver
@@ -412,28 +482,15 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                     : ''
             }`}
         >
-            {/* enable toggle */}
-            <input
-                type="checkbox"
-                checked={criterion.enabled}
-                onChange={() => onToggle(criterion.id)}
-                className="w-3 h-3 accent-gray-600 cursor-pointer shrink-0"
-            />
-
-            {/* row index */}
-            <span className="text-[10px] text-muted-foreground font-mono shrink-0 w-4 select-none">
-                {index + 1}.
-            </span>
-
             {/* ── pill row ── */}
-            <div className="flex-1 flex items-center gap-0.5 flex-wrap min-w-0">
+            <div className="flex-1 flex items-center gap-0 flex-wrap min-w-0">
                 
                 <InteractiveExpr prefix="lhs" indId={tokens.lhsId} params={tokens.lhsParams} />
 
                 {/* Operator chip */}
                 {tokens.lhsId && (
                     <>
-                        <span className="text-muted-foreground/30 text-[11px] px-0.5 select-none">·</span>
+                        <span className="text-muted-foreground/30 text-[13px] px-0.5 select-none leading-none">·</span>
                         <div data-slot="op" className="group/chip">
                             <Chip
                                 label={opDef?.label}
@@ -443,6 +500,8 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                                 onQueryChange={setSearchQuery}
                                 onKeyDown={handleKeyDown}
                                 onClick={e => openSlot('op', e.currentTarget as HTMLElement)}
+                                compact={true}
+                                isOperator={true}
                             />
                         </div>
                     </>
@@ -451,7 +510,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                 {/* RHS */}
                 {tokens.lhsId && tokens.opId && opDef && opDef.valueConfig.type !== 'none' && (
                     <>
-                    <span className="text-muted-foreground/30 text-[11px] px-0.5 select-none">·</span>
+                    <span className="text-muted-foreground/30 text-[13px] px-0.5 select-none leading-none">·</span>
                     <div data-slot="rhs">
                         {activeSlot === 'rhs-value' || (!opDef.rhsCanBeIndicator && tokens.rhsType === 'number') ? (
                             <Chip
@@ -462,6 +521,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                                 onQueryChange={setSearchQuery}
                                 onKeyDown={handleKeyDown}
                                 onClick={e => openSlot('rhs-value', e.currentTarget as HTMLElement)}
+                                compact={true}
                             />
                         ) : (
                             <InteractiveExpr prefix="rhs" indId={tokens.rhsType === 'indicator' ? tokens.rhsValue : null} params={tokens.rhsParams} />

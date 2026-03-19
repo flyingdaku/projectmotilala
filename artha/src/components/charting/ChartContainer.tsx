@@ -45,6 +45,10 @@ interface ChartContainerProps {
   priceChange?:  number | null;
   /** If false, renders inline (not fullscreen). */
   fullscreenMode?: boolean;
+  embeddedPanel?: boolean;
+  workspaceMode?: boolean;
+  minimalPanel?: boolean;
+  panelNumber?: number;
 }
 
 /**
@@ -56,6 +60,10 @@ function ChartContent({
   currentPrice,
   priceChange,
   fullscreenMode = false,
+  embeddedPanel = false,
+  workspaceMode = false,
+  minimalPanel = false,
+  panelNumber,
 }: ChartContainerProps) {
   const canvasRef   = useRef<HTMLDivElement>(null);
   const engineRef   = useRef<ChartEngine>(new ChartEngine());
@@ -305,21 +313,26 @@ function ChartContent({
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-background" style={{ background: theme.background }}>
       {/* Top bar */}
-      <TopBar
-        symbol={symbol}
-        currentPrice={currentPrice}
-        priceChange={priceChange}
-        onIndicatorsClick={() => setShowIndDialog(true)}
-        onScreenshot={handleScreenshot}
-        fullscreenMode={fullscreenMode}
-        watchlistConfig={watchlistConfig}
-        onWatchlistConfigChange={setWatchlistConfig}
-      />
+      {!minimalPanel ? (
+        <TopBar
+          symbol={symbol}
+          currentPrice={currentPrice}
+          priceChange={priceChange}
+          onIndicatorsClick={() => setShowIndDialog(true)}
+          onScreenshot={handleScreenshot}
+          fullscreenMode={fullscreenMode}
+          embeddedPanel={embeddedPanel}
+          workspaceMode={workspaceMode}
+          panelNumber={panelNumber}
+          watchlistConfig={watchlistConfig}
+          onWatchlistConfigChange={setWatchlistConfig}
+        />
+      ) : null}
   
       {/* Body row */}
       <div className="relative flex flex-1 min-h-0 overflow-hidden">
         {/* Drawing toolbar */}
-        <DrawingToolbar />
+        {!minimalPanel ? <DrawingToolbar /> : null}
 
         {/* Chart canvas */}
         <div className="relative flex-1 min-w-0 min-h-0">
@@ -396,16 +409,16 @@ function ChartContent({
         </div>
 
         {/* Layout panel (collapsible) */}
-        {showLayoutPanel && (
+        {!minimalPanel && showLayoutPanel && (
           <div className="w-56 border-l border-border flex-shrink-0 overflow-y-auto">
             <LayoutPanel symbol={symbol} />
           </div>
         )}
 
-        {showWatchlist && <div className="flex-shrink-0" style={{ width: `${watchlistWidth}px` }} />}
+        {!minimalPanel && showWatchlist ? <div className="flex-shrink-0" style={{ width: `${watchlistWidth}px` }} /> : null}
 
         {/* Watchlist panel */}
-        {showWatchlist && (
+        {!minimalPanel && showWatchlist && (
           <div className="absolute right-0 top-0 bottom-0 z-30 flex">
             <WatchlistPanel config={watchlistConfig} onConfigChange={setWatchlistConfig} />
           </div>
@@ -413,7 +426,7 @@ function ChartContent({
       </div>
 
       {/* Indicator dialog */}
-      <IndicatorDialog open={showIndDialog} onClose={() => setShowIndDialog(false)} />
+      {!minimalPanel ? <IndicatorDialog open={showIndDialog} onClose={() => setShowIndDialog(false)} /> : null}
     </div>
   );
 }

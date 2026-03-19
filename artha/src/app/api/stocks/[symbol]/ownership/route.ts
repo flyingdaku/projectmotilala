@@ -16,7 +16,9 @@ export async function GET(
 
         const assetId = String(stock.id);
 
-        const { shareholding, governance } = await adapter.company.getOwnership(assetId);
+        const ownership = await adapter.company.getOwnership(assetId);
+        const shareholding = Array.isArray(ownership?.shareholding) ? ownership.shareholding : [];
+        const governance = ownership?.governance ?? null;
         return NextResponse.json({
             shareholding,
             governance,

@@ -7,11 +7,11 @@
  */
 
 import { useRouter } from 'next/navigation';
-import { useState, type Dispatch, type SetStateAction } from 'react';
+import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import {
   BarChart2, LineChart, AreaChart,
   Maximize2, Minimize2, Moon, Sun, BarChart,
-  Camera, List, Layout, Settings,
+  Camera, Bookmark, Layout, Settings,
 } from 'lucide-react';
 import { useChartStore } from '../store/useChartStore';
 import { DEFAULT_WATCHLIST } from './WatchlistPanel';
@@ -30,7 +30,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 
-const CHART_TYPES: { value: ChartType; icon: React.ReactNode; label: string }[] = [
+const CHART_TYPES: { value: ChartType; icon: ReactNode; label: string }[] = [
   { value: 'candlestick', icon: <BarChart size={20} />, label: 'Candlestick' },
   { value: 'ohlc',        icon: <BarChart size={20} />,  label: 'OHLC' },
   { value: 'line',        icon: <LineChart size={20} />,  label: 'Line' },
@@ -45,6 +45,11 @@ interface TopBarProps {
   onIndicatorsClick: () => void;
   onScreenshot?: () => void;
   fullscreenMode?: boolean;
+  embeddedPanel?: boolean;
+  workspaceMode?: boolean;
+  multiChartMode?: boolean;
+  panelNumber?: number;
+  extraControls?: ReactNode;
   watchlistConfig: WatchlistConfig;
   onWatchlistConfigChange: Dispatch<SetStateAction<WatchlistConfig>>;
 }
@@ -56,6 +61,11 @@ export function TopBar({
   onIndicatorsClick,
   onScreenshot,
   fullscreenMode = false,
+  embeddedPanel = false,
+  workspaceMode = false,
+  multiChartMode = false,
+  panelNumber,
+  extraControls,
   watchlistConfig,
   onWatchlistConfigChange,
 }: TopBarProps) {
@@ -73,12 +83,38 @@ export function TopBar({
   const isPos = (priceChange ?? 0) > 0;
   const isNeg = (priceChange ?? 0) < 0;
 
+  const handleFullscreenClick = () => {
+    if (embeddedPanel) {
+      globalThis.window?.top?.location.assign(`/stocks/${encodeURIComponent(symbol)}/chart`);
+      return;
+    }
+
+    if (workspaceMode) {
+      router.push(`/stocks/${symbol}`);
+      return;
+    }
+
+    if (fullscreenMode) {
+      router.push(`/stocks/${symbol}`);
+    } else {
+      toggleFullscreen();
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-background flex-wrap select-none z-10">
+    <div className={cn(
+      'flex items-center gap-2 border-b border-border bg-background select-none z-10',
+      embeddedPanel ? 'px-2 py-1.5' : 'px-3 py-2 flex-wrap'
+    )}>
 
       {/* Symbol + Price */}
       <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted/20 border border-border">
         <span className="text-xs font-bold font-mono text-foreground">{symbol || 'RELIANCE'}</span>
+        {embeddedPanel && panelNumber ? (
+          <span className="rounded-full bg-[var(--brand-tint)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--brand-primary)]">
+            P{panelNumber}
+          </span>
+        ) : null}
         {currentPrice != null && (
           <>
             <span className="text-sm font-mono font-semibold text-foreground">
@@ -100,21 +136,28 @@ export function TopBar({
       <div className="w-px h-4 bg-border" />
 
       {/* Timeframe selector */}
-      <div className="flex items-center gap-0.5">
-        {TIMEFRAMES.map(tf => (
-          <button
-            key={tf.value}
-            onClick={() => setTimeframe(tf.value as Timeframe)}
-            className={cn(
-              'px-2 py-0.5 text-[11px] font-medium rounded transition-colors',
-              timeframe === tf.value
-                ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
-                : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-            )}
-          >
-            {tf.label}
-          </button>
-        ))}
+      <div className={cn('w-[88px] shrink-0', embeddedPanel ? 'w-[80px]' : null)}>
+        <Select
+          aria-label="Timeframe"
+          value={timeframe}
+          onChange={(e) => setTimeframe(e.target.value as Timeframe)}
+          className="h-8 rounded-md border-[var(--border)] bg-[var(--bg-card)] pr-8 text-xs font-semibold text-[var(--text-primary)] shadow-none"
+        >
+          <optgroup label="Intraday">
+            {TIMEFRAMES.filter((tf) => tf.seconds < 86400).map((tf) => (
+              <option key={tf.value} value={tf.value}>
+                {tf.label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="Higher Timeframes">
+            {TIMEFRAMES.filter((tf) => tf.seconds >= 86400).map((tf) => (
+              <option key={tf.value} value={tf.value}>
+                {tf.label}
+              </option>
+            ))}
+          </optgroup>
+        </Select>
       </div>
 
       {/* Divider */}
@@ -159,34 +202,56 @@ export function TopBar({
       <div className="w-px h-4 bg-border" />
 
       {/* Indicators button */}
-      <button
-        onClick={onIndicatorsClick}
-        className={cn(
-          'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors',
-          indicators.length > 0
-            ? 'bg-amber-500/15 text-amber-500 border border-amber-500/40 hover:bg-amber-500/25'
-            : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-        )}
-      >
-        <BarChart2 size={20} />
-        <span>Indicators</span>
-        {indicators.length > 0 && (
-          <span className="ml-0.5 bg-amber-500 text-black text-[9px] font-bold px-1 rounded-full">
-            {indicators.length}
-          </span>
-        )}
-      </button>
+      {!embeddedPanel && (
+        <button
+          onClick={onIndicatorsClick}
+          className={cn(
+            'flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors',
+            indicators.length > 0
+              ? 'bg-amber-500/15 text-amber-500 border border-amber-500/40 hover:bg-amber-500/25'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+          )}
+        >
+          <BarChart2 size={20} />
+          <span>Indicators</span>
+          {indicators.length > 0 && (
+            <span className="ml-0.5 bg-amber-500 text-black text-[9px] font-bold px-1 rounded-full">
+              {indicators.length}
+            </span>
+          )}
+        </button>
+      )}
+
+      {extraControls ? (
+        <>
+          <div className="w-px h-4 bg-border" />
+          {extraControls}
+        </>
+      ) : null}
 
       {/* Spacer */}
       <div className="flex-1" />
 
       {/* Watchlist toggle */}
-      <div className="flex items-center gap-1.5">
-        {showWatchlist && (
-          <span className="text-[10px] text-muted-foreground px-2 py-1 rounded-md border border-border bg-muted/20">
-            {DEFAULT_WATCHLIST.length} stocks
-          </span>
-        )}
+      {!embeddedPanel && <div className="flex items-center gap-1.5">
+        <button
+          onClick={toggleWatchlist}
+          className={cn(
+            'relative flex h-[var(--control-height-sm)] items-center gap-2 rounded-lg border px-3 transition-all active:scale-[0.98] group',
+            showWatchlist
+              ? 'border-transparent bg-[var(--brand-tint)] text-[var(--brand-primary)]'
+              : 'border-[var(--border)] bg-[var(--bg-card)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-primary)]'
+          )}
+          title="Watchlist"
+        >
+          <Bookmark size={16} className="transition-colors group-hover:text-[var(--brand-hover)]" />
+          <span className="text-xs font-semibold transition-colors group-hover:text-[var(--brand-hover)]">Watchlist</span>
+          {showWatchlist ? (
+            <span className="rounded-full bg-[var(--bg-card)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--text-secondary)]">
+              {DEFAULT_WATCHLIST.length}
+            </span>
+          ) : null}
+        </button>
 
         {showWatchlist && (
           <DropdownMenu>
@@ -309,36 +374,26 @@ export function TopBar({
           </DropdownMenu>
         )}
 
+      </div>}
+
+      {/* Layout panel toggle */}
+      {!embeddedPanel && !multiChartMode && (
         <button
-          onClick={toggleWatchlist}
+          onClick={toggleLayoutPanel}
           className={cn(
             'p-1.5 rounded transition-colors',
-            showWatchlist
+            showLayoutPanel
               ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
           )}
-          title="Watchlist"
+          title="Layouts"
         >
-          <List size={20} />
+          <Layout size={20} />
         </button>
-      </div>
-
-      {/* Layout panel toggle */}
-      <button
-        onClick={toggleLayoutPanel}
-        className={cn(
-          'p-1.5 rounded transition-colors',
-          showLayoutPanel
-            ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
-            : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
-        )}
-        title="Layouts"
-      >
-        <Layout size={20} />
-      </button>
+      )}
 
       {/* Screenshot */}
-      {onScreenshot && (
+      {!embeddedPanel && onScreenshot && (
         <button
           onClick={onScreenshot}
           className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
@@ -349,27 +404,23 @@ export function TopBar({
       )}
 
       {/* Theme toggle */}
-      <button
-        onClick={toggleDark}
-        className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-        title={isDark ? 'Light mode' : 'Dark mode'}
-      >
-        {isDark ? <Sun size={20} /> : <Moon size={20} />}
-      </button>
+      {!embeddedPanel && (
+        <button
+          onClick={toggleDark}
+          className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+          title={isDark ? 'Light mode' : 'Dark mode'}
+        >
+          {isDark ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+      )}
 
       {/* Fullscreen toggle */}
       <button
-        onClick={() => {
-          if (fullscreenMode) {
-            router.push(`/stocks/${symbol}`);
-          } else {
-            toggleFullscreen();
-          }
-        }}
+        onClick={handleFullscreenClick}
         className="p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
-        title={fullscreenMode ? 'Back to company' : (isFullscreen ? 'Exit fullscreen' : 'Fullscreen')}
+        title={embeddedPanel ? 'Open full chart' : ((workspaceMode || fullscreenMode) ? 'Back to company' : (isFullscreen ? 'Exit fullscreen' : 'Fullscreen'))}
       >
-        {fullscreenMode ? <Minimize2 size={20} /> : (isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />)}
+        {embeddedPanel ? <Maximize2 size={18} /> : ((workspaceMode || fullscreenMode) ? <Minimize2 size={20} /> : (isFullscreen ? <Minimize2 size={20} /> : <Maximize2 size={20} />))}
       </button>
     </div>
   );
