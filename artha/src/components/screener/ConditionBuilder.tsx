@@ -449,88 +449,82 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
 
     // ── Visual Builder Renderer ───────────────────────────────────────────
     const renderVisualBuilder = () => (
-        <div className="flex min-h-[600px] h-[70vh]">
+        <div className="flex h-full min-h-[500px] max-h-[75vh] divide-x divide-border overflow-hidden">
             {/* ── Col 1: Category ── */}
-            <div className="w-48 shrink-0 border-r border-border flex flex-col">
-                <div className="px-3 py-2 border-b border-border text-[10px] font-semibold uppercase tracking-widest text-muted-foreground bg-muted/30">Category</div>
-                <ScrollArea className="flex-1">
-                    <div className="p-2 flex flex-col gap-0.5">
-                        {INDICATOR_CATEGORIES.map(cat => (
-                            <button key={cat.id} onClick={() => setSelectedCatId(cat.id)}
-                                className={itemCls(selectedCatId === cat.id)}>
-                                <span className="text-xs">{cat.label}</span>
-                                {selectedCatId === cat.id && <ChevronRight className="w-3 h-3 shrink-0 opacity-50" />}
-                            </button>
-                        ))}
-                    </div>
-                </ScrollArea>
+            <div className="w-44 shrink-0 flex flex-col bg-muted/5 h-full overflow-hidden">
+                <div className="px-4 py-3 border-b border-border text-[10px] font-bold uppercase tracking-widest text-[var(--accent-brand)] opacity-80 shrink-0">Category</div>
+                <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5 custom-scrollbar">
+                    {INDICATOR_CATEGORIES.map(cat => (
+                        <button key={cat.id} onClick={() => setSelectedCatId(cat.id)}
+                            className={itemCls(selectedCatId === cat.id)}>
+                            <span className="text-xs">{cat.label}</span>
+                            {selectedCatId === cat.id && <ChevronRight className="w-3 h-3 shrink-0 opacity-50" />}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* ── Col 2: LHS Indicator ── */}
-            <div className="w-48 shrink-0 border-r border-border flex flex-col">
-                <div className="px-3 py-2 border-b border-border text-[10px] font-semibold uppercase tracking-widest text-muted-foreground bg-muted/30">Indicator</div>
-                <ScrollArea className="flex-1">
-                    <div className="p-2 flex flex-col gap-0.5">
-                        {lhsIndicators.map(ind => {
-                            const isActive = selectedLhsId === ind.id;
-                            return (
-                                <button key={ind.id} onClick={() => setSelectedLhsId(ind.id)} title={ind.description}
-                                    className={itemCls(isActive)}>
-                                    <span className="text-xs truncate flex-1">{ind.label}</span>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        {!ind.supported && <span className="text-[9px] bg-muted text-muted-foreground rounded px-1 py-0.5">soon</span>}
-                                        {isActive && ind.params.map(p => (
-                                            <ParamSpinner key={p.name} param={p} value={lhsParams[p.name] ?? p.defaultValue}
-                                                onChange={(val) => setLhsParams(prev => ({ ...prev, [p.name]: val }))}
-                                                onClick={e => e.stopPropagation()} />
-                                        ))}
-                                    </div>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </ScrollArea>
+            <div className="w-56 shrink-0 flex flex-col h-full overflow-hidden">
+                <div className="px-4 py-3 border-b border-border text-[10px] font-bold uppercase tracking-widest text-[var(--accent-brand)] opacity-80 shrink-0">Indicator</div>
+                <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5 custom-scrollbar">
+                    {lhsIndicators.map(ind => {
+                        const isActive = selectedLhsId === ind.id;
+                        return (
+                            <button key={ind.id} onClick={() => setSelectedLhsId(ind.id)} title={ind.description}
+                                className={itemCls(isActive)}>
+                                <span className="text-xs truncate flex-1">{ind.label}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    {!ind.supported && <span className="text-[9px] bg-muted text-muted-foreground rounded px-1 py-0.5">soon</span>}
+                                    {isActive && ind.params.map(p => (
+                                        <ParamSpinner key={p.name} param={p} value={lhsParams[p.name] ?? p.defaultValue}
+                                            onChange={(val) => setLhsParams(prev => ({ ...prev, [p.name]: val }))}
+                                            onClick={e => e.stopPropagation()} />
+                                    ))}
+                                </div>
+                            </button>
+                        );
+                    })}
+                </div>
             </div>
 
             {/* ── Col 3: Operator ── */}
-            <div className="w-48 shrink-0 border-r border-border flex flex-col">
-                <div className="px-3 py-2 border-b border-border text-[10px] font-semibold uppercase tracking-widest text-muted-foreground bg-muted/30">Condition</div>
-                <ScrollArea className="flex-1">
-                    <div className="p-2 flex flex-col gap-0.5">
-                        {availableOps.map(op => (
-                            <button key={op.id} onClick={() => setSelectedOpId(op.id)} className={itemCls(selectedOpId === op.id)}>
-                                <span className="text-xs">{op.label}</span>
-                                {selectedOpId === op.id && <ChevronRight className="w-3 h-3 shrink-0 opacity-50" />}
-                            </button>
-                        ))}
-                    </div>
-                </ScrollArea>
+            <div className="w-44 shrink-0 flex flex-col bg-muted/5 h-full overflow-hidden">
+                <div className="px-4 py-3 border-b border-border text-[10px] font-bold uppercase tracking-widest text-[var(--accent-brand)] opacity-80 shrink-0">Condition</div>
+                <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5 custom-scrollbar">
+                    {availableOps.map(op => (
+                        <button key={op.id} onClick={() => setSelectedOpId(op.id)} className={itemCls(selectedOpId === op.id)}>
+                            <span className="text-xs">{op.label}</span>
+                            {selectedOpId === op.id && <ChevronRight className="w-3 h-3 shrink-0 opacity-50" />}
+                        </button>
+                    ))}
+                </div>
             </div>
 
             {/* ── Col 4: Value ── */}
-            <div className="flex-1 min-w-[200px] flex flex-col">
-                <div className="px-3 py-2 border-b border-border text-[10px] font-semibold uppercase tracking-widest text-muted-foreground bg-muted/30">Value</div>
-                {!selectedOp ? (
-                    <div className="flex-1 flex items-center justify-center p-4">
-                        <p className="text-xs text-muted-foreground text-center">← Select a condition</p>
-                    </div>
-                ) : vc?.type === 'none' ? (
-                    <div className="flex-1 flex flex-col items-center justify-center p-4 gap-3">
-                        <p className="text-xs text-muted-foreground text-center">No value needed for<br /><span className="font-semibold text-foreground">{selectedOp.label}</span></p>
-                        <Button
-                            size="sm"
-                            variant="default"
-                            onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
-                            disabled={!canAdd()}
-                            className="gap-1.5"
-                        >
-                            <Plus className="w-3.5 h-3.5" /> Add Rule
-                        </Button>
-                    </div>
-                ) : isLhsEnum && lhsInd?.enumOptions && lhsInd.enumOptions.length > 0 ? (
-                    <div className="flex flex-col h-full">
-                        <ScrollArea className="flex-1">
-                            <div className="p-2 flex flex-col gap-0.5">
+            <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+                <div className="px-4 py-3 border-b border-border text-[10px] font-bold uppercase tracking-widest text-[var(--accent-brand)] opacity-80 shrink-0">Value Selection</div>
+                <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                    {!selectedOp ? (
+                        <div className="flex-1 flex items-center justify-center p-4">
+                            <p className="text-xs text-muted-foreground text-center">← Select a condition</p>
+                        </div>
+                    ) : vc?.type === 'none' ? (
+                        <div className="flex-1 flex flex-col items-center justify-center p-4 gap-3">
+                            <p className="text-xs text-muted-foreground text-center">No value needed for<br /><span className="font-semibold text-foreground">{selectedOp.label}</span></p>
+                            <Button
+                                size="sm"
+                                variant="default"
+                                onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
+                                disabled={!canAdd()}
+                                className="gap-1.5"
+                            >
+                                <Plus className="w-3.5 h-3.5" /> Add Rule
+                            </Button>
+                        </div>
+                    ) : isLhsEnum && lhsInd?.enumOptions && lhsInd.enumOptions.length > 0 ? (
+                        <div className="flex flex-col h-full overflow-hidden">
+                            <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5 custom-scrollbar">
                                 {lhsInd.enumOptions.map(opt => (
                                     <button key={opt.value}
                                         onClick={() => setRhsNumber(opt.value)}
@@ -540,76 +534,72 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                     </button>
                                 ))}
                             </div>
-                        </ScrollArea>
-                        <div className="p-3 border-t border-border bg-muted/10">
-                            <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
-                                disabled={!canAdd()}
-                                className="w-full gap-1.5"
-                            >
-                                <Plus className="w-3.5 h-3.5" /> Add Rule
-                            </Button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="flex flex-col h-full">
-                        <div className="p-3 space-y-2">
-                            {vc!.type === 'two_numbers' ? (
-                                <>
-                                    <div><label className="text-[10px] font-semibold text-muted-foreground uppercase">Min</label>
-                                        <Input type="number" value={rhsNumber} onChange={e => setRhsNumber(e.target.value)} placeholder="e.g. 30" className="h-8 text-sm mt-1 font-mono" /></div>
-                                    <div><label className="text-[10px] font-semibold text-muted-foreground uppercase">Max</label>
-                                        <Input type="number" value={rhsNumber2} onChange={e => setRhsNumber2(e.target.value)} placeholder="e.g. 70" className="h-8 text-sm mt-1 font-mono" /></div>
-                                </>
-                            ) : (
-                                <div><label className="text-[10px] font-semibold text-muted-foreground uppercase">Value</label>
-                                    <Input type="number" value={rhsNumber} onChange={e => setRhsNumber(e.target.value)} placeholder="e.g. 50" className="h-8 text-sm mt-1 font-mono" /></div>
-                            )}
-                        </div>
-                        {opCanBeInd && (
-                            <div className="flex-1 min-h-0 border-t border-border">
-                                <ScrollArea className="h-full">
-                                    <div className="p-2">
-                                        <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Or Indicator</div>
-                                        <div className="flex flex-col gap-0.5">
-                                            {lhsIndicators.map(ind => {
-                                                const isActive = rhsIndId === ind.id;
-                                                return (
-                                                    <button key={ind.id} onClick={() => setRhsIndId(ind.id)} className={itemCls(isActive)}>
-                                                        <span className="text-xs truncate flex-1">{ind.label}</span>
-                                                        {isActive && ind.params.map(p => (
-                                                            <ParamSpinner key={p.name} param={p} value={rhsIndParams[p.name] ?? p.defaultValue}
-                                                                onChange={(val) => setRhsIndParams(prev => ({ ...prev, [p.name]: val }))}
-                                                                onClick={e => e.stopPropagation()} />
-                                                        ))}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </ScrollArea>
+                            <div className="p-4 border-t border-border bg-muted/10 shrink-0">
+                                <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
+                                    disabled={!canAdd()}
+                                    className="w-full gap-1.5"
+                                >
+                                    <Plus className="w-3.5 h-3.5" /> Add Rule
+                                </Button>
                             </div>
-                        )}
-                        <div className="p-3 border-t border-border space-y-2 bg-muted/10">
-                            {livePreview && (
-                                <div className="rounded-md bg-muted/40 border border-border px-2.5 py-1.5 font-mono text-[10px] text-amber-500 truncate">
-                                    {livePreview}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col h-full overflow-hidden">
+                            <div className="p-4 space-y-4 shrink-0 bg-muted/5">
+                                {vc!.type === 'two_numbers' ? (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div><label className="text-[10px] font-bold text-muted-foreground uppercase opacity-70">Min</label>
+                                            <Input type="number" value={rhsNumber} onChange={e => setRhsNumber(e.target.value)} placeholder="30" className="h-9 text-sm mt-1 font-mono" /></div>
+                                        <div><label className="text-[10px] font-bold text-muted-foreground uppercase opacity-70">Max</label>
+                                            <Input type="number" value={rhsNumber2} onChange={e => setRhsNumber2(e.target.value)} placeholder="70" className="h-9 text-sm mt-1 font-mono" /></div>
+                                    </div>
+                                ) : (
+                                    <div><label className="text-[10px] font-bold text-muted-foreground uppercase opacity-70">Value</label>
+                                        <Input type="number" value={rhsNumber} onChange={e => setRhsNumber(e.target.value)} placeholder="50" className="h-9 text-sm mt-1 font-mono" /></div>
+                                )}
+                            </div>
+                            {opCanBeInd && (
+                                <div className="flex-1 min-h-0 border-t border-border flex flex-col overflow-hidden">
+                                    <div className="px-4 py-2 text-[10px] font-bold text-muted-foreground uppercase bg-muted/20 shrink-0">Or Indicator</div>
+                                    <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-0.5 custom-scrollbar">
+                                        {lhsIndicators.map(ind => {
+                                            const isActive = rhsIndId === ind.id;
+                                            return (
+                                                <button key={ind.id} onClick={() => setRhsIndId(ind.id)} className={itemCls(isActive)}>
+                                                    <span className="text-xs truncate flex-1">{ind.label}</span>
+                                                    {isActive && ind.params.map(p => (
+                                                        <ParamSpinner key={p.name} param={p} value={rhsIndParams[p.name] ?? p.defaultValue}
+                                                            onChange={(val) => setRhsIndParams(prev => ({ ...prev, [p.name]: val }))}
+                                                            onClick={e => e.stopPropagation()} />
+                                                    ))}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             )}
-                            <Button
-                                size="sm"
-                                variant="default"
-                                onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
-                                disabled={!canAdd()}
-                                className="w-full gap-1.5"
-                            >
-                                <Plus className="w-3.5 h-3.5" /> Add Rule
-                            </Button>
+                            <div className="p-4 border-t border-border space-y-3 bg-muted/10 shrink-0 mt-auto">
+                                {livePreview && (
+                                    <div className="rounded-md bg-amber-500/5 border border-amber-500/20 px-3 py-2 font-mono text-[11px] text-amber-500 truncate select-all">
+                                        {livePreview}
+                                    </div>
+                                )}
+                                <Button
+                                    size="sm"
+                                    variant="default"
+                                    onClick={() => { handleAddCriterion(); setVisualBuilderOpen(false); }}
+                                    disabled={!canAdd()}
+                                    className="w-full gap-2 h-10 text-sm font-semibold shadow-md"
+                                >
+                                    <Plus className="w-4 h-4" /> Add Rule
+                                </Button>
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
         </div>
     );
@@ -676,11 +666,13 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                                 <Wand2 className="w-3.5 h-3.5" /> Add via Visual Builder
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent id={visualBuilderDialogId} className="w-[95vw] max-h-[95vh] p-0">
-                                            <DialogHeader className="px-6 py-4 border-b">
-                                                <DialogTitle>Visual Rule Builder</DialogTitle>
+                                        <DialogContent id={visualBuilderDialogId} className="w-[98vw] sm:max-w-[1000px] sm:w-[90vw] max-h-[90vh] p-0 overflow-hidden bg-card border-border flex flex-col">
+                                            <DialogHeader className="px-6 py-4 border-b shrink-0">
+                                                <DialogTitle className="text-xl font-bold">Visual Rule Builder</DialogTitle>
                                             </DialogHeader>
-                                            {renderVisualBuilder()}
+                                            <div className="flex-1 overflow-x-auto">
+                                                {renderVisualBuilder()}
+                                            </div>
                                         </DialogContent>
                                     </Dialog>
                                 </div>
@@ -726,11 +718,13 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                                                 <Wand2 className="w-3.5 h-3.5" /> Add via Visual Builder
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent id={visualBuilderDialogId} className="w-[95vw] max-h-[95vh] p-0">
-                                            <DialogHeader className="px-6 py-4 border-b">
-                                                <DialogTitle>Visual Rule Builder</DialogTitle>
+                                        <DialogContent id={visualBuilderDialogId} className="w-[98vw] sm:max-w-[1000px] sm:w-[90vw] max-h-[90vh] p-0 overflow-hidden bg-card border-border flex flex-col">
+                                            <DialogHeader className="px-6 py-4 border-b shrink-0">
+                                                <DialogTitle className="text-xl font-bold">Visual Rule Builder</DialogTitle>
                                             </DialogHeader>
-                                            {renderVisualBuilder()}
+                                            <div className="flex-1 overflow-x-auto">
+                                                {renderVisualBuilder()}
+                                            </div>
                                         </DialogContent>
                                     </Dialog>
                                     {(criteria.length > 0 || dslInput.trim()) && (
@@ -743,21 +737,20 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
                         )}
                     </div>
                 )}
-            </div>
 
-            {/* ── Action bar (bottom, always visible) ── */}
-            <div className="flex items-center gap-2 px-3 py-2 border-t border-border bg-muted/10 flex-wrap">
-                <Button size="sm" variant="default" onClick={onRun}
-                    className="gap-1.5 shrink-0 cursor-pointer">
-                    <Play className="w-3.5 h-3.5" /> Run Screen
-                </Button>
-                <div className="flex items-center gap-2 ml-auto">
-                    <Input value={saveScreenName} onChange={e => setSaveScreenName(e.target.value)}
-                        placeholder="Screen name…" className="h-8 w-36 text-xs" />
-                    <Button variant="outline" size="sm" onClick={handleSaveScreen}
-                        disabled={isSaving || !saveScreenName.trim()} className="shrink-0 gap-1 cursor-pointer">
-                        <Save className="w-3.5 h-3.5" />{isSaving ? '…' : 'Save'}
-                    </Button>
+                <div className="mt-4 border-t border-border pt-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <Button size="sm" variant="default" onClick={onRun}
+                            className="gap-1.5 shrink-0 cursor-pointer">
+                            <Play className="w-3.5 h-3.5" /> Run Screen
+                        </Button>
+                        <Input value={saveScreenName} onChange={e => setSaveScreenName(e.target.value)}
+                            placeholder="Screen name…" className="h-8 w-36 text-xs" />
+                        <Button variant="outline" size="sm" onClick={handleSaveScreen}
+                            disabled={isSaving || !saveScreenName.trim()} className="shrink-0 gap-1 cursor-pointer">
+                            <Save className="w-3.5 h-3.5" />{isSaving ? '…' : 'Save'}
+                        </Button>
+                    </div>
                 </div>
             </div>
         </div>

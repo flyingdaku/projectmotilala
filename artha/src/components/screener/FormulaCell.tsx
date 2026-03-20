@@ -10,6 +10,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Copy, Pause, Play, Trash2, ChevronDown } from 'lucide-react';
 import { FormulaAutocomplete, type DropdownMode } from './FormulaAutocomplete';
 import { INDICATORS, OPERATORS } from '@/lib/screener/indicators';
@@ -181,13 +182,30 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
     }, []);
 
     function openSlot(slot: ActiveSlot, el: HTMLElement) {
-        requestAnimationFrame(() => {
+        let attempts = 0;
+        const maxAttempts = 10;
+
+        const calculate = () => {
             const r = el.getBoundingClientRect();
-            // Use viewport coords with fixed positioning to break out of overflow constraints
-            setDropdownPos({ top: r.bottom + 6, left: r.left });
+            
+            // If the element is reporting (0,0) or a very suspicious top position for a mid-page element, 
+            // and we haven't exhausted attempts, wait for next frame.
+            // Note: 20 is a safe threshold for "too high" if we expect it below the header.
+            if (r.top < 20 && r.left === 0 && attempts < maxAttempts) {
+                attempts++;
+                requestAnimationFrame(calculate);
+                return;
+            }
+
+            setDropdownPos({ 
+                top: r.bottom + window.scrollY + 6, 
+                left: r.left + window.scrollX 
+            });
             setActiveSlot(slot);
             setSearchQuery('');
-        });
+        };
+
+        requestAnimationFrame(calculate);
     }
 
     function closeSlot() { 
@@ -332,7 +350,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
         
         if (!ind) {
             return (
-                <div data-slot={prefix}>
+                <div data-slot={prefix} id={`${prefix}-${criterion.id}`}>
                     <Chip
                         placeholder="Select indicator"
                         active={activeSlot === prefix}
@@ -381,11 +399,11 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                         >
                             {tokens.timeframe}
                         </button>
-                        {tfOpen && (
-                            <div className="fixed z-[9999] bg-popover border border-border rounded-md shadow-lg"
+                        {tfOpen && typeof document !== 'undefined' && createPortal(
+                            <div className="absolute z-[9999] bg-popover border border-border rounded-md shadow-lg"
                                 style={{ 
-                                    top: `${tfDropdownPos.top}px`, 
-                                    left: `${tfDropdownPos.left}px`,
+                                    top: `${tfDropdownPos.top + window.scrollY}px`, 
+                                    left: `${tfDropdownPos.left + window.scrollX}px`,
                                     width: `${dropdownWidth}px`
                                 }}>
                                 <div className="overflow-hidden max-h-[300px] overflow-y-auto">
@@ -409,12 +427,13 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                                         </div>
                                     ))}
                                 </div>
-                            </div>
+                            </div>,
+                            document.body
                         )}
                     </div>
                 )}
 
-                <div data-slot={prefix}>
+                <div data-slot={prefix} id={`${prefix}-${criterion.id}`}>
                     <Chip
                         label={ind.label}
                         placeholder={ind.label}
@@ -443,16 +462,18 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                             return (
                                 <React.Fragment key={i}>
                                     {i > 0 && <span className="text-foreground font-mono text-[13px]">,</span>}
-                                    <Chip
-                                        label={displayVal}
-                                        placeholder={p.name}
-                                        active={isParamActive}
-                                        query={isParamActive ? searchQuery : undefined}
-                                        onQueryChange={setSearchQuery}
-                                        onKeyDown={handleKeyDown}
-                                        onClick={(e) => openSlot(slotName, e.currentTarget as HTMLElement)}
-                                        compact={true}
-                                    />
+                                    <div id={`${slotName}-${criterion.id}`}>
+                                        <Chip
+                                            label={displayVal}
+                                            placeholder={p.name}
+                                            active={isParamActive}
+                                            query={isParamActive ? searchQuery : undefined}
+                                            onQueryChange={setSearchQuery}
+                                            onKeyDown={handleKeyDown}
+                                            onClick={(e) => openSlot(slotName, e.currentTarget as HTMLElement)}
+                                            compact={true}
+                                        />
+                                    </div>
                                 </React.Fragment>
                             );
                         })}
@@ -491,7 +512,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                 {tokens.lhsId && (
                     <>
                         <span className="text-muted-foreground/30 text-[13px] px-0.5 select-none leading-none">·</span>
-                        <div data-slot="op" className="group/chip">
+                        <div data-slot="op" id={`op-${criterion.id}`} className="group/chip">
                             <Chip
                                 label={opDef?.label}
                                 placeholder="operator"
@@ -511,7 +532,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                 {tokens.lhsId && tokens.opId && opDef && opDef.valueConfig.type !== 'none' && (
                     <>
                     <span className="text-muted-foreground/30 text-[13px] px-0.5 select-none leading-none">·</span>
-                    <div data-slot="rhs">
+                    <div data-slot="rhs" id={`rhs-${criterion.id}`}>
                         {activeSlot === 'rhs-value' || (!opDef.rhsCanBeIndicator && tokens.rhsType === 'number') ? (
                             <Chip
                                 label={tokens.rhsValue}
@@ -569,6 +590,7 @@ export function FormulaCell({ criterion, index, onToggle, onRemove, onUpdate, on
                     onSelect={handleSelect}
                     onClose={closeSlot}
                     position={dropdownPos}
+                    anchorId={`${activeSlot}-${criterion.id}`}
                 />
             )}
         </div>

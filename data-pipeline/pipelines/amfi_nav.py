@@ -13,7 +13,7 @@ import pandas as pd
 import requests
 
 from utils.alerts import alert_pipeline_failure, alert_pipeline_success
-from core.db import generate_id, get_db
+from core.db import generate_id, get_pg_connection, get_ts_connection
 from utils.storage import raw_file_exists, save_raw_file, load_raw_file
 
 logger = logging.getLogger(__name__)
@@ -57,24 +57,40 @@ def download_amfi_nav(nav_date: date) -> tuple[bytes, str]:
 
 def parse_amfi_nav(content: bytes) -> pd.DataFrame:
     """
-    Parse AMFI NAVAll.txt format.
-
-    Format:
-      Scheme Code;ISIN Div Payout/ISIN Growth;ISIN Div Reinvestment;Scheme Name;Net Asset Value;Date
-      Sections are separated by blank lines with a header like:
-      "Open Ended Schemes(Debt Scheme - Banking and PSU Fund)"
+    Parse AMFI NAVAll.txt format, including AMC and MF Category from headers.
     """
     text = content.decode("utf-8", errors="replace")
     lines = text.splitlines()
 
     records = []
+    current_category = None
+    current_amc = None
+    
     for line in lines:
         line = line.strip()
-        if not line or line.startswith("Scheme Code") or "Open Ended" in line or "Close Ended" in line:
+        if not line:
             continue
-
+            
+        # Headers like: "Open Ended Schemes(Debt Scheme - Banking and PSU Fund)"
+        if "Open Ended" in line or "Close Ended" in line or "Interval Fund" in line:
+            current_category = line
+            current_amc = None # AMC appears after Category header
+            continue
+            
+        # If it's a "Scheme Code" header, skip
+        if line.startswith("Scheme Code"):
+            continue
+            
         parts = line.split(";")
         if len(parts) < 6:
+            # Likely an AMC header (e.g. "Aditya Birla Sun Life Mutual Fund")
+            # But only if it's not a category header and not empty
+            if current_category and not current_amc:
+                 current_amc = line
+            elif current_category and current_amc:
+                 # It might be a new AMC within the same category
+                 # Most files have AMC name as a single line
+                 current_amc = line
             continue
 
         try:
@@ -96,6 +112,8 @@ def parse_amfi_nav(content: bytes) -> pd.DataFrame:
                 "name": name,
                 "nav": nav,
                 "date": nav_date.isoformat(),
+                "amc_name": current_amc,
+                "mf_category": current_category
             })
         except (ValueError, IndexError):
             continue
@@ -105,60 +123,76 @@ def parse_amfi_nav(content: bytes) -> pd.DataFrame:
 
 def upsert_mf_assets(df: pd.DataFrame):
     """Create or update mutual fund assets in the database."""
-    with get_db() as conn:
+    with get_pg_connection() as conn:
         for _, row in df.iterrows():
-            amfi_code = row["amfi_code"]
-            isin = row.get("isin")
-            name = row["name"]
+            amfi_code = str(row["amfi_code"]).strip() if pd.notnull(row["amfi_code"]) else None
+            isin = str(row["isin"]).strip() if pd.notnull(row["isin"]) else None
+            name = str(row["name"]).strip()
+            amc_name = str(row.get("amc_name", "")).strip()
+            mf_category = str(row.get("mf_category", "")).strip()
+
+            if not amfi_code and not isin:
+                continue
 
             # Try to find by ISIN first, then by amfi_code
             existing = None
-            if isin:
+            if isin and isin not in ('NaN', 'None', ''):
                 existing = conn.execute(
-                    "SELECT id FROM assets WHERE isin = ?", (isin,)
+                    "SELECT id FROM assets WHERE isin = %s", (isin,)
                 ).fetchone()
-            if not existing:
+            if not existing and amfi_code:
                 existing = conn.execute(
-                    "SELECT id FROM assets WHERE amfi_code = ?", (amfi_code,)
+                    "SELECT id FROM assets WHERE amfi_code = %s", (amfi_code,)
                 ).fetchone()
 
             if existing:
                 conn.execute(
-                    "UPDATE assets SET amfi_code = ?, name = ? WHERE id = ?",
-                    (amfi_code, name, existing["id"]),
+                    "UPDATE assets SET amfi_code = %s, name = %s, amc_name = %s, mf_category = %s WHERE id = %s",
+                    (amfi_code, name, amc_name, mf_category, existing["id"]),
                 )
             else:
                 asset_id = generate_id()
                 conn.execute(
                     """INSERT INTO assets
-                       (id, isin, amfi_code, name, asset_class, is_active)
-                       VALUES (?, ?, ?, ?, 'MF', 1)""",
-                    (asset_id, isin, amfi_code, name),
+                       (id, isin, amfi_code, name, amc_name, mf_category, asset_class, is_active)
+                       VALUES (%s, %s, %s, %s, %s, %s, 'MF', 1)""",
+                    (asset_id, isin, amfi_code, name, amc_name, mf_category),
                 )
 
 
 def insert_nav_prices(df: pd.DataFrame):
     """Insert NAV prices into daily_prices with source_exchange='AMFI'."""
-    with get_db() as conn:
-        for _, row in df.iterrows():
-            # Resolve asset_id
-            asset = None
-            if row.get("isin"):
-                asset = conn.execute(
-                    "SELECT id FROM assets WHERE isin = ?", (row["isin"],)
-                ).fetchone()
-            if not asset:
-                asset = conn.execute(
-                    "SELECT id FROM assets WHERE amfi_code = ?", (row["amfi_code"],)
-                ).fetchone()
-            if not asset:
-                continue
+    with get_ts_connection() as conn:
+        price_rows = []
+        with get_pg_connection() as pg_conn:
+            for _, row in df.iterrows():
+                amfi_code = str(row["amfi_code"]).strip() if pd.notnull(row["amfi_code"]) else None
+                isin = str(row["isin"]).strip() if pd.notnull(row["isin"]) else None
+                
+                asset = None
+                if isin and isin not in ('NaN', 'None', ''):
+                    asset = pg_conn.execute(
+                        "SELECT id FROM assets WHERE isin = %s", (isin,)
+                    ).fetchone()
+                if not asset and amfi_code:
+                    asset = pg_conn.execute(
+                        "SELECT id FROM assets WHERE amfi_code = %s", (amfi_code,)
+                    ).fetchone()
+                
+                if not asset:
+                    continue
 
-            conn.execute(
-                """INSERT OR REPLACE INTO daily_prices
+                price_rows.append((
+                    asset["id"], row["date"], row["nav"], row["nav"], 'AMFI'
+                ))
+
+        if price_rows:
+            conn.executemany(
+                """INSERT INTO daily_prices
                    (asset_id, date, close, adj_close, source_exchange)
-                   VALUES (?, ?, ?, ?, 'AMFI')""",
-                (asset["id"], row["date"], row["nav"], row["nav"]),
+                   VALUES (%s, %s, %s, %s, %s)
+                   ON CONFLICT (asset_id, date, source_exchange) DO NOTHING""",
+                price_rows,
             )
 
 
@@ -186,11 +220,11 @@ def run_amfi_nav_pipeline(nav_date: date = None):
 
         duration_ms = int((datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds() * 1000)
 
-        with get_db() as conn:
+        with get_pg_connection() as conn:
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, records_inserted, duration_ms)
-                   VALUES (?, ?, ?, 'SUCCESS', ?, ?)""",
+                   VALUES (%s, %s, %s, 'SUCCESS', %s, %s)""",
                 (run_id, nav_date.isoformat(), source, len(df), duration_ms),
             )
 
@@ -200,11 +234,11 @@ def run_amfi_nav_pipeline(nav_date: date = None):
     except Exception as e:
         duration_ms = int((datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds() * 1000)
         logger.error(f"[{source}] ❌ Pipeline failed: {e}", exc_info=True)
-        with get_db() as conn:
+        with get_pg_connection() as conn:
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, error_log, duration_ms)
-                   VALUES (?, ?, ?, 'FAILED', ?, ?)""",
+                   VALUES (%s, %s, %s, 'FAILED', %s, %s)""",
                 (run_id, nav_date.isoformat(), source, str(e), duration_ms),
             )
         alert_pipeline_failure(source, str(e), nav_date.isoformat())

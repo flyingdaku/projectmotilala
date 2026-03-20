@@ -86,7 +86,15 @@ export function useChartData(symbol: string, timeframe: Timeframe): UseChartData
           // ascending by time (lwc requirement)
           .sort((a, b) => a.time - b.time);
 
-        setBars(mapped);
+        // Strictly increasing deduplication (lwc requirement)
+        const deduped: OHLCVBar[] = [];
+        for (const b of mapped) {
+          if (deduped.length === 0 || b.time > deduped[deduped.length - 1].time) {
+            deduped.push(b);
+          }
+        }
+
+        setBars(deduped);
       })
       .catch(e => {
         if (!cancelled) setError(String(e.message ?? e));

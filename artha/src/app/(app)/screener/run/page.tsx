@@ -22,6 +22,11 @@ interface ScreenerResult {
   rsi14?: number;
 }
 
+const PAGE_TITLE_CLASS = "text-2xl font-semibold tracking-tight text-foreground";
+const SECTION_TITLE_CLASS = "text-base font-semibold tracking-tight text-foreground";
+const SMALL_CARD_TITLE_CLASS = "text-sm font-semibold tracking-tight text-foreground";
+const TABLE_HEADER_CLASS = "px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground";
+
 export default function ScreenerRunPage() {
   const [filters, setFilters] = useState<ScreenerFilters>({});
   const [results, setResults] = useState<ScreenerResult[] | null>(null);
@@ -29,6 +34,7 @@ export default function ScreenerRunPage() {
   const [error, setError] = useState<string | null>(null);
   const [totalCount, setTotalCount] = useState<number>(0);
   const [rulesViewMode, setRulesViewMode] = useState<'list' | 'formula'>('list');
+  const hasResults = results !== null;
 
   const handleRun = useCallback(async () => {
     setIsLoading(true);
@@ -59,7 +65,7 @@ export default function ScreenerRunPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Stock Screener</h1>
+          <h1 className={PAGE_TITLE_CLASS}>Stock Screener</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Build a formula to filter stocks from NSE/BSE universe
           </p>
@@ -79,46 +85,46 @@ export default function ScreenerRunPage() {
         rulesViewMode={rulesViewMode}
       />
 
-      {/* Results */}
-      {isLoading && (
-        <div className="flex items-center gap-2 py-12 justify-center text-muted-foreground">
-          <Loader2 className="w-5 h-5 animate-spin" />
-          <span className="text-sm">Running screen…</span>
-        </div>
-      )}
-
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
 
-      {results === null && !isLoading && !error && (
-        <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
-          <TrendingUp className="w-12 h-12 text-muted-foreground/40 mb-4" />
-          <h3 className="text-lg font-semibold text-foreground mb-2">Ready to Screen Stocks</h3>
-          <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
-            Build your criteria using the formula builder above, then click "Run Screen" to filter stocks from the NSE/BSE universe.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-lg text-xs">
-            <div className="text-center p-3 rounded-lg bg-card border border-border">
-              <div className="font-medium text-foreground mb-1">Technical</div>
-              <div className="text-muted-foreground">RSI, Moving Averages, MACD</div>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-card border border-border">
-              <div className="font-medium text-foreground mb-1">Fundamental</div>
-              <div className="text-muted-foreground">PE, ROE, ROCE, Debt/Equity</div>
-            </div>
-            <div className="text-center p-3 rounded-lg bg-card border border-border">
-              <div className="font-medium text-foreground mb-1">Valuation</div>
-              <div className="text-muted-foreground">PEG, PB, EV/EBITDA</div>
+      <div className="relative min-h-[18rem]">
+        {isLoading ? (
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/70 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-muted-foreground shadow-sm">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Running screen…</span>
             </div>
           </div>
-        </div>
-      )}
+        ) : null}
 
-      {results !== null && !isLoading && (
-        <div className="space-y-3">
+        {!hasResults && !error ? (
+          <div className="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
+            <TrendingUp className="w-12 h-12 text-muted-foreground/40 mb-4" />
+            <h3 className={`${SECTION_TITLE_CLASS} mb-2`}>Ready to Screen Stocks</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-md mb-6">
+              Build your criteria using the formula builder above, then click "Run Screen" to filter stocks from the NSE/BSE universe.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-lg text-xs">
+              <div className="text-center p-3 rounded-lg bg-card border border-border">
+                <div className={`${SMALL_CARD_TITLE_CLASS} mb-1`}>Technical</div>
+                <div className="text-muted-foreground">RSI, Moving Averages, MACD</div>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-card border border-border">
+                <div className={`${SMALL_CARD_TITLE_CLASS} mb-1`}>Fundamental</div>
+                <div className="text-muted-foreground">PE, ROE, ROCE, Debt/Equity</div>
+              </div>
+              <div className="text-center p-3 rounded-lg bg-card border border-border">
+                <div className={`${SMALL_CARD_TITLE_CLASS} mb-1`}>Valuation</div>
+                <div className="text-muted-foreground">PEG, PB, EV/EBITDA</div>
+              </div>
+            </div>
+          </div>
+        ) : hasResults ? (
+          <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
               <span className="font-semibold text-foreground">{totalCount}</span> stocks matched
@@ -128,7 +134,7 @@ export default function ScreenerRunPage() {
           {results.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
               <TrendingUp className="w-10 h-10 text-muted-foreground/40 mb-3" />
-              <h3 className="text-sm font-semibold text-foreground mb-1">No stocks matched</h3>
+              <h3 className={`${SECTION_TITLE_CLASS} mb-1`}>No stocks matched</h3>
               <p className="text-xs text-muted-foreground text-center max-w-sm">
                 Try relaxing your filters or check your formula syntax. Consider using broader ranges or fewer conditions.
               </p>
@@ -139,16 +145,16 @@ export default function ScreenerRunPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/40">
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">#</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Company</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Sector</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mkt Cap</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Price</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chg%</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">PE</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">PB</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">ROCE%</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">RSI(14)</th>
+                      <th className={TABLE_HEADER_CLASS}>#</th>
+                      <th className={TABLE_HEADER_CLASS}>Company</th>
+                      <th className={TABLE_HEADER_CLASS}>Sector</th>
+                      <th className={`${TABLE_HEADER_CLASS} text-right`}>Mkt Cap</th>
+                      <th className={`${TABLE_HEADER_CLASS} text-right`}>Price</th>
+                      <th className={`${TABLE_HEADER_CLASS} text-right`}>Chg%</th>
+                      <th className={`${TABLE_HEADER_CLASS} text-right`}>PE</th>
+                      <th className={`${TABLE_HEADER_CLASS} text-right`}>PB</th>
+                      <th className={`${TABLE_HEADER_CLASS} text-right`}>ROCE%</th>
+                      <th className={`${TABLE_HEADER_CLASS} text-right`}>RSI(14)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -201,8 +207,9 @@ export default function ScreenerRunPage() {
               </div>
             </div>
           )}
-        </div>
-      )}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -8,6 +8,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { INDICATORS, OPERATORS, INDICATOR_CATEGORIES } from '@/lib/screener/indicators';
 import { getMatchIndices } from './formula-utils';
@@ -64,8 +65,9 @@ interface FormulaAutocompleteProps {
     query: string;
     onSelect: (item: AutocompleteItem) => void;
     onClose: () => void;
-    /** Pixels from viewport top/left for the anchor */
-    position: { top: number; left: number };
+    /** Element ID to anchor to, or pixel position */
+    anchorId?: string;
+    position?: { top: number; left: number };
 }
 
 // ─── build flat filtered list ────────────────────────────────────────────────
@@ -154,6 +156,7 @@ export function FormulaAutocomplete({
     onSelect,
     onClose,
     position,
+    anchorId,
 }: FormulaAutocompleteProps) {
     const ref = useRef<HTMLDivElement>(null);
     const selRef = useRef<HTMLButtonElement>(null);
@@ -163,6 +166,39 @@ export function FormulaAutocomplete({
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
     const [focusPanel, setFocusPanel] = useState<'category' | 'value'>('value');
+
+    // Dynamic positioning
+    const [currentPos, setCurrentPos] = useState(position || { top: 0, left: 0 });
+
+    useEffect(() => {
+        if (!anchorId) return;
+
+        const update = () => {
+            const el = document.getElementById(anchorId);
+            if (el) {
+                const r = el.getBoundingClientRect();
+                if (r.top !== 0 || r.left !== 0) {
+                    setCurrentPos({ top: r.bottom + 6, left: r.left });
+                }
+            }
+        };
+
+        update();
+        
+        // Track for a bit to handle animations
+        const timer = setInterval(update, 100);
+        const timeout = setTimeout(() => clearInterval(timer), 2000);
+        
+        window.addEventListener('resize', update);
+        window.addEventListener('scroll', update, true); // Catch scroll in any container
+
+        return () => {
+            clearInterval(timer);
+            clearTimeout(timeout);
+            window.removeEventListener('resize', update);
+            window.removeEventListener('scroll', update, true);
+        };
+    }, [anchorId]);
 
     // reset selection when query changes
     useEffect(() => {
@@ -287,15 +323,17 @@ export function FormulaAutocomplete({
         </div>
     );
 
-    return (
+    const dropdownGrid = (
         <div
             ref={ref}
-            className="fixed z-[200] rounded-xl border border-border bg-popover shadow-2xl overflow-hidden flex flex-col"
+            className="fixed z-[9999] rounded-xl border border-border bg-popover shadow-2xl overflow-hidden flex flex-col"
             style={{ 
-                top: position.top, 
-                left: position.left, 
+                top: `${currentPos.top}px`, 
+                left: `${currentPos.left}px`, 
                 maxHeight: 600,
-                width: filtered ? 320 : 520
+                width: filtered ? 320 : 520,
+                opacity: currentPos.top === 0 && currentPos.left === 0 ? 0 : 1,
+                pointerEvents: currentPos.top === 0 && currentPos.left === 0 ? 'none' : 'auto'
             }}
             onMouseDown={e => e.preventDefault()}
         >
@@ -371,6 +409,13 @@ export function FormulaAutocomplete({
             </div>
         </div>
     );
+
+    // Only portal on client-side
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    if (!mounted) return null;
+
+    return createPortal(dropdownGrid, document.body);
 }
 
 // ─── single row ──────────────────────────────────────────────────────────────

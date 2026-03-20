@@ -151,36 +151,45 @@ def run_screener_fundamentals(trade_date: date, mode: str = SCREENER_MODE_DEFAUL
         do_classification = False
 
     symbol_set = {str(symbol).upper() for symbol in symbols} if symbols else None
-    with get_db() as conn:
-        assets = conn.execute("SELECT id, nse_symbol, bse_code FROM assets WHERE is_active = 1").fetchall()
+    
+    from core.db import get_pg_connection, get_ts_connection
+    
+    with get_pg_connection() as pg_conn:
+        assets = pg_conn.fetchall("SELECT id, nse_symbol, bse_code FROM assets WHERE is_active = 1")
+    
     if symbol_set is not None:
         assets = [
             asset for asset in assets
             if ((asset["nse_symbol"] or "").upper() in symbol_set) or ((asset["bse_code"] or "").upper() in symbol_set)
         ]
         
-    for asset in assets:
-        identifier = asset["nse_symbol"] or asset["bse_code"]
-        if not identifier: continue
+    with get_ts_connection() as ts_conn, get_pg_connection() as pg_conn:
+        for asset in assets:
+            identifier = asset["nse_symbol"] or asset["bse_code"]
+            if not identifier: continue
 
-        logger.info(f"[SCREENER] Fetching {identifier}...")
-        data, was_cached = fetch_screener_data(identifier, mode=mode)
-        if not data: continue
+            logger.info(f"[SCREENER] Fetching {identifier}...")
+            data, was_cached = fetch_screener_data(identifier, mode=mode)
+            if not data: continue
 
-        if do_classification and mode != SCREENER_MODE_CACHE_ONLY:
-            cls = fetch_classification(identifier)
-            if cls:
-                update_asset_classification(asset["id"], cls)
+            if do_classification and mode != SCREENER_MODE_CACHE_ONLY:
+                cls = fetch_classification(identifier)
+                if cls:
+                    update_asset_classification(asset["id"], cls)
 
-        # 1. Quarterly Results
-        for row in data.get("quarters", []):
-            period_date = _period_to_iso(row["period"])
-            if not period_date: continue
-            with get_db() as dml_conn:
-                dml_conn.execute("""
-                    INSERT OR REPLACE INTO src_screener_quarterly (
+            # 1. Quarterly Results
+            for row in data.get("quarters", []):
+                period_date = _period_to_iso(row["period"])
+                if not period_date: continue
+                ts_conn.execute("""
+                    INSERT INTO src_screener_quarterly (
                         id, asset_id, period_end_date, sales, expenses, operating_profit, opm_pct, pbt, tax_pct, net_profit, eps
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (asset_id, period_end_date, is_consolidated) DO UPDATE SET
+                        sales=EXCLUDED.sales, expenses=EXCLUDED.expenses,
+                        operating_profit=EXCLUDED.operating_profit, opm_pct=EXCLUDED.opm_pct,
+                        pbt=EXCLUDED.pbt, tax_pct=EXCLUDED.tax_pct, net_profit=EXCLUDED.net_profit,
+                        eps=EXCLUDED.eps
                 """, (
                     generate_id(), asset["id"], period_date,
                     row.get("sales"), row.get("expenses"), row.get("operating profit"),
@@ -188,15 +197,20 @@ def run_screener_fundamentals(trade_date: date, mode: str = SCREENER_MODE_DEFAUL
                     row.get("net profit"), row.get("eps in rs")
                 ))
 
-        # 2. Balance Sheet
-        for row in data.get("balance_sheet", []):
-            period_date = _period_to_iso(row["period"])
-            if not period_date: continue
-            with get_db() as dml_conn:
-                dml_conn.execute("""
-                    INSERT OR REPLACE INTO src_screener_balance_sheet (
+            # 2. Balance Sheet
+            for row in data.get("balance_sheet", []):
+                period_date = _period_to_iso(row["period"])
+                if not period_date: continue
+                ts_conn.execute("""
+                    INSERT INTO src_screener_balance_sheet (
                         id, asset_id, period_end_date, share_capital, reserves, borrowings, other_liabilities, fixed_assets, cwip, investments, other_assets, total_assets
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (asset_id, period_end_date) DO UPDATE SET
+                        share_capital=EXCLUDED.share_capital, reserves=EXCLUDED.reserves,
+                        borrowings=EXCLUDED.borrowings, other_liabilities=EXCLUDED.other_liabilities,
+                        fixed_assets=EXCLUDED.fixed_assets, cwip=EXCLUDED.cwip,
+                        investments=EXCLUDED.investments, other_assets=EXCLUDED.other_assets,
+                        total_assets=EXCLUDED.total_assets
                 """, (
                     generate_id(), asset["id"], period_date,
                     row.get("share capital"), row.get("reserves"), row.get("borrowings"),
@@ -204,53 +218,65 @@ def run_screener_fundamentals(trade_date: date, mode: str = SCREENER_MODE_DEFAUL
                     row.get("investments"), row.get("other assets"), row.get("total assets")
                 ))
 
-        # 3. Cash Flow
-        for row in data.get("cash_flow", []):
-            period_date = _period_to_iso(row["period"])
-            if not period_date: continue
-            with get_db() as dml_conn:
-                dml_conn.execute("""
-                    INSERT OR REPLACE INTO src_screener_cashflow (
+            # 3. Cash Flow
+            for row in data.get("cash_flow", []):
+                period_date = _period_to_iso(row["period"])
+                if not period_date: continue
+                ts_conn.execute("""
+                    INSERT INTO src_screener_cashflow (
                         id, asset_id, period_end_date, cash_from_operating, cash_from_investing, cash_from_financing, net_cash_flow
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (asset_id, period_end_date) DO UPDATE SET
+                        cash_from_operating=EXCLUDED.cash_from_operating,
+                        cash_from_investing=EXCLUDED.cash_from_investing,
+                        cash_from_financing=EXCLUDED.cash_from_financing,
+                        net_cash_flow=EXCLUDED.net_cash_flow
                 """, (
                     generate_id(), asset["id"], period_date,
                     row.get("cash from operating activity"), row.get("cash from investing activity"),
                     row.get("cash from financing activity"), row.get("net cash flow")
                 ))
 
-        # 4. Ratios
-        for row in data.get("ratios", []):
-            period_date = _period_to_iso(row["period"])
-            if not period_date: continue
-            with get_db() as dml_conn:
-                dml_conn.execute("""
-                    INSERT OR REPLACE INTO src_screener_ratios (
+            # 4. Ratios
+            for row in data.get("ratios", []):
+                period_date = _period_to_iso(row["period"])
+                if not period_date: continue
+                ts_conn.execute("""
+                    INSERT INTO src_screener_ratios (
                         id, asset_id, period_end_date, debtor_days, inventory_days, days_payable,
                         cash_conversion_cycle, working_capital_days, roc_pct
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (asset_id, period_end_date) DO UPDATE SET
+                        debtor_days=EXCLUDED.debtor_days, inventory_days=EXCLUDED.inventory_days,
+                        days_payable=EXCLUDED.days_payable, cash_conversion_cycle=EXCLUDED.cash_conversion_cycle,
+                        working_capital_days=EXCLUDED.working_capital_days, roc_pct=EXCLUDED.roc_pct
                 """, (
                     generate_id(), asset["id"], period_date,
                     row.get("debtor days"), row.get("inventory days"), row.get("days payable"),
                     row.get("cash conversion cycle"), row.get("working capital days"), row.get("roc %")
                 ))
 
-        # 5. Shareholding
-        for row in data.get("shareholding", []):
-            period_date = _period_to_iso(row["period"])
-            if not period_date: continue
-            with get_db() as dml_conn:
-                dml_conn.execute("""
-                    INSERT OR REPLACE INTO src_screener_shareholding (
-                        id, asset_id, period_end_date, promoters_pct, fii_pct, dii_pct,
-                        government_pct, public_pct, num_shareholders
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            # 5. Shareholding
+            for row in data.get("shareholding", []):
+                period_date = _period_to_iso(row["period"])
+                if not period_date: continue
+                ts_conn.execute("""
+                    INSERT INTO src_screener_shareholding (
+                        id, asset_id, period_end_date, promoters_pct, fii_pct, dii_pct, public_pct, num_shareholders
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (asset_id, period_end_date) DO UPDATE SET
+                        promoters_pct=EXCLUDED.promoters_pct, fii_pct=EXCLUDED.fii_pct,
+                        dii_pct=EXCLUDED.dii_pct, public_pct=EXCLUDED.public_pct,
+                        num_shareholders=EXCLUDED.num_shareholders
                 """, (
                     generate_id(), asset["id"], period_date,
                     row.get("promoters"), row.get("fii"), row.get("dii"),
-                    row.get("government"), row.get("public"), row.get("no. of shareholders")
+                    row.get("public"), row.get("no. of shareholders")
                 ))
 
-        logger.info(f"[SCREENER] Updated {identifier}")
-        if not was_cached:
-            time.sleep(1)
+            logger.info(f"[SCREENER] Updated {identifier}")
+            if not was_cached:
+                time.sleep(1)
+            
+            ts_conn.commit()
+            pg_conn.commit()

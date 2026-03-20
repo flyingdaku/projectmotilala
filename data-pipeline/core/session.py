@@ -104,6 +104,22 @@ def create_amfi_session() -> requests.Session:
     return session
 
 
+def create_morningstar_session() -> requests.Session:
+    """
+    Return a Morningstar India session.
+
+    Public Morningstar fund pages behave like normal HTML pages. We keep a
+    browser-like session and set a Morningstar referer so the scraper can fall
+    back to public page crawling without needing login in v1.
+    """
+    session = requests.Session()
+    session.headers.update({
+        **_DEFAULT_HEADERS,
+        "Referer": "https://www.morningstar.in/",
+    })
+    return session
+
+
 def create_cogencis_session(prime: bool = False) -> requests.Session:
     session = requests.Session()
     session.headers.update({

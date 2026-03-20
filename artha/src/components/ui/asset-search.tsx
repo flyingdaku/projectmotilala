@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -22,7 +23,9 @@ export function AssetSearch({ onSelect, placeholder = "Search assets...", classN
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -63,6 +66,41 @@ export function AssetSearch({ onSelect, placeholder = "Search assets...", classN
     return () => clearTimeout(timer);
   }, [query]);
 
+  const updateDropdownPos = useCallback((attempts: number | any = 0) => {
+    // If called from an event listener, attempts will be an Event object
+    const actualAttempts = typeof attempts === 'number' ? attempts : 0;
+    
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      
+      // If position is (0,0) and we haven't reached max attempts, retry next frame
+      // This handles the case where the element is still being animated or mounted
+      if (rect.top === 0 && rect.left === 0 && actualAttempts < 10) {
+        requestAnimationFrame(() => updateDropdownPos(actualAttempts + 1));
+        return;
+      }
+      
+      setDropdownPos({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      updateDropdownPos(0);
+      const handleRefresh = () => updateDropdownPos(0);
+      window.addEventListener("scroll", handleRefresh, true);
+      window.addEventListener("resize", handleRefresh);
+      return () => {
+        window.removeEventListener("scroll", handleRefresh, true);
+        window.removeEventListener("resize", handleRefresh);
+      };
+    }
+  }, [isOpen, updateDropdownPos]);
+
   const handleSelect = (symbol: string) => {
     onSelect(symbol);
     setQuery("");
@@ -72,13 +110,16 @@ export function AssetSearch({ onSelect, placeholder = "Search assets...", classN
 
   return (
     <div ref={wrapperRef} className={cn("relative", className)}>
-      <div className="relative">
+      <div ref={inputRef} className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => query.trim() && results.length > 0 && setIsOpen(true)}
+          onFocus={() => {
+            if (query.trim() && results.length > 0) setIsOpen(true);
+            updateDropdownPos();
+          }}
           placeholder={placeholder}
           className="pl-9 pr-9"
         />
@@ -87,32 +128,44 @@ export function AssetSearch({ onSelect, placeholder = "Search assets...", classN
         )}
       </div>
 
-      {isOpen && results.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg max-h-60 overflow-y-auto">
-          {results.map((result) => (
-            <button
-              key={result.symbol}
-              onClick={() => handleSelect(result.symbol)}
-              className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center justify-between group"
-            >
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-foreground">{result.symbol}</span>
-                {result.name && (
-                  <span className="text-xs text-muted-foreground truncate">{result.name}</span>
-                )}
-              </div>
-              {result.exchange && (
-                <span className="text-xs text-muted-foreground">{result.exchange}</span>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {isOpen && query.trim() && !isLoading && results.length === 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-lg p-3">
-          <p className="text-sm text-muted-foreground text-center">No results found</p>
-        </div>
+      {isOpen && typeof document !== "undefined" && createPortal(
+        <div 
+          className="absolute z-[9999] mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden flex flex-col pointer-events-auto"
+          style={{ 
+            top: `${dropdownPos.top}px`, 
+            left: `${dropdownPos.left}px`, 
+            width: dropdownPos.width,
+            maxHeight: '240px'
+          }}
+          onMouseDown={e => e.preventDefault()}
+        >
+          {results.length > 0 ? (
+            <div className="overflow-y-auto w-full">
+              {results.map((result) => (
+                <button
+                  key={result.symbol}
+                  onClick={() => handleSelect(result.symbol)}
+                  className="w-full px-3 py-2 text-left hover:bg-accent transition-colors flex items-center justify-between group"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-foreground">{result.symbol}</span>
+                    {result.name && (
+                      <span className="text-xs text-muted-foreground truncate">{result.name}</span>
+                    )}
+                  </div>
+                  {result.exchange && (
+                    <span className="text-xs text-muted-foreground">{result.exchange}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : query.trim() && !isLoading && (
+            <div className="p-3">
+              <p className="text-sm text-muted-foreground text-center">No results found</p>
+            </div>
+          )}
+        </div>,
+        document.body
       )}
     </div>
   );

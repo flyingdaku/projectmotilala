@@ -25,6 +25,8 @@ class Asset:
     nse_symbol: Optional[str] = None
     bse_code: Optional[str] = None
     amfi_code: Optional[str] = None
+    amc_name: Optional[str] = None
+    mf_category: Optional[str] = None
     screener_id: Optional[str] = None
     series: Optional[str] = None
 

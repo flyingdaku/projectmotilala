@@ -37,6 +37,7 @@ ensure_logs_dir()
 from utils.alerts import send_telegram_alert
 from utils.calendar import ensure_holiday_cache, is_trading_day
 from utils.db import init_db
+from core.db import get_connection
 
 logging.basicConfig(
     level=logging.INFO,
@@ -51,7 +52,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("run_pipeline")
 
-def run(trade_date: date, skip_bse=False, skip_amfi=False, skip_corp_actions=False, skip_adjust=False, skip_reconcile=False, skip_iima=False, skip_eodhd=False, skip_eodhd_reconcile=False) -> bool:
+def run(trade_date: date, skip_bse=False, skip_amfi=False, skip_corp_actions=False, skip_adjust=False, skip_reconcile=False, skip_iima=False, skip_eodhd=False, skip_eodhd_reconcile=False, skip_morningstar=False) -> bool:
     """Run the full nightly pipeline for a given trade date."""
     ensure_logs_dir()
 
@@ -143,7 +144,7 @@ def run(trade_date: date, skip_bse=False, skip_amfi=False, skip_corp_actions=Fal
     # ── Steps 5-8: Parallel Data Ingestion ───────────────────────────
     import concurrent.futures
 
-    logger.info("Steps 5-8: Running Ingestion Pipelines (NSE, BSE, AMFI, Fundamentals, IIMA FF) in parallel...")
+    logger.info("Steps 5-8: Running Ingestion Pipelines (NSE, BSE, AMFI, Fundamentals, IIMA FF, Morningstar) in parallel...")
     
     def run_nse():
         from pipelines.nse_bhavcopy import run_nse_bhavcopy_pipeline
@@ -238,6 +239,16 @@ def run(trade_date: date, skip_bse=False, skip_amfi=False, skip_corp_actions=Fal
         except Exception as e:
             logger.warning(f"EODHD reconciliation failed (non-fatal): {e}")
 
+    def run_morningstar():
+        if skip_morningstar or os.getenv("MORNINGSTAR_ENABLED", "").strip().lower() not in {"1", "true", "yes", "on"}:
+            logger.info("Morningstar mutual-fund pipeline skipped")
+            return
+        try:
+            from pipelines.morningstar_funds import run_morningstar_funds_pipeline
+            run_morningstar_funds_pipeline(trade_date)
+        except Exception as e:
+            logger.warning(f"Morningstar mutual-fund pipeline failed (non-fatal): {e}")
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         futures = [
             executor.submit(run_nse),
@@ -249,6 +260,7 @@ def run(trade_date: date, skip_bse=False, skip_amfi=False, skip_corp_actions=Fal
             executor.submit(run_bse_indices),
             executor.submit(run_eodhd),
             executor.submit(run_eodhd_ca),
+            executor.submit(run_morningstar),
         ]
         concurrent.futures.wait(futures)
         # Check for exceptions in the parallel execution
@@ -305,6 +317,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-iima", action="store_true", help="Skip IIMA delayed Fama-French ingestion")
     parser.add_argument("--skip-eodhd", action="store_true", help="Skip EODHD EOD price ingestion")
     parser.add_argument("--skip-eodhd-reconcile", action="store_true", help="Skip EODHD price reconciliation")
+    parser.add_argument("--skip-morningstar", action="store_true", help="Skip Morningstar mutual-fund enrichment")
 
     args = parser.parse_args()
 
@@ -320,4 +333,5 @@ if __name__ == "__main__":
         skip_iima=args.skip_iima,
         skip_eodhd=args.skip_eodhd,
         skip_eodhd_reconcile=args.skip_eodhd_reconcile,
+        skip_morningstar=args.skip_morningstar,
     )

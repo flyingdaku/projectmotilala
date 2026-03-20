@@ -1,0 +1,1 @@
+from .ingester import MorningstarFundDetailsIngester, MorningstarFundDirectoryIngester

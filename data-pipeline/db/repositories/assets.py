@@ -18,7 +18,7 @@ class AssetRepository(Repository[Asset]):
     def upsert(self, asset: Asset) -> None:
         self._conn.execute(
             """INSERT INTO assets (
-                id, isin, nse_symbol, bse_code, amfi_code, screener_id,
+                id, isin, nse_symbol, bse_code, amfi_code, amc_name, mf_category, screener_id,
                 name, asset_class, series,
                 sector, industry_group, industry, sub_industry,
                 screener_sector_code, screener_industry_group_code,
@@ -28,7 +28,7 @@ class AssetRepository(Repository[Asset]):
                 nse_listed, bse_listed,
                 face_value, website_url, description, management_json
             ) VALUES (
-                ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?,
                 ?, ?, ?,
                 ?, ?, ?, ?,
                 ?, ?, ?, ?,
@@ -41,6 +41,9 @@ class AssetRepository(Repository[Asset]):
                 name = COALESCE(excluded.name, name),
                 nse_symbol = COALESCE(excluded.nse_symbol, nse_symbol),
                 bse_code = COALESCE(excluded.bse_code, bse_code),
+                amfi_code = COALESCE(excluded.amfi_code, amfi_code),
+                amc_name = COALESCE(excluded.amc_name, amc_name),
+                mf_category = COALESCE(excluded.mf_category, mf_category),
                 sector = COALESCE(excluded.sector, sector),
                 industry_group = COALESCE(excluded.industry_group, industry_group),
                 industry = COALESCE(excluded.industry, industry),
@@ -55,7 +58,7 @@ class AssetRepository(Repository[Asset]):
             """,
             (
                 asset.id, asset.isin, asset.nse_symbol, asset.bse_code,
-                asset.amfi_code, asset.screener_id,
+                asset.amfi_code, asset.amc_name, asset.mf_category, asset.screener_id,
                 asset.name, asset.asset_class, asset.series,
                 asset.sector, asset.industry_group, asset.industry, asset.sub_industry,
                 asset.screener_sector_code, asset.screener_industry_group_code,
@@ -106,6 +109,8 @@ class AssetRepository(Repository[Asset]):
             nse_symbol=row.get("nse_symbol"),
             bse_code=row.get("bse_code"),
             amfi_code=row.get("amfi_code"),
+            amc_name=row.get("amc_name"),
+            mf_category=row.get("mf_category"),
             screener_id=row.get("screener_id"),
             series=row.get("series"),
             sector=row.get("sector"),

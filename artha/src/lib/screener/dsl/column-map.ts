@@ -39,16 +39,16 @@ export function resolveCall(name: string, args: number[]): ColInfo | null {
 
 const PLAIN_MAP: Record<string, ColInfo> = {
     // Price
-    price:              { sql: 'ti.price',              table: 'ti' },
-    close:              { sql: 'ti.price',              table: 'ti' },
-    last:               { sql: 'ti.price',              table: 'ti' },
-    c:                  { sql: 'ti.price',              table: 'ti' },
-    open:               { sql: 'ti.open_price',         table: 'ti' },
-    o:                  { sql: 'ti.open_price',         table: 'ti' },
-    high:               { sql: 'ti.high_price',         table: 'ti' },
-    h:                  { sql: 'ti.high_price',         table: 'ti' },
-    low:                { sql: 'ti.low_price',          table: 'ti' },
-    l:                  { sql: 'ti.low_price',          table: 'ti' },
+    price:              { sql: 'ti.close',              table: 'ti' },
+    close:              { sql: 'ti.close',              table: 'ti' },
+    last:               { sql: 'ti.close',              table: 'ti' },
+    c:                  { sql: 'ti.close',              table: 'ti' },
+    open:               { sql: 'ti.open',               table: 'ti' },
+    o:                  { sql: 'ti.open',               table: 'ti' },
+    high:               { sql: 'ti.high',               table: 'ti' },
+    h:                  { sql: 'ti.high',               table: 'ti' },
+    low:                { sql: 'ti.low',                table: 'ti' },
+    l:                  { sql: 'ti.low',                table: 'ti' },
 
     // Volume
     volume:             { sql: 'ti.volume',             table: 'ti' },
@@ -69,7 +69,7 @@ const PLAIN_MAP: Record<string, ColInfo> = {
     avol:               { sql: 'ti.volume_ma_20',       table: 'ti' },
 
     // Average daily DOLLAR volume (21-day default, millions) — approx price * avol
-    advol:              { sql: '(ti.price * ti.volume_ma_20 / 1000000.0)', table: 'ti' },
+    advol:              { sql: '(ti.close * ti.volume_ma_20 / 1000000.0)', table: 'ti' },
 
     // Relative volume
     rvol:               { sql: 'ti.rvol',               table: 'ti' },
@@ -153,7 +153,7 @@ const PLAIN_MAP: Record<string, ColInfo> = {
     dvd_yield:          { sql: 'cr.dividend_yield',     table: 'cr' },
     roce:               { sql: 'cr.roce',               table: 'cr' },
     roe:                { sql: 'cr.roe',                table: 'cr' },
-    roic:               { sql: 'cr.roce',               table: 'cr' }, // approximation
+    roic:               { sql: 'cr.roic',               table: 'cr' },
     eps:                { sql: 'cr.eps_ttm',            table: 'cr' },
     ebitda:             { sql: 'cr.ebitda_ttm',         table: 'cr' },
     // Margins
@@ -170,7 +170,7 @@ const PLAIN_MAP: Record<string, ColInfo> = {
 
     // Quality / Solvency scores
     quality_score:      { sql: 'cr.quality_score',      table: 'cr' },
-    piotroski_f_score:  { sql: 'cr.quality_score',      table: 'cr' }, // best proxy
+    piotroski_f_score:  { sql: 'cr.piotroski_f_score',  table: 'cr' },
     altman_z_score:     { sql: 'cr.altman_z',           table: 'cr' },
     altman_z:           { sql: 'cr.altman_z',           table: 'cr' },
     beneish_m_score:    { sql: 'cr.beneish_m',          table: 'cr' },
@@ -193,8 +193,8 @@ const PLAIN_MAP: Record<string, ColInfo> = {
 
     // Legacy / generic growth aliases
     eps_yoy:            { sql: 'cr.eps_growth_1y',      table: 'cr' },
-    revenue_qoq:        { sql: 'cr.revenue_growth_1y',  table: 'cr' }, // approx
-    net_income_5y_growth: { sql: 'cr.pat_growth_1y',   table: 'cr' }, // approx
+    revenue_qoq:        { sql: 'cr.revenue_growth_1q',  table: 'cr' },
+    net_income_5y_growth: { sql: 'cr.pat_growth_5y',   table: 'cr' },
 
     // Dividend
     dvd_payout_ratio:   { sql: 'cr.dividend_payout',   table: 'cr' },
@@ -256,7 +256,7 @@ const CALL_MAP: Record<string, CallResolver> = {
     willr:   ([p=14])  => ({ sql: 'ti.williams_r_14', table: 'ti' }),
     mom:     ([p=12])  => ({ sql: 'ti.momentum_12',  table: 'ti' }),
     roc:     ([p=10])  => ({ sql: 'ti.roc_10',       table: 'ti' }),
-    ao:      ([f=5,s=34]) => ({ sql: 'ti.macd_hist', table: 'ti' }), // AO approx via MACD hist
+    ao:      ([f=5,s=34]) => ({ sql: 'ti.ao',        table: 'ti' }),
     adx:     ([p=14])  => ({ sql: 'ti.adx_14',       table: 'ti' }),
     di_plus: ([p=14])  => ({ sql: 'ti.di_plus_14',   table: 'ti' }),
     di_minus:([p=14])  => ({ sql: 'ti.di_minus_14',  table: 'ti' }),
@@ -274,7 +274,7 @@ const CALL_MAP: Record<string, CallResolver> = {
 
     // Volume
     avol:  ([p=21]) => ({ sql: 'ti.volume_ma_20', table: 'ti' }),
-    advol: ([p=21]) => ({ sql: '(ti.price * ti.volume_ma_20 / 1000000.0)', table: 'ti' }),
+    advol: ([p=21]) => ({ sql: '(ti.close * ti.volume_ma_20 / 1000000.0)', table: 'ti' }),
     vma:   ([p=21]) => ({ sql: 'ti.volume_ma_20', table: 'ti' }),
     rvol:  ([p=21]) => ({ sql: 'ti.rvol',         table: 'ti' }),
 

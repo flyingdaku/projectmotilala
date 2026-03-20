@@ -53,7 +53,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.db import get_connection, generate_id
+from core.db import get_pg_connection, get_ts_connection, generate_id
 from sources.eodhd.client import EODHDClient
 
 logging.basicConfig(
@@ -108,10 +108,15 @@ def _ingest_rows(conn: Any, rows: List[Dict], asset_id: str, eodhd_symbol: str, 
             continue
         try:
             conn.execute("""
-                INSERT OR REPLACE INTO eodhd_daily_prices
+                INSERT INTO eodhd_daily_prices
                 (asset_id, date, open, high, low, close, adjusted_close,
                  volume, eodhd_symbol, exchange, fetched_at)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT (asset_id, date, exchange) DO UPDATE SET
+                open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
+                close=EXCLUDED.close, adjusted_close=EXCLUDED.adjusted_close,
+                volume=EXCLUDED.volume, eodhd_symbol=EXCLUDED.eodhd_symbol,
+                fetched_at=EXCLUDED.fetched_at
             """, (
                 asset_id,
                 row.get("date"),
@@ -156,7 +161,7 @@ def backfill_symbol(
 
     for chunk_start, chunk_end in chunks:
         if skip_existing:
-            with get_connection() as conn:
+            with get_ts_connection() as conn:
                 if _already_has_data(conn, asset_id, exchange, chunk_start, chunk_end):
                     skipped += 1
                     continue
@@ -170,7 +175,7 @@ def backfill_symbol(
             logger.debug(f"[{eodhd_symbol}] No data for {chunk_start}–{chunk_end}")
             continue
 
-        with get_connection() as conn:
+        with get_ts_connection() as conn:
             ins = _ingest_rows(conn, rows, asset_id, eodhd_symbol, exchange)
             total_ins += ins
 
@@ -203,7 +208,7 @@ def run_backfill(
     )
 
     # ── Load symbol mappings ──────────────────────────────────
-    with get_connection() as conn:
+    with get_pg_connection() as conn:
         q_parts = ["SELECT asset_id, eodhd_nse_symbol, eodhd_bse_symbol, is_delisted FROM eodhd_symbol_mapping WHERE 1=1"]
         params: List[Any] = []
 
@@ -340,15 +345,16 @@ def backfill_ca_symbol(
         ))
 
     if rows_to_insert:
-        with get_connection() as conn:
+        with get_pg_connection() as conn:
             for row in rows_to_insert:
                 try:
                     conn.execute("""
-                        INSERT OR IGNORE INTO eodhd_corporate_actions
+                        INSERT INTO eodhd_corporate_actions
                         (id, asset_id, date, type, value,
                          declaration_date, payment_date, record_date,
                          raw_json, fetched_at)
                         VALUES (?,?,?,?,?,?,?,?,?,?)
+                        ON CONFLICT DO NOTHING
                     """, row)
                     inserted += 1
                 except Exception as exc:
@@ -365,7 +371,7 @@ def run_ca_backfill(
     """Backfill EODHD splits + dividends history for all mapped symbols."""
     logger.info(f"EODHD CA Backfill | from={from_date} | workers={workers}")
 
-    with get_connection() as conn:
+    with get_pg_connection() as conn:
         q = """
             SELECT asset_id, eodhd_nse_symbol, eodhd_bse_symbol
             FROM   eodhd_symbol_mapping

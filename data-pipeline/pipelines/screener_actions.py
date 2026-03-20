@@ -42,31 +42,10 @@ def extract_company_id(html: str) -> Optional[str]:
     return None
 
 def fetch_actions_html(identifier: str, company_id: str) -> Optional[str]:
-    """Fetch corporate actions fragment from Screener."""
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    """Fetch corporate actions fragment from Screener cache if available."""
     cache_path = CACHE_DIR / f"{identifier}.html"
-    
     if cache_path.exists() and cache_path.stat().st_size > 500:
         return cache_path.read_text(encoding="utf-8")
-    
-    url = f"https://www.screener.in/company/actions/{company_id}/"
-    for attempt in range(1, 4):
-        try:
-            resp = requests.get(url, headers=HEADERS, cookies=COOKIES, timeout=20)
-            if resp.status_code == 200 and "Register - Screener" not in resp.text:
-                html = resp.text
-                cache_path.write_text(html, encoding="utf-8")
-                return html
-            elif resp.status_code == 429:
-                wait = 60 * attempt
-                logger.warning(f"[SCREENER] Actions 429 for {identifier} - waiting {wait}s...")
-                time.sleep(wait)
-            else:
-                logger.warning(f"Failed to fetch actions for {identifier} (ID: {company_id}). Status: {resp.status_code}")
-                return None
-        except Exception as e:
-            logger.error(f"Error fetching actions for {identifier} (attempt {attempt}): {e}")
-            time.sleep(10)
     return None
 
 def _parse_date(date_div: BeautifulSoup) -> Optional[str]:
@@ -126,72 +105,64 @@ def parse_actions_fragment(html: str) -> Dict[str, List[Dict]]:
 def run_screener_actions_pipeline():
     logger.info("Starting Screener Corporate Actions pipeline...")
     
-    # 1. Ensure schema exists
-    with get_db() as conn:
+    from core.db import get_pg_connection
+    
+    with get_pg_connection() as conn:
+        # 1. Ensure schema exists (Postgres syntax)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS src_screener_actions (
                 id                TEXT PRIMARY KEY,
-                asset_id          TEXT NOT NULL,
+                asset_id          TEXT NOT NULL REFERENCES assets(id),
                 action_type       TEXT NOT NULL,
-                ex_date           TEXT NOT NULL,
+                ex_date           DATE NOT NULL,
                 title             TEXT,
                 description       TEXT,
-                created_at        TEXT DEFAULT (datetime('now')),
-                UNIQUE(asset_id, action_type, ex_date),
-                FOREIGN KEY (asset_id) REFERENCES assets(id)
+                created_at        TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(asset_id, action_type, ex_date)
             )
         """)
         
         # 2. Get active assets
-        assets = conn.execute("SELECT id, nse_symbol, bse_code FROM assets WHERE is_active = 1").fetchall()
+        assets = conn.fetchall("SELECT id, nse_symbol, bse_code FROM assets WHERE is_active = 1")
     
-    for asset in assets:
-        identifier = asset["nse_symbol"] or asset["bse_code"]
-        if not identifier: continue
-        
-        # Check if we have main page cached to extract company ID
-        main_cache = MAIN_CACHE_DIR / f"{identifier}.html"
-        company_id = None
-        if main_cache.exists():
-            company_id = extract_company_id(main_cache.read_text(encoding="utf-8"))
-        
-        if not company_id:
-            # Try to fetch main page if not cached (briefly)
-            try:
-                url = f"https://www.screener.in/company/{identifier}/"
-                resp = requests.get(url, headers=HEADERS, cookies=COOKIES, timeout=10)
-                company_id = extract_company_id(resp.text)
-            except:
-                pass
-        
-        if not company_id:
-            logger.warning(f"Could not resolve company ID for {identifier}")
-            continue
+        for asset in assets:
+            identifier = asset["nse_symbol"] or asset["bse_code"]
+            if not identifier: continue
             
-        logger.info(f"Processing {identifier} (ID: {company_id})...")
-        html = fetch_actions_html(identifier, company_id)
-        if not html:
-            continue
+            # Check if we have main page cached to extract company ID
+            main_cache = MAIN_CACHE_DIR / f"{identifier}.html"
+            company_id = None
+            if main_cache.exists():
+                company_id = extract_company_id(main_cache.read_text(encoding="utf-8"))
             
-        actions = parse_actions_fragment(html)
-        
-        with get_db() as conn:
+            if not company_id:
+                # Modest attempt if not in cache (login likely required for many)
+                continue
+            
+            logger.info(f"Processing {identifier} (ID: {company_id})...")
+            html = fetch_actions_html(identifier, company_id)
+            if not html:
+                continue
+                
+            actions = parse_actions_fragment(html)
+            
             for action_type, rows in actions.items():
                 for row in rows:
                     try:
                         conn.execute("""
-                            INSERT OR IGNORE INTO src_screener_actions (
+                            INSERT INTO src_screener_actions (
                                 id, asset_id, action_type, ex_date, title, description
-                            ) VALUES (?, ?, ?, ?, ?, ?)
+                            ) VALUES (%s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (asset_id, action_type, ex_date) DO NOTHING
                         """, (
                             generate_id(), asset["id"], row["action_type"],
                             row["date"], row["title"], row["description"]
                         ))
                     except Exception as e:
                         logger.error(f"DB Error for {identifier}: {e}")
-        
-        logger.info(f"Updated actions for {identifier}")
-        time.sleep(0.5) # Modest sleep
+            
+            logger.info(f"Updated actions for {identifier}")
+            conn.commit()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)

@@ -152,17 +152,17 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'open',         label: 'Open',               categoryId: 'price',
         dslName: 'open',    params: [],                  rhsType: 'number_or_indicator',
-        description: 'Open price', supported: true,
+        description: 'Open price', supported: false,
     },
     {
         id: 'high',         label: 'High',               categoryId: 'price',
         dslName: 'high',    params: [],                  rhsType: 'number_or_indicator',
-        description: 'High price', supported: true,
+        description: 'High price', supported: false,
     },
     {
         id: 'low',          label: 'Low',                categoryId: 'price',
         dslName: 'low',     params: [],                  rhsType: 'number_or_indicator',
-        description: 'Low price', supported: true,
+        description: 'Low price', supported: false,
     },
     {
         id: 'volume',       label: 'Volume',             categoryId: 'price',
@@ -172,22 +172,22 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'cvol',         label: 'Current Volume (M)', categoryId: 'price',
         dslName: 'cvol',    params: [],                  rhsType: 'number',
-        description: 'Current volume in millions', supported: true,
+        description: 'Current volume in millions', supported: false,
     },
     {
         id: 'avol',         label: 'Avg Volume',         categoryId: 'price',
         dslName: 'avol',    params: [{ name: 'period', label: 'Period', defaultValue: 21 }],
-        rhsType: 'number',  description: 'Average volume (millions)', supported: true,
+        rhsType: 'number',  description: 'Average volume (millions)', supported: false,
     },
     {
         id: 'rvol',         label: 'Relative Volume',    categoryId: 'price',
         dslName: 'rvol',    params: [],                  rhsType: 'number',
-        description: 'Current volume / 21-day avg volume', supported: true,
+        description: 'Current volume / 21-day avg volume', supported: false,
     },
     {
         id: 'volch',        label: 'Volume % Change',    categoryId: 'price',
         dslName: 'volch',   params: [],                  rhsType: 'number',
-        description: 'Volume % change vs previous day', supported: true,
+        description: 'Volume % change vs previous day', supported: false,
     },
     {
         id: 'pct52wHigh',   label: '% from 52w High',   categoryId: 'price',
@@ -202,12 +202,12 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'highest',      label: 'Highest Price',     categoryId: 'price',
         dslName: 'highest', params: [{ name: 'period', label: 'Period', defaultValue: 52 }],
-        rhsType: 'number_or_indicator', description: 'Highest close over N bars', supported: true,
+        rhsType: 'number_or_indicator', description: 'Highest close over N bars', supported: false,
     },
     {
         id: 'lowest',       label: 'Lowest Price',      categoryId: 'price',
         dslName: 'lowest',  params: [{ name: 'period', label: 'Period', defaultValue: 52 }],
-        rhsType: 'number_or_indicator', description: 'Lowest close over N bars', supported: true,
+        rhsType: 'number_or_indicator', description: 'Lowest close over N bars', supported: false,
     },
     {
         id: 'change_pct',   label: 'Price % Change',    categoryId: 'price',
@@ -234,27 +234,27 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'ema',          label: 'EMA',               categoryId: 'ma',
         dslName: 'ema',     params: [{ name: 'expr', label: 'Expression', defaultValue: 'close' }, { name: 'period', label: 'Period', defaultValue: 50, min: 2, max: 500 }],
-        rhsType: 'number_or_indicator', description: 'Exponential Moving Average', supported: true,
+        rhsType: 'number_or_indicator', description: 'Exponential Moving Average', supported: false,
     },
     {
         id: 'wma',          label: 'WMA',               categoryId: 'ma',
         dslName: 'wma',     params: [{ name: 'period', label: 'Period', defaultValue: 50, min: 2, max: 500 }],
-        rhsType: 'number_or_indicator', description: 'Weighted Moving Average', supported: true,
+        rhsType: 'number_or_indicator', description: 'Weighted Moving Average', supported: false,
     },
     {
         id: 'dema',         label: 'DEMA',              categoryId: 'ma',
         dslName: 'dema',    params: [{ name: 'period', label: 'Period', defaultValue: 50 }],
-        rhsType: 'number_or_indicator', description: 'Double EMA', supported: true,
+        rhsType: 'number_or_indicator', description: 'Double EMA', supported: false,
     },
     {
         id: 'tema',         label: 'TEMA',              categoryId: 'ma',
         dslName: 'tema',    params: [{ name: 'period', label: 'Period', defaultValue: 50 }],
-        rhsType: 'number_or_indicator', description: 'Triple EMA', supported: true,
+        rhsType: 'number_or_indicator', description: 'Triple EMA', supported: false,
     },
     {
         id: 'hma',          label: 'HMA',               categoryId: 'ma',
         dslName: 'hma',     params: [{ name: 'period', label: 'Period', defaultValue: 50 }],
-        rhsType: 'number_or_indicator', description: 'Hull Moving Average', supported: true,
+        rhsType: 'number_or_indicator', description: 'Hull Moving Average', supported: false,
     },
     {
         id: 'kama',         label: 'KAMA',              categoryId: 'ma',
@@ -264,7 +264,7 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'vwma',         label: 'VWMA',              categoryId: 'ma',
         dslName: 'vwma',    params: [{ name: 'period', label: 'Period', defaultValue: 50 }],
-        rhsType: 'number_or_indicator', description: 'Volume Weighted MA', supported: true,
+        rhsType: 'number_or_indicator', description: 'Volume Weighted MA', supported: false,
     },
     {
         id: 'wild',         label: 'Wilder MA',         categoryId: 'ma',
@@ -285,7 +285,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'slow', label: 'Slow', defaultValue: 26 },
             { name: 'signal', label: 'Signal', defaultValue: 9 },
         ],
-        rhsType: 'number_or_indicator', description: 'MACD line', supported: true,
+        rhsType: 'number_or_indicator', description: 'MACD line', supported: false,
     },
     {
         id: 'macds',        label: 'MACD Signal',       categoryId: 'oscillators',
@@ -294,7 +294,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'slow', label: 'Slow', defaultValue: 26 },
             { name: 'signal', label: 'Signal', defaultValue: 9 },
         ],
-        rhsType: 'number_or_indicator', description: 'MACD Signal line', supported: true,
+        rhsType: 'number_or_indicator', description: 'MACD Signal line', supported: false,
     },
     {
         id: 'macdh',        label: 'MACD Histogram',    categoryId: 'oscillators',
@@ -303,7 +303,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'slow', label: 'Slow', defaultValue: 26 },
             { name: 'signal', label: 'Signal', defaultValue: 9 },
         ],
-        rhsType: 'number',  description: 'MACD Histogram', supported: true,
+        rhsType: 'number',  description: 'MACD Histogram', supported: false,
     },
     {
         id: 'stoch',        label: 'Stochastic %K',     categoryId: 'oscillators',
@@ -312,7 +312,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'slowK', label: 'Slow %K', defaultValue: 3 },
             { name: 'slowD', label: 'Slow %D', defaultValue: 3 },
         ],
-        rhsType: 'number_or_indicator', description: 'Stochastic %K line', supported: true,
+        rhsType: 'number_or_indicator', description: 'Stochastic %K line', supported: false,
     },
     {
         id: 'stochd',       label: 'Stochastic %D',     categoryId: 'oscillators',
@@ -321,7 +321,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'slowK', label: 'Slow %K', defaultValue: 3 },
             { name: 'slowD', label: 'Slow %D', defaultValue: 3 },
         ],
-        rhsType: 'number_or_indicator', description: 'Stochastic %D line', supported: true,
+        rhsType: 'number_or_indicator', description: 'Stochastic %D line', supported: false,
     },
     {
         id: 'stochrsi',     label: 'Stoch RSI',         categoryId: 'oscillators',
@@ -331,27 +331,27 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'slowK', label: 'Slow %K', defaultValue: 3 },
             { name: 'slowD', label: 'Slow %D', defaultValue: 3 },
         ],
-        rhsType: 'number_or_indicator', description: 'Stochastic RSI', supported: true,
+        rhsType: 'number_or_indicator', description: 'Stochastic RSI', supported: false,
     },
     {
         id: 'cci',          label: 'CCI',               categoryId: 'oscillators',
         dslName: 'cci',     params: [{ name: 'period', label: 'Period', defaultValue: 20 }],
-        rhsType: 'number',  description: 'Commodity Channel Index', supported: true,
+        rhsType: 'number',  description: 'Commodity Channel Index', supported: false,
     },
     {
         id: 'wpr',          label: 'Williams %R',       categoryId: 'oscillators',
         dslName: 'willr',   params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
-        rhsType: 'number',  description: "Williams' Percent Range", supported: true,
+        rhsType: 'number',  description: "Williams' Percent Range", supported: false,
     },
     {
         id: 'mom',          label: 'Momentum',          categoryId: 'oscillators',
         dslName: 'mom',     params: [{ name: 'period', label: 'Period', defaultValue: 12 }],
-        rhsType: 'number',  description: 'Price Momentum', supported: true,
+        rhsType: 'number',  description: 'Price Momentum', supported: false,
     },
     {
         id: 'roc',          label: 'ROC',               categoryId: 'oscillators',
         dslName: 'roc',     params: [{ name: 'period', label: 'Period', defaultValue: 10 }],
-        rhsType: 'number',  description: 'Rate of Change', supported: true,
+        rhsType: 'number',  description: 'Rate of Change', supported: false,
     },
     {
         id: 'ao',           label: 'Awesome Oscillator', categoryId: 'oscillators',
@@ -390,17 +390,17 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'adx',          label: 'ADX',               categoryId: 'trend',
         dslName: 'adx',     params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
-        rhsType: 'number',  description: 'Average Directional Index', supported: true,
+        rhsType: 'number',  description: 'Average Directional Index', supported: false,
     },
     {
         id: 'dip',          label: '+DI',               categoryId: 'trend',
         dslName: 'di_plus', params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
-        rhsType: 'number_or_indicator', description: 'Positive Directional Indicator', supported: true,
+        rhsType: 'number_or_indicator', description: 'Positive Directional Indicator', supported: false,
     },
     {
         id: 'dim',          label: '-DI',               categoryId: 'trend',
         dslName: 'di_minus', params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
-        rhsType: 'number_or_indicator', description: 'Negative Directional Indicator', supported: true,
+        rhsType: 'number_or_indicator', description: 'Negative Directional Indicator', supported: false,
     },
     {
         id: 'aroon',        label: 'Aroon',             categoryId: 'trend',
@@ -418,7 +418,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'multiplier', label: 'Multiplier', defaultValue: 3, step: 0.5 },
             { name: 'period', label: 'ATR Period', defaultValue: 7 },
         ],
-        rhsType: 'number_or_indicator', description: 'SuperTrend Indicator', supported: true,
+        rhsType: 'number_or_indicator', description: 'SuperTrend Indicator', supported: false,
     },
     {
         id: 'psar',         label: 'Parabolic SAR',     categoryId: 'trend',
@@ -426,7 +426,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'step', label: 'Step', defaultValue: 0.02, step: 0.01 },
             { name: 'max', label: 'Max', defaultValue: 0.2, step: 0.05 },
         ],
-        rhsType: 'number_or_indicator', description: 'Parabolic SAR', supported: true,
+        rhsType: 'number_or_indicator', description: 'Parabolic SAR', supported: false,
     },
     {
         id: 'trix',         label: 'TRIX',              categoryId: 'trend',
@@ -441,12 +441,12 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'atr',          label: 'ATR',               categoryId: 'volatility',
         dslName: 'atr',     params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
-        rhsType: 'number',  description: 'Average True Range', supported: true,
+        rhsType: 'number',  description: 'Average True Range', supported: false,
     },
     {
         id: 'natr',         label: 'NATR',              categoryId: 'volatility',
         dslName: 'natr',    params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
-        rhsType: 'number',  description: 'Normalized ATR (%)', supported: true,
+        rhsType: 'number',  description: 'Normalized ATR (%)', supported: false,
     },
     {
         id: 'stddev',       label: 'Std Deviation',     categoryId: 'volatility',
@@ -454,12 +454,12 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'period', label: 'Period', defaultValue: 20 },
             { name: 'nbDev', label: 'StdDev', defaultValue: 1 },
         ],
-        rhsType: 'number',  description: 'Standard Deviation of price', supported: true,
+        rhsType: 'number',  description: 'Standard Deviation of price', supported: false,
     },
     {
         id: 'hv',           label: 'Historical Vol',    categoryId: 'volatility',
         dslName: 'hv',      params: [{ name: 'period', label: 'Period', defaultValue: 20 }],
-        rhsType: 'number',  description: 'Historical Volatility', supported: true,
+        rhsType: 'number',  description: 'Historical Volatility', supported: false,
     },
     {
         id: 'chop',         label: 'Choppiness Index',  categoryId: 'volatility',
@@ -471,12 +471,12 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'obv',          label: 'OBV',               categoryId: 'volume',
         dslName: 'obv',     params: [],                  rhsType: 'number_or_indicator',
-        description: 'On Balance Volume', supported: true,
+        description: 'On Balance Volume', supported: false,
     },
     {
         id: 'cmf',          label: 'CMF',               categoryId: 'volume',
         dslName: 'cmf',     params: [{ name: 'period', label: 'Period', defaultValue: 20 }],
-        rhsType: 'number',  description: 'Chaikin Money Flow', supported: true,
+        rhsType: 'number',  description: 'Chaikin Money Flow', supported: false,
     },
     {
         id: 'ad',           label: 'A/D Line',          categoryId: 'volume',
@@ -491,7 +491,7 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'mfi',          label: 'MFI',               categoryId: 'volume',
         dslName: 'mfi',     params: [{ name: 'period', label: 'Period', defaultValue: 14 }],
-        rhsType: 'number',  description: 'Money Flow Index', supported: true,
+        rhsType: 'number',  description: 'Money Flow Index', supported: false,
     },
     {
         id: 'vr',           label: 'Volume Ratio',      categoryId: 'volume',
@@ -501,7 +501,7 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'vma',          label: 'Volume MA',         categoryId: 'volume',
         dslName: 'vma',     params: [{ name: 'period', label: 'Period', defaultValue: 20 }],
-        rhsType: 'number_or_indicator', description: 'Volume Moving Average', supported: true,
+        rhsType: 'number_or_indicator', description: 'Volume Moving Average', supported: false,
     },
     {
         id: 'vo',           label: 'Volume Oscillator', categoryId: 'volume',
@@ -519,7 +519,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'period', label: 'Period', defaultValue: 20 },
             { name: 'stddev', label: 'Std Dev', defaultValue: 2, step: 0.5 },
         ],
-        rhsType: 'number_or_indicator', description: 'Bollinger Upper Band', supported: true,
+        rhsType: 'number_or_indicator', description: 'Bollinger Upper Band', supported: false,
     },
     {
         id: 'bbmb',         label: 'BB Middle Band',    categoryId: 'channels',
@@ -527,7 +527,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'period', label: 'Period', defaultValue: 20 },
             { name: 'stddev', label: 'Std Dev', defaultValue: 2, step: 0.5 },
         ],
-        rhsType: 'number_or_indicator', description: 'Bollinger Middle Band', supported: true,
+        rhsType: 'number_or_indicator', description: 'Bollinger Middle Band', supported: false,
     },
     {
         id: 'bblb',         label: 'BB Lower Band',     categoryId: 'channels',
@@ -535,7 +535,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'period', label: 'Period', defaultValue: 20 },
             { name: 'stddev', label: 'Std Dev', defaultValue: 2, step: 0.5 },
         ],
-        rhsType: 'number_or_indicator', description: 'Bollinger Lower Band', supported: true,
+        rhsType: 'number_or_indicator', description: 'Bollinger Lower Band', supported: false,
     },
     {
         id: 'bb_pct',       label: 'Bollinger %B',      categoryId: 'channels',
@@ -543,7 +543,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'period', label: 'Period', defaultValue: 20 },
             { name: 'stddev', label: 'Std Dev', defaultValue: 2, step: 0.5 },
         ],
-        rhsType: 'number',  description: 'Bollinger %B (position within bands)', supported: true,
+        rhsType: 'number',  description: 'Bollinger %B (position within bands)', supported: false,
     },
     {
         id: 'bb_bw',        label: 'BB Width',          categoryId: 'channels',
@@ -551,7 +551,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'period', label: 'Period', defaultValue: 20 },
             { name: 'stddev', label: 'Std Dev', defaultValue: 2, step: 0.5 },
         ],
-        rhsType: 'number',  description: 'Bollinger BandWidth %', supported: true,
+        rhsType: 'number',  description: 'Bollinger BandWidth %', supported: false,
     },
     {
         id: 'keltub',       label: 'Keltner Upper',     categoryId: 'channels',
@@ -560,7 +560,7 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'mult', label: 'ATR Mult', defaultValue: 2, step: 0.5 },
             { name: 'atrPeriod', label: 'ATR Period', defaultValue: 10 },
         ],
-        rhsType: 'number_or_indicator', description: 'Keltner Channel Upper', supported: true,
+        rhsType: 'number_or_indicator', description: 'Keltner Channel Upper', supported: false,
     },
     {
         id: 'keltlb',       label: 'Keltner Lower',     categoryId: 'channels',
@@ -569,17 +569,17 @@ export const INDICATORS: IndicatorDef[] = [
             { name: 'mult', label: 'ATR Mult', defaultValue: 2, step: 0.5 },
             { name: 'atrPeriod', label: 'ATR Period', defaultValue: 10 },
         ],
-        rhsType: 'number_or_indicator', description: 'Keltner Channel Lower', supported: true,
+        rhsType: 'number_or_indicator', description: 'Keltner Channel Lower', supported: false,
     },
     {
         id: 'udon',         label: 'Donchian Upper',    categoryId: 'channels',
         dslName: 'udon',    params: [{ name: 'period', label: 'Period', defaultValue: 20 }],
-        rhsType: 'number_or_indicator', description: 'Donchian Upper Channel', supported: true,
+        rhsType: 'number_or_indicator', description: 'Donchian Upper Channel', supported: false,
     },
     {
         id: 'ldon',         label: 'Donchian Lower',    categoryId: 'channels',
         dslName: 'ldon',    params: [{ name: 'period', label: 'Period', defaultValue: 20 }],
-        rhsType: 'number_or_indicator', description: 'Donchian Lower Channel', supported: true,
+        rhsType: 'number_or_indicator', description: 'Donchian Lower Channel', supported: false,
     },
 
     // ── Ichimoku ──────────────────────────────────────────────────────────
@@ -678,12 +678,12 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'tprice',       label: 'Typical Price',     categoryId: 'price_action',
         dslName: 'tprice',  params: [],                  rhsType: 'number_or_indicator',
-        description: '(H+L+C)/3', supported: true,
+        description: '(H+L+C)/3', supported: false,
     },
     {
         id: 'mprice',       label: 'Median Price',      categoryId: 'price_action',
         dslName: 'mprice',  params: [],                  rhsType: 'number_or_indicator',
-        description: '(H+L)/2', supported: true,
+        description: '(H+L)/2', supported: false,
     },
     {
         id: 'wick',         label: 'Upper Wick',        categoryId: 'price_action',
@@ -735,7 +735,7 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'ebitda_ttm',   label: 'EBITDA (₹ Cr)',    categoryId: 'fundamental',
         dslName: 'ebitda',  params: [],                  rhsType: 'number',
-        description: 'EBITDA (TTM, ₹ Crores)', supported: true,
+        description: 'EBITDA (TTM, ₹ Crores)', supported: false,
     },
     {
         id: 'pat_margin',   label: 'PAT Margin %',      categoryId: 'fundamental',
@@ -750,7 +750,7 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'gross_margin', label: 'Gross Margin %',    categoryId: 'fundamental',
         dslName: 'gross_margin', params: [],              rhsType: 'number',
-        description: 'Gross Profit Margin % (from MSI ratios)', supported: true,
+        description: 'Gross Profit Margin % (from MSI ratios)', supported: false,
     },
 
     // ── Financial Health ──────────────────────────────────────────────────
@@ -772,27 +772,27 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'quick_ratio',  label: 'Quick Ratio',       categoryId: 'financial_health',
         dslName: 'quick_ratio', params: [],              rhsType: 'number',
-        description: '(Current Assets − Inventory) / Current Liabilities', supported: true,
+        description: '(Current Assets − Inventory) / Current Liabilities', supported: false,
     },
     {
         id: 'altman_z',     label: 'Altman Z-Score',    categoryId: 'financial_health',
         dslName: 'altman_z_score', params: [],            rhsType: 'number',
-        description: 'Altman Z-Score (>3 safe, <1.8 distress)', supported: true,
+        description: 'Altman Z-Score (>3 safe, <1.8 distress)', supported: false,
     },
     {
         id: 'beneish_m',    label: 'Beneish M-Score',   categoryId: 'financial_health',
         dslName: 'beneish_m_score', params: [],           rhsType: 'number',
-        description: 'Earnings manipulation indicator (<-2.22 = low risk)', supported: true,
+        description: 'Earnings manipulation indicator (<-2.22 = low risk)', supported: false,
     },
     {
         id: 'promoter_pct', label: 'Promoter Holding %', categoryId: 'financial_health',
         dslName: 'promoter_pct', params: [],              rhsType: 'number',
-        description: 'Promoter shareholding percentage', supported: true,
+        description: 'Promoter shareholding percentage', supported: false,
     },
     {
         id: 'pledged_pct',  label: 'Pledged Shares %',  categoryId: 'financial_health',
         dslName: 'pledged_pct', params: [],               rhsType: 'number',
-        description: 'Promoter pledged shares as % of total shares', supported: true,
+        description: 'Promoter pledged shares as % of total shares', supported: false,
     },
 
     // ── Growth ────────────────────────────────────────────────────────────
@@ -814,7 +814,7 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'pat_g3y',      label: 'PAT Growth 3Y %',   categoryId: 'growth',
         dslName: 'pat_g3y', params: [],                  rhsType: 'number',
-        description: '3-Year Net Profit CAGR', supported: true,
+        description: '3-Year Net Profit CAGR', supported: false,
     },
     {
         id: 'eps_g1y',      label: 'EPS Growth 1Y %',   categoryId: 'growth',
@@ -824,24 +824,24 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'fcf',          label: 'Free Cash Flow (₹ Cr)', categoryId: 'growth',
         dslName: 'fcf',     params: [],                  rhsType: 'number',
-        description: 'Free Cash Flow (Operating CF − Capex)', supported: true,
+        description: 'Free Cash Flow (Operating CF − Capex)', supported: false,
     },
 
     // ── Valuation ─────────────────────────────────────────────────────────
     {
         id: 'roce',         label: 'ROCE %',            categoryId: 'valuation',
         dslName: 'roce',    params: [],                  rhsType: 'number',
-        description: 'Return on Capital Employed %', supported: true,
+        description: 'Return on Capital Employed %', supported: false,
     },
     {
         id: 'roe',          label: 'ROE %',             categoryId: 'valuation',
         dslName: 'roe',     params: [],                  rhsType: 'number',
-        description: 'Return on Equity %', supported: true,
+        description: 'Return on Equity %', supported: false,
     },
     {
         id: 'book_value',   label: 'Book Value/Share',  categoryId: 'valuation',
         dslName: 'book_value', params: [],               rhsType: 'number',
-        description: 'Book Value per Share (₹)', supported: true,
+        description: 'Book Value per Share (₹)', supported: false,
     },
 
     // ── Quality & Rank ────────────────────────────────────────────────────
@@ -853,7 +853,7 @@ export const INDICATORS: IndicatorDef[] = [
     {
         id: 'piotroski',    label: 'Piotroski F-Score', categoryId: 'quality',
         dslName: 'piotroski_f_score', params: [],         rhsType: 'number',
-        description: 'Piotroski F-Score (0-9, higher = stronger)', supported: true,
+        description: 'Piotroski F-Score (0-9, higher = stronger)', supported: false,
     },
 
     // ── Factor Exposure (IIMA Carhart 4-Factor) ───────────────────────────
@@ -887,6 +887,86 @@ export const INDICATORS: IndicatorDef[] = [
         dslName: 'ff_r2',   params: [],                    rhsType: 'number',
         description: 'Model R-squared: how much return variance factors explain', supported: false,
     },
+
+    // ─── Additional Requested Indicators (Under consideration/WIP) ───
+
+    // MA Additions
+    { id: 'alma', label: 'ALMA', categoryId: 'ma', dslName: 'alma', params: [{ name: 'period', label: 'Period', defaultValue: 9 }, { name: 'offset', label: 'Offset', defaultValue: 0.85, step: 0.05 }, { name: 'sigma', label: 'Sigma', defaultValue: 6 }], rhsType: 'number_or_indicator', description: 'Arnaud Legoux MA', supported: false },
+    { id: 'smma', label: 'SMMA (Smoothed MA)', categoryId: 'ma', dslName: 'smma', params: [{ name: 'period', label: 'Period', defaultValue: 50 }], rhsType: 'number_or_indicator', description: 'Smoothed Moving Average', supported: false },
+    { id: 't3', label: 'T3 MA', categoryId: 'ma', dslName: 't3', params: [{ name: 'period', label: 'Period', defaultValue: 5 }, { name: 'vfactor', label: 'Volume Factor', defaultValue: 0.7, step: 0.1 }], rhsType: 'number_or_indicator', description: 'Tillson T3 MA', supported: false },
+    { id: 'zlema', label: 'ZLEMA', categoryId: 'ma', dslName: 'zlema', params: [{ name: 'period', label: 'Period', defaultValue: 20 }], rhsType: 'number_or_indicator', description: 'Zero Lag EMA', supported: false },
+    
+    // Oscillators Additions
+    { id: 'fisher', label: 'Fisher Transform', categoryId: 'oscillators', dslName: 'fisher', params: [{ name: 'period', label: 'Period', defaultValue: 9 }], rhsType: 'number_or_indicator', description: 'Fisher Transform', supported: false },
+    { id: 'kst', label: 'KST', categoryId: 'oscillators', dslName: 'kst', params: [], rhsType: 'number_or_indicator', description: 'Know Sure Thing Oscillator', supported: false },
+    { id: 'smi', label: 'Stochastic Momentum (SMI)', categoryId: 'oscillators', dslName: 'smi', params: [{ name: 'q', label: 'Q-Period', defaultValue: 10 }, { name: 'r', label: 'R-Period', defaultValue: 3 }, { name: 's', label: 'S-Period', defaultValue: 3 }], rhsType: 'number_or_indicator', description: 'Stochastic Momentum Index', supported: false },
+    { id: 'tsi', label: 'TSI', categoryId: 'oscillators', dslName: 'tsi', params: [{ name: 'long', label: 'Long', defaultValue: 25 }, { name: 'short', label: 'Short', defaultValue: 13 }], rhsType: 'number_or_indicator', description: 'True Strength Index', supported: false },
+    { id: 'ppo', label: 'PPO', categoryId: 'oscillators', dslName: 'ppo', params: [{ name: 'fast', label: 'Fast', defaultValue: 12 }, { name: 'slow', label: 'Slow', defaultValue: 26 }, { name: 'sig', label: 'Signal', defaultValue: 9 }], rhsType: 'number_or_indicator', description: 'Percentage Price Oscillator', supported: false },
+    
+    // Trend Additions
+    { id: 'vortex', label: 'Vortex Indicator (VI)', categoryId: 'trend', dslName: 'vortex', params: [{ name: 'period', label: 'Period', defaultValue: 14 }], rhsType: 'number_or_indicator', description: 'Vortex Indicator', supported: false },
+    { id: 'mass_index', label: 'Mass Index', categoryId: 'trend', dslName: 'mass', params: [{ name: 'period', label: 'Period', defaultValue: 25 }], rhsType: 'number_or_indicator', description: 'Mass Index', supported: false },
+    { id: 'dmi', label: 'DMI (Directional Movement)', categoryId: 'trend', dslName: 'dmi', params: [{ name: 'period', label: 'Period', defaultValue: 14 }], rhsType: 'number_or_indicator', description: 'Directional Movement Index', supported: false },
+    { id: 'ttm_squeeze', label: 'TTM Squeeze', categoryId: 'trend', dslName: 'squeeze', params: [], rhsType: 'number_or_indicator', description: 'Volatility Squeeze Indicator', supported: false },
+    
+    // Volatility Additions
+    { id: 'chaikin_vol', label: 'Chaikin Volatility', categoryId: 'volatility', dslName: 'cvi', params: [{ name: 'period', label: 'Period', defaultValue: 10 }, { name: 'roc', label: 'ROC Period', defaultValue: 10 }], rhsType: 'number', description: 'Chaikin Volatility Index', supported: false },
+    { id: 'rvi', label: 'Relative Volatility (RVI)', categoryId: 'volatility', dslName: 'rvi', params: [{ name: 'period', label: 'Period', defaultValue: 14 }], rhsType: 'number', description: 'Relative Volatility Index', supported: false },
+    { id: 'stderr_bands', label: 'StdErr Bands', categoryId: 'volatility', dslName: 'stderr', params: [{ name: 'period', label: 'Period', defaultValue: 20 }], rhsType: 'number', description: 'Standard Error Bands', supported: false },
+
+    // Volume Additions
+    { id: 'vwap', label: 'VWAP', categoryId: 'volume', dslName: 'vwap', params: [], rhsType: 'number_or_indicator', description: 'Volume Weighted Average Price', supported: false },
+    { id: 'anchored_vwap', label: 'Anchored VWAP', categoryId: 'volume', dslName: 'avwap', params: [{ name: 'days', label: 'Days Ago', defaultValue: 30 }], rhsType: 'number_or_indicator', description: 'Anchored VWAP', supported: false },
+    { id: 'twap', label: 'TWAP', categoryId: 'volume', dslName: 'twap', params: [{ name: 'period', label: 'Period', defaultValue: 20 }], rhsType: 'number_or_indicator', description: 'Time Weighted Average Price', supported: false },
+    { id: 'eom', label: 'Ease of Movement (EOM)', categoryId: 'volume', dslName: 'eom', params: [{ name: 'period', label: 'Period', defaultValue: 14 }], rhsType: 'number_or_indicator', description: 'Ease of Movement', supported: false },
+    { id: 'nvi', label: 'Negative Volume Index', categoryId: 'volume', dslName: 'nvi', params: [], rhsType: 'number_or_indicator', description: 'Negative Volume Index (NVI)', supported: false },
+    { id: 'pvi', label: 'Positive Volume Index', categoryId: 'volume', dslName: 'pvi', params: [], rhsType: 'number_or_indicator', description: 'Positive Volume Index (PVI)', supported: false },
+
+    // Channels & Bands Additions
+    { id: 'kc_width', label: 'Keltner Width', categoryId: 'channels', dslName: 'kcw', params: [{ name: 'period', label: 'Period', defaultValue: 20 }], rhsType: 'number', description: 'Keltner Channels Width', supported: false },
+    { id: 'donchian_width', label: 'Donchian Width', categoryId: 'channels', dslName: 'dcw', params: [{ name: 'period', label: 'Period', defaultValue: 20 }], rhsType: 'number', description: 'Donchian Channels Width', supported: false },
+    { id: 'starc_bands', label: 'STARC Bands Upper', categoryId: 'channels', dslName: 'starc_u', params: [{ name: 'period', label: 'Period', defaultValue: 6 }, { name: 'mult', label: 'Multiplier', defaultValue: 2 }], rhsType: 'number_or_indicator', description: 'Stoller Average Range Channel', supported: false },
+
+    // Ichimoku Additions
+    { id: 'chikou', label: 'Chikou (Lagging Span)', categoryId: 'ichimoku', dslName: 'chikou', params: [{ name: 'offset', label: 'Offset', defaultValue: 26 }], rhsType: 'number_or_indicator', description: 'Ichimoku Chikou Span', supported: false },
+    
+    // Pivot Additions
+    { id: 'woodie_pp', label: 'Woodie Pivot', categoryId: 'pivot', dslName: 'w_pp', params: [], rhsType: 'number_or_indicator', description: 'Woodie Pivot Point', supported: false },
+    { id: 'camarilla_pp', label: 'Camarilla Pivot', categoryId: 'pivot', dslName: 'c_pp', params: [], rhsType: 'number_or_indicator', description: 'Camarilla Pivot Point', supported: false },
+    { id: 'fibo_pp', label: 'Fibonacci Pivot', categoryId: 'pivot', dslName: 'f_pp', params: [], rhsType: 'number_or_indicator', description: 'Fibonacci Pivot Point', supported: false },
+
+    // Price Action / Candlesticks
+    { id: 'inside_bar', label: 'Inside Bar', categoryId: 'price_action', dslName: 'cdl_inside', params: [], rhsType: 'number', description: 'Inside Bar Pattern (1=True, 0=False)', supported: false },
+    { id: 'outside_bar', label: 'Outside Bar', categoryId: 'price_action', dslName: 'cdl_outside', params: [], rhsType: 'number', description: 'Outside Bar Pattern (1=True, 0=False)', supported: false },
+    { id: 'doji', label: 'Doji', categoryId: 'price_action', dslName: 'cdl_doji', params: [], rhsType: 'number', description: 'Doji Pattern (1=True, 0=False)', supported: false },
+    { id: 'hammer', label: 'Hammer', categoryId: 'price_action', dslName: 'cdl_hammer', params: [], rhsType: 'number', description: 'Hammer Pattern (1=True, 0=False)', supported: false },
+    { id: 'engulfing', label: 'Engulfing', categoryId: 'price_action', dslName: 'cdl_engulfing', params: [], rhsType: 'number', description: 'Engulfing Pattern (1=Bull, -1=Bear)', supported: false },
+    { id: 'pin_bar', label: 'Pin Bar', categoryId: 'price_action', dslName: 'cdl_pin', params: [], rhsType: 'number', description: 'Pin Bar Reversal Pattern', supported: false },
+
+    // Financial Health & Valuation
+    { id: 'peg', label: 'PEG Ratio', categoryId: 'valuation', dslName: 'peg', params: [], rhsType: 'number', description: 'Price/Earnings to Growth Ratio', supported: false },
+    { id: 'ps', label: 'Price to Sales (P/S)', categoryId: 'valuation', dslName: 'ps', params: [], rhsType: 'number', description: 'Price to Sales Ratio', supported: false },
+    { id: 'pcf', label: 'Price to Cash Flow', categoryId: 'valuation', dslName: 'pcf', params: [], rhsType: 'number', description: 'Price to Cash Flow Ratio', supported: false },
+    { id: 'ev_sales', label: 'EV/Sales', categoryId: 'valuation', dslName: 'ev_sales', params: [], rhsType: 'number', description: 'Enterprise Value to Sales', supported: false },
+    { id: 'ev', label: 'Enterprise Value (₹ Cr)', categoryId: 'valuation', dslName: 'ev', params: [], rhsType: 'number', description: 'Enterprise Value', supported: false },
+    { id: 'fcf_yield', label: 'FCF Yield %', categoryId: 'valuation', dslName: 'fcf_yield', params: [], rhsType: 'number', description: 'Free Cash Flow Yield', supported: false },
+
+    { id: 'debt_asset', label: 'Debt to Asset %', categoryId: 'financial_health', dslName: 'debt_asset', params: [], rhsType: 'number', description: 'Total Debt to Total Assets', supported: false },
+    { id: 'equity_mult', label: 'Equity Multiplier', categoryId: 'financial_health', dslName: 'equity_mult', params: [], rhsType: 'number', description: 'Total Assets / Total Equity', supported: false },
+    { id: 'asset_turnover', label: 'Asset Turnover', categoryId: 'financial_health', dslName: 'asset_turnover', params: [], rhsType: 'number', description: 'Revenue / Total Assets', supported: false },
+    { id: 'inv_turnover', label: 'Inventory Turnover', categoryId: 'financial_health', dslName: 'inv_turnover', params: [], rhsType: 'number', description: 'COGS / Average Inventory', supported: false },
+
+    // Growth
+    { id: 'eps_g5y', label: 'EPS Growth 5Y %', categoryId: 'growth', dslName: 'eps_g5y', params: [], rhsType: 'number', description: '5-Year EPS CAGR', supported: false },
+    { id: 'rev_g5y', label: 'Revenue Growth 5Y %', categoryId: 'growth', dslName: 'rev_g5y', params: [], rhsType: 'number', description: '5-Year Revenue CAGR', supported: false },
+    { id: 'div_g3y', label: 'Dividend Growth 3Y %', categoryId: 'growth', dslName: 'div_g3y', params: [], rhsType: 'number', description: '3-Year Dividend Growth', supported: false },
+    { id: 'capex_g3y', label: 'CAPEX Growth 3Y %', categoryId: 'growth', dslName: 'capex_g3y', params: [], rhsType: 'number', description: '3-Year Capital Expenditure Growth', supported: false },
+
+    // Factor exposure
+    { id: 'factor_sharpe', label: 'Sharpe Ratio (1Y)', categoryId: 'factor', dslName: 'sharpe', params: [], rhsType: 'number', description: 'Annualized Sharpe Ratio', supported: false },
+    { id: 'factor_sortino', label: 'Sortino Ratio (1Y)', categoryId: 'factor', dslName: 'sortino', params: [], rhsType: 'number', description: 'Annualized Sortino Ratio', supported: false },
+    { id: 'factor_treynor', label: 'Treynor Ratio (1Y)', categoryId: 'factor', dslName: 'treynor', params: [], rhsType: 'number', description: 'Treynor Ratio', supported: false },
+    { id: 'factor_info', label: 'Information Ratio (1Y)', categoryId: 'factor', dslName: 'info_ratio', params: [], rhsType: 'number', description: 'Information Ratio vs Nifty 50', supported: false },
 ];
 
 // ─── Operators ─────────────────────────────────────────────────────────────

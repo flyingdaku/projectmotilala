@@ -96,26 +96,26 @@ export interface WatchlistConfig {
   marketCap: WatchlistColumnConfig;
 }
 
-const WATCHLIST_PANEL_SYMBOL_WIDTH = 120;
+const WATCHLIST_PANEL_SYMBOL_WIDTH = 100;
 const WATCHLIST_PANEL_INDUSTRY_WIDTH = 24;
-const WATCHLIST_PANEL_CHANGE_WIDTH = 68;
-const WATCHLIST_PANEL_PRICE_WIDTH = 90;
-const WATCHLIST_PANEL_PADDING_WIDTH = 12;
+const WATCHLIST_PANEL_CHANGE_WIDTH = 72;
+const WATCHLIST_PANEL_PRICE_WIDTH = 88;
+const WATCHLIST_PANEL_PADDING_WIDTH = 36;
 const WATCHLIST_MAX_CUSTOM_COLUMNS = 10;
 
 const WATCHLIST_METRICS: WatchlistMetricDefinition[] = [
-  { key: 'rvol1', label: 'RVol', shortLabel: 'RVol', width: 72, kind: 'number', periodOptions: [1, 5, 10, 20] },
-  { key: 'atr', label: 'ATR', shortLabel: 'ATR', width: 72, kind: 'number', periodOptions: [7, 14, 21] },
-  { key: 'natr', label: 'NATR', shortLabel: 'NATR', width: 72, kind: 'percent', periodOptions: [7, 14, 21] },
-  { key: 'pe', label: 'P/E', shortLabel: 'P/E', width: 68, kind: 'multiple' },
-  { key: 'pb', label: 'P/B', shortLabel: 'P/B', width: 68, kind: 'multiple' },
-  { key: 'roe', label: 'ROE', shortLabel: 'ROE', width: 68, kind: 'percent' },
-  { key: 'roce', label: 'ROCE', shortLabel: 'ROCE', width: 70, kind: 'percent' },
-  { key: 'debtToEquity', label: 'Debt / Eq', shortLabel: 'D/E', width: 72, kind: 'multiple' },
-  { key: 'dividendYield', label: 'Dividend Yield', shortLabel: 'Div Yld', width: 78, kind: 'percent' },
-  { key: 'salesGrowth', label: 'Sales Growth', shortLabel: 'Sales Gr', width: 76, kind: 'percent' },
-  { key: 'profitGrowth', label: 'Profit Growth', shortLabel: 'Profit Gr', width: 76, kind: 'percent' },
-  { key: 'marketCap', label: 'Market Cap', shortLabel: 'MCap', width: 84, kind: 'currencyCompact' },
+  { key: 'rvol1', label: 'RVol', shortLabel: 'RVol', width: 64, kind: 'number', periodOptions: [1, 5, 10, 20] },
+  { key: 'atr', label: 'ATR', shortLabel: 'ATR', width: 64, kind: 'number', periodOptions: [7, 14, 21] },
+  { key: 'natr', label: 'NATR', shortLabel: 'NATR', width: 64, kind: 'percent', periodOptions: [7, 14, 21] },
+  { key: 'pe', label: 'P/E', shortLabel: 'P/E', width: 60, kind: 'multiple' },
+  { key: 'pb', label: 'P/B', shortLabel: 'P/B', width: 60, kind: 'multiple' },
+  { key: 'roe', label: 'ROE', shortLabel: 'ROE', width: 60, kind: 'percent' },
+  { key: 'roce', label: 'ROCE', shortLabel: 'ROCE', width: 60, kind: 'percent' },
+  { key: 'debtToEquity', label: 'Debt / Eq', shortLabel: 'D/E', width: 64, kind: 'multiple' },
+  { key: 'dividendYield', label: 'Dividend Yield', shortLabel: 'Div Yld', width: 64, kind: 'percent' },
+  { key: 'salesGrowth', label: 'Sales Growth', shortLabel: 'Sales Gr', width: 64, kind: 'percent' },
+  { key: 'profitGrowth', label: 'Profit Growth', shortLabel: 'Profit Gr', width: 64, kind: 'percent' },
+  { key: 'marketCap', label: 'Market Cap', shortLabel: 'MCap', width: 72, kind: 'currencyCompact' },
 ];
 
 const METRIC_DEFINITIONS = Object.fromEntries(
@@ -220,14 +220,14 @@ function getSortValue(item: WatchItem, sortKey: SortKey) {
 
 function SortArrow({ active, direction }: { active: boolean; direction: 'asc' | 'desc' }) {
   if (!active) {
-    return <ArrowDown size={11} className="text-foreground/70 self-center" />;
+    return <ArrowDown size={12} className="shrink-0 self-center text-foreground/70" />;
   }
 
   if (direction === 'asc') {
-    return <ArrowUp size={11} className="text-foreground self-center" />;
+    return <ArrowUp size={12} className="shrink-0 self-center text-foreground" />;
   }
 
-  return <ArrowDown size={11} className="text-foreground self-center" />;
+  return <ArrowDown size={12} className="shrink-0 self-center text-foreground" />;
 }
 
 export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose }: WatchlistPanelProps) {
@@ -417,9 +417,9 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-7 w-[172px] justify-between gap-1 px-1 text-left text-[13px] font-semibold text-foreground">
+              <Button variant="ghost" className="h-7 w-[172px] justify-between gap-1.5 px-1.5 text-left text-xs font-semibold tracking-tight text-foreground">
                 <span className="truncate">{activeWatchlist?.name ?? 'Watchlist'}</span>
-                <ChevronDown size={14} />
+                <ChevronDown size={12} className="shrink-0 text-muted-foreground" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-[260px] p-1">
@@ -547,27 +547,27 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
         </div>
       </div>
 
-      <div className="grid items-center gap-px border-b border-border bg-muted/30 px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground" style={{ gridTemplateColumns }}>
-        <button type="button" onClick={() => handleSort('symbol')} className="flex min-w-0 items-center gap-px text-left hover:text-foreground">
+      <div className="grid items-center gap-px border-b border-border bg-muted/30 pl-3 pr-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-muted-foreground" style={{ gridTemplateColumns }}>
+        <button type="button" onClick={() => handleSort('symbol')} className="flex min-w-0 items-center gap-1 text-left leading-none hover:text-foreground">
           <span>Symbol</span>
           <SortArrow active={sortKey === 'symbol'} direction={sortDirection} />
         </button>
 
         {config.industryIcon.enabled && (
-          <button type="button" onClick={() => handleSort('industryGroup')} className="flex items-center justify-center gap-px text-center hover:text-foreground">
+          <button type="button" onClick={() => handleSort('industryGroup')} className="flex items-center justify-center gap-1 text-center leading-none hover:text-foreground">
             <span>Ind</span>
             <SortArrow active={sortKey === 'industryGroup'} direction={sortDirection} />
           </button>
         )}
 
         {enabledMetricColumns.map((metric) => (
-          <button key={metric.key} type="button" onClick={() => handleSort(metric.key)} className="flex items-center justify-end gap-px text-right hover:text-foreground">
+          <button key={metric.key} type="button" onClick={() => handleSort(metric.key)} className="flex items-center justify-end gap-1 text-right leading-none hover:text-foreground">
             <span>{metric.shortLabel}{config[metric.key].period ? `(${config[metric.key].period})` : ''}</span>
             <SortArrow active={sortKey === metric.key} direction={sortDirection} />
           </button>
         ))}
 
-        <button type="button" onClick={() => handleSort('change')} className="flex items-center justify-end gap-px text-right hover:text-foreground">
+        <button type="button" onClick={() => handleSort('change')} className="flex items-center justify-end gap-1 text-right leading-none hover:text-foreground">
           <span>Chg%</span>
           <SortArrow active={sortKey === 'change'} direction={sortDirection} />
         </button>
@@ -586,7 +586,7 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
                 type="button"
                 onClick={() => handleSelect(item)}
                 className={cn(
-                  'group relative grid min-h-10 w-full items-center gap-px border-b border-border/80 px-2 pr-4 py-2 text-left transition-colors',
+                  'group relative grid min-h-8 w-full items-center gap-px border-b border-border/80 pl-3 pr-3 py-1.5 text-left transition-colors',
                   isActive
                     ? 'bg-amber-500/5 hover:bg-muted/40'
                     : 'bg-transparent hover:bg-muted/40'
@@ -637,10 +637,10 @@ export function WatchlistPanel({ config, onConfigChange, onSymbolSelect, onClose
                       removeRow(item.symbol);
                     }
                   }}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted-foreground opacity-0 transition-all hover:bg-background hover:text-rose-500 group-hover:opacity-100"
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground opacity-0 transition-all hover:bg-background hover:text-rose-500 group-hover:opacity-100"
                   title="Remove row"
                 >
-                  <Trash2 size={13} />
+                  <Trash2 size={11} />
                 </span>
               </button>
             );

@@ -129,8 +129,20 @@ export function createPgAdapter() {
                     [String(assetId), startDate, endDate]
                 );
                 const byDate = new Map<string, typeof rows[0]>();
-                for (const r of rows) { const e = byDate.get(r.date); if (!e || r.source_exchange === "NSE") byDate.set(r.date, r); }
-                return [...byDate.values()].map(r => ({ date: r.date, open: r.open, high: r.high, low: r.low, close: r.close, volume: r.volume }));
+                for (const r of rows) {
+                    const dKey = typeof r.date === "string" ? r.date : new Date(r.date).toISOString().slice(0, 10);
+                    const e = byDate.get(dKey);
+                    if (!e || r.source_exchange === "NSE") byDate.set(dKey, r);
+                }
+                return [...byDate.values()]
+                    .map(r => ({
+                        date: typeof r.date === "string" ? r.date : new Date(r.date).toISOString().slice(0, 10),
+                        open: r.open,
+                        high: r.high,
+                        low: r.low,
+                        close: r.close,
+                        volume: r.volume
+                    }));
             },
         },
 
@@ -168,7 +180,7 @@ export function createPgAdapter() {
                         `SELECT period_end_date, net_cash_operating, net_cash_investing, net_cash_financing, capex FROM ${cfT} WHERE asset_id = $1 ORDER BY period_end_date DESC LIMIT 10`, [assetId]
                     ),
                     tsDb.queryAll<{ period_end_date: string; roce: number | null; net_profit_margin: number | null; ebit_margin: number | null; debtor_days: number | null }>(
-                        `SELECT period_end_date, roce, net_profit_margin, ebit_margin, debtor_days FROM msi_ratios_quarterly WHERE asset_id = $1 ORDER BY period_end_date DESC LIMIT 12`, [assetId]
+                        `SELECT period_end_date, roce, net_profit_margin, ebit_margin, debtor_days FROM src_msi_ratios WHERE asset_id = $1 ORDER BY period_end_date DESC LIMIT 12`, [assetId]
                     ),
                     tsDb.queryAll<{ period_end_date: string; sales: number | null; operating_profit: number | null; pbt: number | null; net_profit: number | null; eps: number | null }>(
                         `SELECT period_end_date, sales, operating_profit, pbt, net_profit, eps FROM src_screener_quarterly WHERE asset_id = $1 ORDER BY period_end_date DESC LIMIT 20`, [assetId]
@@ -184,7 +196,7 @@ export function createPgAdapter() {
             },
             async getOwnership(assetId: string): Promise<{ shareholding: ShareholdingPattern[]; governance: GovernanceScore }> {
                 const rows = await tsDb.queryAll<{ period_end_date: string; promoter_holding: number | null; fii_holding: number | null; dii_holding: number | null; public_holding: number | null; pledged_shares: number | null }>(
-                    `SELECT period_end_date, promoter_holding, fii_holding, dii_holding, public_holding, pledged_shares FROM msi_shareholding WHERE asset_id = $1 ORDER BY period_end_date DESC LIMIT 8`, [assetId]
+                    `SELECT period_end_date, promoter_holding, fii_holding, dii_holding, public_holding, pledged_shares FROM src_msi_shareholding WHERE asset_id = $1 ORDER BY period_end_date DESC LIMIT 8`, [assetId]
                 );
                 return { shareholding: rows.map(r => ({ quarterEnd: r.period_end_date, promoterPct: r.promoter_holding ?? undefined, fiiPct: r.fii_holding ?? undefined, diiPct: r.dii_holding ?? undefined, publicPct: r.public_holding ?? undefined, pledgedPct: r.pledged_shares ?? undefined })), governance: { overall: null } };
             },

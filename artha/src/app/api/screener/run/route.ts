@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import type { ScreenerFilters, RangeFilter } from "@/lib/data/types";
 import { pgDb } from "@/lib/data/db-postgres";
 import { INDIA_INDICES } from "@/lib/screener/dsl/column-map";
+import { parseDsl } from "@/lib/screener/dsl/parser";
+import { codegenFormula } from "@/lib/screener/dsl/codegen";
 
 // ── Market-cap bucket boundaries (₹ Cr) ──────────────────────────────────────
 const MCAP_BUCKETS: Record<string, { min?: number; max?: number }> = {
@@ -135,11 +137,34 @@ export async function POST(req: NextRequest) {
     applyRange("ti.pct_from_52w_high", filters.pctFrom52wHigh, where, params);
     applyRange("ti.pct_from_52w_low",  filters.pctFrom52wLow,  where, params);
 
-    // ── DSL formula conditions (already use $N syntax from codegen) ───────────
+    // ── DSL formula conditions ───────────────────────────────────────────────
     if (filters.formula && filters.formula.length > 0) {
-      for (const frag of filters.formula) {
-        if (typeof frag === "string" && frag.trim()) {
-          where.push(frag);
+      for (const dsl of filters.formula) {
+        if (typeof dsl === "string" && dsl.trim()) {
+          try {
+            const ast = parseDsl(dsl);
+            const res = codegenFormula(ast);
+            
+            // Map the params and re-index placeholders ($1, $2...)
+            const offset = params.length;
+            let sqlFragment = res.conditions.join(" AND ");
+            
+            res.params.forEach((p, i) => {
+              params.push(p);
+              const oldIndex = i + 1;
+              const newIndex = params.length;
+              // Replace $N with the new index safely using regex
+              sqlFragment = sqlFragment.replace(new RegExp(`\\$${oldIndex}(?![0-9])`, 'g'), `__TEMP_PH_${newIndex}__`);
+            });
+            // Final swap to avoid collision ($ symbol needs escaping in some JS contexts, but here it is just a string)
+            sqlFragment = sqlFragment.replace(/__TEMP_PH_(\d+)__/g, "$$$1");
+
+            if (sqlFragment) {
+              where.push(`(${sqlFragment})`);
+            }
+          } catch (e) {
+            console.error("DSL parse error for:", dsl, e);
+          }
         }
       }
     }
@@ -175,6 +200,7 @@ export async function POST(req: NextRequest) {
         ti.change_1d_pct     AS "pctChange",
         ti.rsi_14            AS rsi14,
         ti.pct_from_52w_high AS "pctFrom52wHigh",
+        ti.sma_20            AS sma20,
         ti.sma_50            AS sma50,
         ti.sma_200           AS sma200
       FROM assets a
@@ -211,6 +237,7 @@ export async function POST(req: NextRequest) {
       qualityScore:    r.qualityScore,
       rsi14:           r.rsi14,
       pctFrom52wHigh:  r.pctFrom52wHigh,
+      sma20:           r.sma20,
       sma50:           r.sma50,
       sma200:          r.sma200,
     }));
