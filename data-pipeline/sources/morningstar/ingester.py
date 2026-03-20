@@ -42,7 +42,7 @@ from sources.morningstar.parser import (
     parse_portfolio_page,
     parse_risk_page,
 )
-from sources.morningstar.schema import ensure_morningstar_schema_sqlite
+from sources.morningstar.schema import ensure_morningstar_schema
 from utils.storage import get_raw_path, load_raw_file, raw_file_exists, save_raw_file
 
 logger = logging.getLogger(__name__)
@@ -172,6 +172,8 @@ def _insert_pipeline_checkpoint(
 
 class MorningstarBaseIngester(SourceIngester):
     RATE_LIMIT_QPS = float(os.getenv("MORNINGSTAR_RATE_LIMIT_QPS", "1.0") or "1.0")
+    DOWNLOAD_RETRIES = max(1, int(os.getenv("MORNINGSTAR_DOWNLOAD_RETRIES", "4") or "4"))
+    RETRY_BACKOFF_BASE = float(os.getenv("MORNINGSTAR_RETRY_BACKOFF_BASE", "1.5") or "1.5")
 
     def __init__(self):
         self.session = create_morningstar_session()
@@ -203,15 +205,34 @@ class MorningstarBaseIngester(SourceIngester):
                 "path": str(save_raw_file(source_bucket, trade_date, filename, raw)),
                 "final_url": request_url,
             }
-        self._sleep()
-        response = self.session.get(request_url, timeout=30, headers=headers)
-        response.raise_for_status()
-        if use_cache:
-            path = save_raw_file(source_bucket, trade_date, filename, response.content)
-        else:
-            path = get_raw_path(source_bucket, trade_date, filename)
-            path.write_bytes(response.content)
-        return {"text": response.text, "path": str(path), "final_url": str(response.url)}
+        last_error: Optional[Exception] = None
+        for attempt in range(1, self.DOWNLOAD_RETRIES + 1):
+            try:
+                self._sleep()
+                response = self.session.get(request_url, timeout=30, headers=headers)
+                response.raise_for_status()
+                if use_cache:
+                    path = save_raw_file(source_bucket, trade_date, filename, response.content)
+                else:
+                    path = get_raw_path(source_bucket, trade_date, filename)
+                    path.write_bytes(response.content)
+                return {"text": response.text, "path": str(path), "final_url": str(response.url)}
+            except requests.RequestException as exc:
+                last_error = exc
+                if attempt >= self.DOWNLOAD_RETRIES:
+                    break
+                delay = self.RETRY_BACKOFF_BASE * (2 ** (attempt - 1)) + random.uniform(0.1, 0.5)
+                logger.warning(
+                    "[MORNINGSTAR] fetch retry %s/%s failed for %s: %s; retrying in %.2fs",
+                    attempt,
+                    self.DOWNLOAD_RETRIES,
+                    request_url,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+        assert last_error is not None
+        raise last_error
 
     def _download_html(
         self,
@@ -273,9 +294,7 @@ class MorningstarBaseIngester(SourceIngester):
         t0 = time.time()
         errors: List[str] = []
         try:
-            raw_conn = getattr(conn, "raw_connection", None)
-            if raw_conn is not None:
-                ensure_morningstar_schema_sqlite(raw_conn)
+            ensure_morningstar_schema(conn)
             payload = self.fetch(trade_date)
             count = self.ingest(payload["records"], conn)
             errors = payload.get("errors", [])
@@ -793,9 +812,7 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
         inserted = 0
         skipped = 0
         try:
-            raw_conn = getattr(conn, "raw_connection", None)
-            if raw_conn is not None:
-                ensure_morningstar_schema_sqlite(raw_conn)
+            ensure_morningstar_schema(conn)
             if self.use_playwright:
                 logger.info("[MORNINGSTAR] MORNINGSTAR_USE_PLAYWRIGHT is enabled, but v1 still prefers public HTML fetches where possible.")
             candidates = self._load_candidates()

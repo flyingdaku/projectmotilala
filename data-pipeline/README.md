@@ -9,10 +9,6 @@ The product now uses:
 - PostgreSQL as the relational source of truth
 - TimescaleDB as the timeseries source of truth
 
-Legacy SQLite files still exist in this repository for historical recovery,
-migration, and local debugging workflows, but the frontend no longer treats
-SQLite as its active backend.
-
 Key bootstrap files:
 
 - `db/init-postgres.sql`
@@ -75,8 +71,9 @@ python -m pipelines.backfill 2020-01-01
 ```
 data-pipeline/
 ├── db/
-│   ├── schema.sql          # SQLite schema (adapted from PostgreSQL spec)
-│   └── market_data.db      # SQLite database (created on first run)
+│   ├── init-postgres.sql   # Relational PostgreSQL schema bootstrap
+│   ├── init-timescale.sql  # TimescaleDB schema bootstrap
+│   └── migrations/         # Incremental Postgres migrations
 ├── scripts/
 │   ├── backfill_indices.py # Nifty indices backfill (TRI + Price Return)
 │   ├── fetch_constituents.py # Nifty index constituents
@@ -91,7 +88,7 @@ data-pipeline/
 │   ├── verification.py     # Data quality checks
 │   └── backfill.py         # Full historical backfill
 ├── utils/
-│   ├── db.py               # SQLite connection helper
+│   ├── db.py               # PostgreSQL/TimescaleDB connection helpers
 │   ├── alerts.py           # Telegram bot alerts
 │   ├── calendar.py         # NSE trading calendar (dynamic, cached)
 │   ├── circuit_breakers.py # Anomaly detection rules

@@ -28,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.db import get_connection, generate_id, SqliteConnection
+from core.db import get_connection, generate_id
 from core.models import PipelineRun
 from db.repositories.pipeline_runs import PipelineRunsRepository
 

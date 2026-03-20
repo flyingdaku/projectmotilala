@@ -8,7 +8,6 @@ if WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, WORKSPACE_ROOT)
 
 import pytest
-import sqlite3
 from unittest.mock import MagicMock
 from pipelines.compute_metrics import _get_ttm_values
 

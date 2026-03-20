@@ -16,10 +16,19 @@ class PipelineRunsRepository(Repository[PipelineRun]):
 
     def upsert(self, run: PipelineRun) -> None:
         self._conn.execute(
-            """INSERT OR REPLACE INTO pipeline_runs
+            """INSERT INTO pipeline_runs
                (id, run_date, source, status, records_inserted,
                 records_skipped, circuit_breaks, error_log, duration_ms)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT(id) DO UPDATE SET
+                 run_date = EXCLUDED.run_date,
+                 source = EXCLUDED.source,
+                 status = EXCLUDED.status,
+                 records_inserted = EXCLUDED.records_inserted,
+                 records_skipped = EXCLUDED.records_skipped,
+                 circuit_breaks = EXCLUDED.circuit_breaks,
+                 error_log = EXCLUDED.error_log,
+                 duration_ms = EXCLUDED.duration_ms""",
             (
                 run.id, run.run_date, run.source, run.status,
                 run.records_inserted, run.records_skipped,

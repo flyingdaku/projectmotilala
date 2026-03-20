@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sqlite3
+from core.db import DatabaseConnection
 
 
 _ASSET_COLUMNS = {
@@ -370,11 +370,20 @@ _DDL = [
 ]
 
 
-def ensure_morningstar_schema_sqlite(conn: sqlite3.Connection) -> None:
-    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(assets)").fetchall()}
+def ensure_morningstar_schema(conn: DatabaseConnection) -> None:
+    existing_cols = {
+        row["column_name"]
+        for row in conn.fetchall(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'assets'
+            """
+        )
+    }
     for column_name, column_type in _ASSET_COLUMNS.items():
         if column_name not in existing_cols:
             conn.execute(f"ALTER TABLE assets ADD COLUMN {column_name} {column_type}")
     for ddl in _DDL:
         conn.execute(ddl)
-    conn.commit()

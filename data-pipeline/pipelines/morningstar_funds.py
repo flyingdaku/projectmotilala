@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
 
 from core.db import get_connection
 from sources.morningstar import MorningstarFundDetailsIngester, MorningstarFundDirectoryIngester
-from sources.morningstar.schema import ensure_morningstar_schema_sqlite
+from sources.morningstar.schema import ensure_morningstar_schema
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 def run_morningstar_directory_pipeline(trade_date: date) -> object:
     with get_connection() as conn:
-        ensure_morningstar_schema_sqlite(conn.raw_connection)
+        ensure_morningstar_schema(conn)
         run = MorningstarFundDirectoryIngester().run(trade_date, conn)
         conn.execute(
             """
@@ -66,7 +66,7 @@ def run_morningstar_directory_pipeline(trade_date: date) -> object:
 
 def run_morningstar_detail_pipeline(trade_date: date, limit: Optional[int] = None) -> object:
     with get_connection() as conn:
-        ensure_morningstar_schema_sqlite(conn.raw_connection)
+        ensure_morningstar_schema(conn)
         run = MorningstarFundDetailsIngester(limit=limit).run(trade_date, conn)
         conn.execute(
             """

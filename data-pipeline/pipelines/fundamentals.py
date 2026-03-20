@@ -171,8 +171,15 @@ def map_screener_field(q: Dict, bs: Dict, cf: Dict, field: str) -> Optional[floa
 
 def _ensure_fundamentals_columns(conn):
     existing = {
-        row[1]
-        for row in conn.execute("PRAGMA table_info(fundamentals)").fetchall()
+        row["column_name"]
+        for row in conn.execute(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'fundamentals'
+            """
+        ).fetchall()
     }
     wanted = {
         'trade_receivables': 'REAL',
@@ -200,7 +207,12 @@ def log_conflict(conn, p, field, values, chosen_val, chosen_source, conflict_typ
 def _resolve_table_name(conn, candidates: List[str]) -> Optional[str]:
     for candidate in candidates:
         row = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            """
+            SELECT table_name AS name
+            FROM information_schema.tables
+            WHERE table_schema = current_schema()
+              AND table_name = ?
+            """,
             (candidate,),
         ).fetchone()
         if row:

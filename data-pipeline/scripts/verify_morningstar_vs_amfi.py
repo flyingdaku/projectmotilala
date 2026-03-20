@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.db import get_connection
-from sources.morningstar.schema import ensure_morningstar_schema_sqlite
+from sources.morningstar.schema import ensure_morningstar_schema
 
 
 QUERY = """
@@ -48,7 +48,7 @@ LIMIT 50
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     with get_connection() as conn:
-        ensure_morningstar_schema_sqlite(conn.raw_connection)
+        ensure_morningstar_schema(conn)
         rows = conn.fetchall(QUERY)
         for row in rows:
             print(

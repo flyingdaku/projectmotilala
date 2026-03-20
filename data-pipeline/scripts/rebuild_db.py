@@ -80,20 +80,12 @@ def step(name: str, fn, *args, skip=False, **kwargs):
 # ── Step implementations ───────────────────────────────────────────────────────
 
 def drop_and_init_db():
-    """Delete existing DB file and recreate from schema.sql."""
-    from core.db import DB_PATH, init_db
-    db_path = Path(DB_PATH)
-    if db_path.exists():
-        logger.info(f"Deleting existing DB at {db_path} ({db_path.stat().st_size / 1e6:.1f} MB)")
-        db_path.unlink()
-    # Also remove WAL/SHM sidecar files
-    for suffix in ["-wal", "-shm"]:
-        p = db_path.with_name(db_path.name + suffix)
-        if p.exists():
-            p.unlink()
-    init_db()
-    logger.info(f"Fresh DB created at: {db_path}")
-    return str(db_path)
+    """Bootstrap the relational Postgres schema."""
+    from core.db import init_db
+
+    dsn = init_db()
+    logger.info(f"Relational Postgres schema ensured on: {dsn}")
+    return dsn
 
 
 def populate_holiday_cache(force=True):
@@ -217,7 +209,7 @@ def print_report():
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Rebuild the Artha SQLite database from scratch.")
+    parser = argparse.ArgumentParser(description="Rebuild the Artha Postgres databases from scratch.")
     parser.add_argument("--from", dest="start_date", default="2000-01-01", help="Start date for NSE backfill")
     parser.add_argument("--bse-from", dest="bse_start_date", default=None,
                         help="Start date for BSE backfill (Default: matches --from)")

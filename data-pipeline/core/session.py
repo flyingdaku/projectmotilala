@@ -11,6 +11,12 @@ import os
 import time
 import requests
 from typing import Optional
+from requests.adapters import HTTPAdapter
+
+try:
+    from urllib3.util.retry import Retry
+except ImportError:  # pragma: no cover
+    Retry = None
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +123,19 @@ def create_morningstar_session() -> requests.Session:
         **_DEFAULT_HEADERS,
         "Referer": "https://www.morningstar.in/",
     })
+    if Retry is not None:
+        retry = Retry(
+            total=3,
+            connect=3,
+            read=3,
+            backoff_factor=1.0,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset({"GET", "HEAD"}),
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
     return session
 
 
