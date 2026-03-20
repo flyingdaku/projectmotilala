@@ -1,14 +1,9 @@
 /**
  * PostgreSQL / TimescaleDB connection pools for the Artha frontend.
  *
- * Replaces better-sqlite3 (synchronous) with pg (async).
  * Two pools:
- *   - pgPool  → artha_relational (port 5432) — assets, corp_actions, computed_ratios, etc.
- *   - tsPool  → artha_timeseries (port 5433) — daily_prices, fundamentals, etc.
- *
- * Usage:
- *   import { pgPool, tsPool } from "@/lib/data/db-postgres";
- *   const rows = await pgPool.query("SELECT * FROM assets LIMIT 5");
+ *   - pgPool  → artha_relational (port 5432) — assets, follows, feed state, ratios
+ *   - tsPool  → artha_timeseries (port 5433) — prices, fundamentals, shareholding
  */
 
 import { Pool, PoolClient, QueryResult, QueryResultRow } from "pg";
@@ -83,7 +78,7 @@ function makeDb(pool: Pool): AsyncDb {
     };
 }
 
-/** Relational DB (assets, corp_actions, computed_ratios, technical_indicators) */
+/** Relational DB (assets, follows, feed state, computed tables) */
 export const pgDb: AsyncDb = makeDb(pgPool);
 
 /** TimescaleDB (daily_prices, fundamentals, src_msi_*, src_screener_*) */

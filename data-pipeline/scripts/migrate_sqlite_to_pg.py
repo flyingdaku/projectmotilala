@@ -281,6 +281,7 @@ def run_post_migration_sql(pg_conn, ts_conn):
             rsi_14 REAL,
             pct_from_52w_high REAL,
             pct_from_52w_low REAL,
+            sma_20 REAL,
             sma_50 REAL,
             sma_200 REAL,
             volume REAL,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   User,
@@ -235,7 +235,7 @@ function AppearancePreview() {
   );
 }
 
-export default function SettingsPage() {
+function SettingsPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -557,5 +557,13 @@ export default function SettingsPage() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm" style={{ color: "var(--text-secondary)" }}>Loading settings...</div>}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }

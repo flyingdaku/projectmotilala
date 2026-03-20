@@ -94,6 +94,7 @@ def compute_technical_indicators(asset_id: str, ts_conn) -> dict | None:
         "rsi_14": compute_rsi(prices),
         "pct_from_52w_high": pct_from_52w_high,
         "pct_from_52w_low": pct_from_52w_low,
+        "sma_20": compute_sma(prices, 20),
         "sma_50": compute_sma(prices, 50),
         "sma_200": compute_sma(prices, 200),
         "volume": avg_vol,
@@ -333,11 +334,11 @@ def main():
         ti_upsert = """
             INSERT INTO technical_indicators (
                 asset_id, computed_date, close, change_1d_pct, rsi_14,
-                pct_from_52w_high, pct_from_52w_low, sma_50, sma_200,
+                pct_from_52w_high, pct_from_52w_low, sma_20, sma_50, sma_200,
                 volume, lag1_close, prev_close, prev_high, prev_low
             ) VALUES (
                 %(asset_id)s, %(computed_date)s, %(close)s, %(change_1d_pct)s, %(rsi_14)s,
-                %(pct_from_52w_high)s, %(pct_from_52w_low)s, %(sma_50)s, %(sma_200)s,
+                %(pct_from_52w_high)s, %(pct_from_52w_low)s, %(sma_20)s, %(sma_50)s, %(sma_200)s,
                 %(volume)s, %(lag1_close)s, %(prev_close)s, %(prev_high)s, %(prev_low)s
             )
             ON CONFLICT (asset_id, computed_date) DO UPDATE SET
@@ -346,6 +347,7 @@ def main():
                 rsi_14 = EXCLUDED.rsi_14,
                 pct_from_52w_high = EXCLUDED.pct_from_52w_high,
                 pct_from_52w_low = EXCLUDED.pct_from_52w_low,
+                sma_20 = EXCLUDED.sma_20,
                 sma_50 = EXCLUDED.sma_50,
                 sma_200 = EXCLUDED.sma_200,
                 volume = EXCLUDED.volume,

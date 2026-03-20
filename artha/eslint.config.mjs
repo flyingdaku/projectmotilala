@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "scripts/diagnostics/**",
   ]),
   // Allow setState in effects for SSR hydration guards (useIsMounted hook)
   {

@@ -1,36 +1,95 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Artha Frontend
 
-## Getting Started
+Artha is a Next.js App Router application for Indian-market research, analytics, screener workflows, stock detail pages, feed tracking, and portfolio tooling.
 
-First, run the development server:
+## Runtime Dependencies
+
+The app reads from:
+
+- PostgreSQL for relational metadata and product state
+- TimescaleDB for prices, fundamentals, and shareholding history
+- Supabase for authentication/session management
+
+Key files:
+
+- `src/lib/data/db-postgres.ts`
+- `src/lib/data/pg-adapter.ts`
+- `src/lib/server/auth.ts`
+- `src/middleware.ts`
+
+## App Areas
+
+Primary route groups:
+
+- `(marketing)`: landing and login
+- `(app)`: authenticated product experience
+- `api/`: server routes for search, stocks, feed, screener, analytics, sectors
+
+Notable routes:
+
+- `/dashboard`
+- `/feed`
+- `/screener`
+- `/stocks/[symbol]`
+- `/analytics/*`
+- `/portfolio/*`
+
+## Commands
 
 ```bash
+npm install --cache /tmp/projectmotilala-npm-cache
+npm run lint
+npm run test
+npm run build
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Testing
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Formal tests:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/lib/__tests__/`
 
-## Learn More
+Vitest config:
 
-To learn more about Next.js, take a look at the following resources:
+- `vitest.config.ts`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Manual diagnostics:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `scripts/diagnostics/`
 
-## Deploy on Vercel
+These diagnostics are useful for local debugging but are not the supported CI-style test suite.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Follow And Feed
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Follow state:
+
+- stored in `user_asset_follows`
+- keyed by Supabase `user.id`
+
+Feed state:
+
+- built from followed assets plus market datasets
+- read/unread state stored in `user_feed_reads`
+
+Current event sources:
+
+- corporate actions
+- latest quarterly fundamentals
+- latest shareholding changes
+
+## Environment
+
+Required:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+PG_RELATIONAL_URL=postgresql://...
+PG_TIMESERIES_URL=postgresql://...
+```
+
+## Notes
+
+- The frontend no longer ships a supported SQLite data adapter.
+- Sector hierarchy data is sourced from database aggregates, not hardcoded mock responses.

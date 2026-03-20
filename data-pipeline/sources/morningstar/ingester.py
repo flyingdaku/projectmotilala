@@ -20,8 +20,17 @@ from core.session import create_morningstar_session
 from sources.morningstar.parser import (
     TAB_KEYS,
     build_tab_urls,
+    build_sal_endpoint_urls,
     canonicalize_scheme_url,
+    extract_sal_fund_config_url,
     extract_fund_house_slug,
+    parse_sal_holdings_json,
+    parse_sal_overview_json,
+    parse_sal_page_context,
+    parse_sal_performance_json,
+    parse_sal_portfolio_json,
+    parse_sal_risk_json,
+    parse_sal_runtime_js,
     json_dumps,
     normalize_space,
     parse_directory_page,
@@ -34,7 +43,7 @@ from sources.morningstar.parser import (
     parse_risk_page,
 )
 from sources.morningstar.schema import ensure_morningstar_schema_sqlite
-from utils.storage import load_raw_file, raw_file_exists, save_raw_file
+from utils.storage import get_raw_path, load_raw_file, raw_file_exists, save_raw_file
 
 logger = logging.getLogger(__name__)
 
@@ -137,24 +146,98 @@ class MorningstarBaseIngester(SourceIngester):
     def __init__(self):
         self.session = create_morningstar_session()
         self.use_playwright = _env_flag("MORNINGSTAR_USE_PLAYWRIGHT", default=False)
+        self._sal_runtime: Optional[Dict[str, Any]] = None
 
     def _sleep(self) -> None:
         qps = max(self.RATE_LIMIT_QPS, 0.1)
         base_delay = 1.0 / qps
         time.sleep(base_delay + random.uniform(0.25, 0.75))
 
-    def _download_html(self, trade_date: date, url: str, source_bucket: str, filename_prefix: str) -> Dict[str, Any]:
-        url = canonicalize_scheme_url(url)
-        digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:12]
-        filename = f"{filename_prefix}_{digest}.html"
-        if raw_file_exists(source_bucket, trade_date, filename):
+    def _download_text(
+        self,
+        trade_date: date,
+        url: str,
+        source_bucket: str,
+        filename_prefix: str,
+        extension: str,
+        headers: Optional[Dict[str, str]] = None,
+        use_cache: bool = True,
+    ) -> Dict[str, Any]:
+        request_url = url
+        digest = hashlib.sha1(request_url.encode("utf-8")).hexdigest()[:12]
+        filename = f"{filename_prefix}_{digest}.{extension}"
+        if use_cache and raw_file_exists(source_bucket, trade_date, filename):
             raw = load_raw_file(source_bucket, trade_date, filename)
-            return {"text": raw.decode("utf-8", errors="replace"), "path": str(save_raw_file(source_bucket, trade_date, filename, raw))}
+            return {
+                "text": raw.decode("utf-8", errors="replace"),
+                "path": str(save_raw_file(source_bucket, trade_date, filename, raw)),
+                "final_url": request_url,
+            }
         self._sleep()
-        response = self.session.get(url, timeout=30)
+        response = self.session.get(request_url, timeout=30, headers=headers)
         response.raise_for_status()
-        path = save_raw_file(source_bucket, trade_date, filename, response.content)
+        if use_cache:
+            path = save_raw_file(source_bucket, trade_date, filename, response.content)
+        else:
+            path = get_raw_path(source_bucket, trade_date, filename)
+            path.write_bytes(response.content)
         return {"text": response.text, "path": str(path), "final_url": str(response.url)}
+
+    def _download_html(
+        self,
+        trade_date: date,
+        url: str,
+        source_bucket: str,
+        filename_prefix: str,
+        use_cache: bool = True,
+    ) -> Dict[str, Any]:
+        return self._download_text(trade_date, url, source_bucket, filename_prefix, "html", use_cache=use_cache)
+
+    def _download_json(
+        self,
+        trade_date: date,
+        url: str,
+        source_bucket: str,
+        filename_prefix: str,
+        headers: Dict[str, str],
+    ) -> Dict[str, Any]:
+        payload = self._download_text(trade_date, url, source_bucket, filename_prefix, "json", headers=headers)
+        try:
+            data = json.loads(payload["text"])
+        except json.JSONDecodeError as exc:
+            preview = payload["text"][:250]
+            raise ValueError(f"JSON decode failed for {url}: {exc}; preview={preview!r}") from exc
+        return {**payload, "data": data}
+
+    def _sal_headers(self, context: Dict[str, Any], referer: str, include_realtime: bool = False) -> Dict[str, str]:
+        headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Origin": "https://www.morningstar.in",
+            "Referer": referer,
+            "Authorization": f"Bearer {context['access_token']}",
+            "X-SAL-ContentType": context["sal_content_type"],
+        }
+        if include_realtime and context.get("realtime_token"):
+            headers["X-API-REALTIME-E"] = context["realtime_token"]
+        return headers
+
+    def _load_sal_runtime(self, trade_date: date, page_html: str, page_url: str) -> Dict[str, Any]:
+        if self._sal_runtime is not None:
+            return self._sal_runtime
+        config_url = extract_sal_fund_config_url(page_html, page_url)
+        if not config_url:
+            self._sal_runtime = {}
+            return self._sal_runtime
+        try:
+            resource = self._download_text(trade_date, config_url, SOURCE_TABS, "fund_config", "js")
+            runtime = parse_sal_runtime_js(resource["text"])
+            runtime["raw_js_path"] = resource["path"]
+            runtime["config_url"] = config_url
+            self._sal_runtime = runtime
+        except Exception as exc:
+            logger.warning("[MORNINGSTAR] could not load SAL runtime config %s: %s", config_url, exc)
+            self._sal_runtime = {}
+        return self._sal_runtime
 
     def run(self, trade_date: date, conn: DatabaseConnection) -> PipelineRun:  # type: ignore[override]
         t0 = time.time()
@@ -335,6 +418,7 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
         super().__init__()
         self.limit = limit or int(os.getenv("MORNINGSTAR_DETAIL_LIMIT", "0") or "0") or None
         self.include_analysis = _env_flag("MORNINGSTAR_INCLUDE_ANALYSIS", default=False)
+        self.include_factsheet = _env_flag("MORNINGSTAR_INCLUDE_FACTSHEET", default=False)
 
     def _load_candidates(self) -> List[Dict[str, Any]]:
         with get_connection() as conn:
@@ -358,6 +442,33 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                 break
         return deduped
 
+    def _fetch_sal_bundle(
+        self,
+        trade_date: date,
+        fund_id: str,
+        context: Dict[str, Any],
+        referer: str,
+        endpoint_names: List[str],
+    ) -> tuple[Dict[str, Any], Dict[str, str], List[str]]:
+        urls = build_sal_endpoint_urls(context)
+        payloads: Dict[str, Any] = {}
+        raw_paths: Dict[str, str] = {}
+        errors: List[str] = []
+        for endpoint_name in endpoint_names:
+            try:
+                resource = self._download_json(
+                    trade_date,
+                    urls[endpoint_name],
+                    SOURCE_TABS,
+                    f"{fund_id}_{endpoint_name}",
+                    self._sal_headers(context, referer),
+                )
+                payloads[endpoint_name] = resource["data"]
+                raw_paths[endpoint_name] = resource["path"]
+            except Exception as exc:
+                errors.append(f"{fund_id} {endpoint_name}: {exc}")
+        return payloads, raw_paths, errors
+
     def fetch(self, trade_date: date) -> Dict[str, Any]:
         if self.use_playwright:
             logger.info("[MORNINGSTAR] MORNINGSTAR_USE_PLAYWRIGHT is enabled, but v1 still prefers public HTML fetches where possible.")
@@ -373,31 +484,256 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                 "directory_row": candidate,
             }
             try:
-                overview_page = self._download_html(trade_date, tabs["overview"], SOURCE_TABS, f"{candidate['morningstar_fund_id']}_overview")
-                overview = parse_overview_page(overview_page["text"], tabs["overview"])
-                overview["raw_html_path"] = overview_page["path"]
-                overview["source_page_url"] = tabs["overview"]
-                bundle["overview"] = overview
+                overview_page = self._download_html(
+                    trade_date,
+                    tabs["overview"],
+                    SOURCE_TABS,
+                    f"{candidate['morningstar_fund_id']}_overview",
+                    use_cache=False,
+                )
+                overview_fallback = parse_overview_page(overview_page["text"], tabs["overview"])
+                overview_fallback["raw_html_path"] = overview_page["path"]
+                overview_fallback["source_page_url"] = tabs["overview"]
+                bundle["overview"] = overview_fallback
+                tabs = overview_fallback.get("tabs") or tabs
             except Exception as exc:
                 errors.append(f"{scheme_url} overview: {exc}")
                 continue
 
-            for tab_key, parser in (
-                ("performance", parse_performance_page),
-                ("risk", parse_risk_page),
-                ("portfolio", parse_portfolio_page),
-                ("detailed_portfolio", parse_holdings_page),
-                ("factsheet", parse_factsheet_page),
-            ):
+            sal_runtime = self._load_sal_runtime(trade_date, overview_page["text"], tabs["overview"])
+            sal_context = parse_sal_page_context(overview_page["text"], tabs["overview"], sal_runtime)
+            quote_payload: Optional[Dict[str, Any]] = None
+            people_payload: Optional[Dict[str, Any]] = None
+
+            if sal_context:
+                sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                    trade_date,
+                    candidate["morningstar_fund_id"],
+                    sal_context,
+                    tabs["overview"],
+                    ["quote"],
+                )
+                errors.extend(sal_errors)
+                quote_payload = sal_payloads.get("quote")
+                if quote_payload:
+                    overview = parse_sal_overview_json(quote_payload, fallback=bundle["overview"])
+                    overview.update({
+                        "morningstar_fund_id": candidate["morningstar_fund_id"],
+                        "scheme_url": scheme_url,
+                        "tabs": tabs,
+                        "raw_html_path": overview_page["path"],
+                        "raw_json_path": json_dumps(sal_paths),
+                        "raw_json": {
+                            "quote_payload_path": sal_paths.get("quote"),
+                            "overview_stats": overview.get("overview_stats", {}),
+                        },
+                        "source_page_url": tabs["overview"],
+                    })
+                    bundle["overview"] = overview
+
+            try:
+                performance_page = self._download_html(
+                    trade_date,
+                    tabs["performance"],
+                    SOURCE_TABS,
+                    f"{candidate['morningstar_fund_id']}_performance",
+                    use_cache=False,
+                )
+                performance_fallback = parse_performance_page(performance_page["text"], tabs["performance"])
+                performance_fallback["raw_html_path"] = performance_page["path"]
+                performance_fallback["source_page_url"] = tabs["performance"]
+                performance_fallback["raw_json"] = {"tables": performance_fallback.get("tables", [])}
+                bundle["performance"] = performance_fallback
+                if sal_context:
+                    sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                        trade_date,
+                        candidate["morningstar_fund_id"],
+                        sal_context,
+                        tabs["performance"],
+                        ["performance_chart", "performance_table", "trailing_returns"],
+                    )
+                    errors.extend(sal_errors)
+                    if sal_payloads.get("performance_chart") and sal_payloads.get("trailing_returns"):
+                        performance = parse_sal_performance_json(
+                            sal_payloads.get("performance_chart"),
+                            sal_payloads.get("trailing_returns"),
+                            sal_payloads.get("performance_table"),
+                        )
+                        performance.update({
+                            "morningstar_fund_id": candidate["morningstar_fund_id"],
+                            "scheme_url": scheme_url,
+                            "raw_html_path": performance_page["path"],
+                            "raw_json_path": json_dumps(sal_paths),
+                            "raw_json": {
+                                "performance_chart_path": sal_paths.get("performance_chart"),
+                                "performance_table_path": sal_paths.get("performance_table"),
+                                "trailing_returns_path": sal_paths.get("trailing_returns"),
+                                "annual_table": performance.get("annual_table"),
+                            },
+                            "source_page_url": tabs["performance"],
+                        })
+                        bundle["performance"] = performance
+            except Exception as exc:
+                errors.append(f"{scheme_url} performance: {exc}")
+
+            try:
+                risk_page = self._download_html(
+                    trade_date,
+                    tabs["risk"],
+                    SOURCE_TABS,
+                    f"{candidate['morningstar_fund_id']}_risk",
+                    use_cache=False,
+                )
+                risk_fallback = parse_risk_page(risk_page["text"], tabs["risk"])
+                risk_fallback["raw_html_path"] = risk_page["path"]
+                risk_fallback["source_page_url"] = tabs["risk"]
+                risk_fallback["raw_json"] = {"tables": risk_fallback.get("tables", [])}
+                bundle["risk"] = risk_fallback
+                if sal_context:
+                    sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                        trade_date,
+                        candidate["morningstar_fund_id"],
+                        sal_context,
+                        tabs["risk"],
+                        ["risk_summary", "risk_volatility", "risk_scatter", "market_volatility"],
+                    )
+                    errors.extend(sal_errors)
+                    if sal_payloads.get("risk_volatility") and sal_payloads.get("risk_summary") and sal_payloads.get("market_volatility"):
+                        risk = parse_sal_risk_json(
+                            quote_payload,
+                            sal_payloads.get("risk_volatility"),
+                            sal_payloads.get("risk_summary"),
+                            sal_payloads.get("market_volatility"),
+                            sal_payloads.get("risk_scatter"),
+                        )
+                        risk.update({
+                            "morningstar_fund_id": candidate["morningstar_fund_id"],
+                            "scheme_url": scheme_url,
+                            "raw_html_path": risk_page["path"],
+                            "raw_json_path": json_dumps(sal_paths),
+                            "raw_json": {
+                                "risk_summary_path": sal_paths.get("risk_summary"),
+                                "risk_volatility_path": sal_paths.get("risk_volatility"),
+                                "risk_scatter_path": sal_paths.get("risk_scatter"),
+                                "market_volatility_path": sal_paths.get("market_volatility"),
+                                "selected_period": risk.get("selected_period"),
+                            },
+                            "source_page_url": tabs["risk"],
+                        })
+                        bundle["risk"] = risk
+            except Exception as exc:
+                errors.append(f"{scheme_url} risk: {exc}")
+
+            try:
+                portfolio_page = self._download_html(
+                    trade_date,
+                    tabs["portfolio"],
+                    SOURCE_TABS,
+                    f"{candidate['morningstar_fund_id']}_portfolio",
+                    use_cache=False,
+                )
+                portfolio_fallback = parse_portfolio_page(portfolio_page["text"], tabs["portfolio"])
+                portfolio_fallback["raw_html_path"] = portfolio_page["path"]
+                portfolio_fallback["source_page_url"] = tabs["portfolio"]
+                portfolio_fallback["raw_json"] = {"tables": portfolio_fallback.get("tables", [])}
+                bundle["portfolio"] = portfolio_fallback
+                if sal_context:
+                    sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                        trade_date,
+                        candidate["morningstar_fund_id"],
+                        sal_context,
+                        tabs["portfolio"],
+                        ["asset_allocation", "ownership_zone", "people"],
+                    )
+                    errors.extend(sal_errors)
+                    people_payload = sal_payloads.get("people")
+                    if quote_payload and sal_payloads.get("asset_allocation") and sal_payloads.get("ownership_zone"):
+                        portfolio = parse_sal_portfolio_json(
+                            quote_payload,
+                            sal_payloads.get("asset_allocation"),
+                            sal_payloads.get("ownership_zone"),
+                            people_payload,
+                        )
+                        portfolio.update({
+                            "morningstar_fund_id": candidate["morningstar_fund_id"],
+                            "scheme_url": scheme_url,
+                            "raw_html_path": portfolio_page["path"],
+                            "raw_json_path": json_dumps(sal_paths),
+                            "raw_json": {
+                                "asset_allocation_path": sal_paths.get("asset_allocation"),
+                                "ownership_zone_path": sal_paths.get("ownership_zone"),
+                                "people_path": sal_paths.get("people"),
+                                "manager_summary": portfolio.get("manager_summary", {}),
+                            },
+                            "source_page_url": tabs["portfolio"],
+                        })
+                        bundle["portfolio"] = portfolio
+                        if quote_payload:
+                            overview = parse_sal_overview_json(quote_payload, people_payload, fallback=bundle["overview"])
+                            overview.update({
+                                "morningstar_fund_id": candidate["morningstar_fund_id"],
+                                "scheme_url": scheme_url,
+                                "tabs": tabs,
+                                "raw_html_path": overview_page["path"],
+                                "raw_json_path": bundle["overview"].get("raw_json_path"),
+                                "raw_json": {
+                                    **(bundle["overview"].get("raw_json") or {}),
+                                    "people_payload_path": sal_paths.get("people"),
+                                },
+                                "source_page_url": tabs["overview"],
+                            })
+                            bundle["overview"] = overview
+            except Exception as exc:
+                errors.append(f"{scheme_url} portfolio: {exc}")
+
+            try:
+                detailed_page = self._download_html(
+                    trade_date,
+                    tabs["detailed_portfolio"],
+                    SOURCE_TABS,
+                    f"{candidate['morningstar_fund_id']}_detailed_portfolio",
+                    use_cache=False,
+                )
+                detailed_fallback = parse_holdings_page(detailed_page["text"], tabs["detailed_portfolio"])
+                detailed_fallback["raw_html_path"] = detailed_page["path"]
+                detailed_fallback["source_page_url"] = tabs["detailed_portfolio"]
+                detailed_fallback["raw_json"] = {"tables": detailed_fallback.get("tables", [])}
+                bundle["detailed_portfolio"] = detailed_fallback
+                if sal_context:
+                    sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                        trade_date,
+                        candidate["morningstar_fund_id"],
+                        sal_context,
+                        tabs["detailed_portfolio"],
+                        ["holdings"],
+                    )
+                    errors.extend(sal_errors)
+                    if sal_payloads.get("holdings"):
+                        detailed = parse_sal_holdings_json(sal_payloads.get("holdings"))
+                        detailed.update({
+                            "morningstar_fund_id": candidate["morningstar_fund_id"],
+                            "scheme_url": scheme_url,
+                            "raw_html_path": detailed_page["path"],
+                            "raw_json_path": json_dumps(sal_paths),
+                            "raw_json": {
+                                "holdings_path": sal_paths.get("holdings"),
+                                "holding_summary": detailed.get("holding_summary", {}),
+                            },
+                            "source_page_url": tabs["detailed_portfolio"],
+                        })
+                        bundle["detailed_portfolio"] = detailed
+            except Exception as exc:
+                errors.append(f"{scheme_url} detailed_portfolio: {exc}")
+
+            if self.include_factsheet:
                 try:
-                    source_bucket = SOURCE_FACTSHEETS if tab_key == "factsheet" else SOURCE_TABS
-                    page = self._download_html(trade_date, tabs[tab_key], source_bucket, f"{candidate['morningstar_fund_id']}_{tab_key}")
-                    parsed = parser(page["text"], tabs[tab_key])
+                    page = self._download_html(trade_date, tabs["factsheet"], SOURCE_FACTSHEETS, f"{candidate['morningstar_fund_id']}_factsheet")
+                    parsed = parse_factsheet_page(page["text"], tabs["factsheet"])
                     parsed["raw_html_path"] = page["path"]
-                    parsed["source_page_url"] = tabs[tab_key]
-                    bundle[tab_key] = parsed
+                    parsed["source_page_url"] = tabs["factsheet"]
+                    bundle["factsheet"] = parsed
                 except Exception as exc:
-                    errors.append(f"{scheme_url} {tab_key}: {exc}")
+                    errors.append(f"{scheme_url} factsheet: {exc}")
             if self.include_analysis:
                 try:
                     page = self._download_html(trade_date, tabs["analysis"], SOURCE_TABS, f"{candidate['morningstar_fund_id']}_analysis")
@@ -417,8 +753,8 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
             INSERT INTO src_morningstar_fund_overview (
               id, asset_id, morningstar_fund_id, scheme_url, scheme_name, isin, amc_name,
               category_name, distribution_type, structure, latest_nav, nav_date, benchmark_name,
-              tabs_json, raw_html_path, raw_json, source_page_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              tabs_json, raw_html_path, raw_json_path, raw_json, source_page_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(morningstar_fund_id, scheme_url) DO UPDATE SET
               asset_id = excluded.asset_id,
               scheme_name = COALESCE(excluded.scheme_name, src_morningstar_fund_overview.scheme_name),
@@ -432,6 +768,7 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
               benchmark_name = COALESCE(excluded.benchmark_name, src_morningstar_fund_overview.benchmark_name),
               tabs_json = excluded.tabs_json,
               raw_html_path = excluded.raw_html_path,
+              raw_json_path = excluded.raw_json_path,
               raw_json = excluded.raw_json,
               source_page_url = excluded.source_page_url,
               captured_at = datetime('now')
@@ -452,7 +789,8 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                 overview.get("benchmark_name"),
                 json_dumps(overview.get("tabs", {})),
                 overview.get("raw_html_path"),
-                json_dumps(overview),
+                overview.get("raw_json_path"),
+                json_dumps(overview.get("raw_json", overview)),
                 overview.get("source_page_url"),
             ),
         )
@@ -521,18 +859,20 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                 conn.execute(
                     """
                     INSERT INTO src_morningstar_fund_performance (
-                      id, asset_id, morningstar_fund_id, scheme_url, growth_of_10000_json,
+                      id, asset_id, morningstar_fund_id, scheme_url, as_of_date, growth_of_10000_json,
                       trailing_returns_json, calendar_returns_json, monthly_returns_json,
-                      quarterly_returns_json, raw_html_path, raw_json, source_page_url
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      quarterly_returns_json, raw_html_path, raw_json_path, raw_json, source_page_url
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(morningstar_fund_id, scheme_url) DO UPDATE SET
                       asset_id = excluded.asset_id,
+                      as_of_date = COALESCE(excluded.as_of_date, src_morningstar_fund_performance.as_of_date),
                       growth_of_10000_json = excluded.growth_of_10000_json,
                       trailing_returns_json = excluded.trailing_returns_json,
                       calendar_returns_json = excluded.calendar_returns_json,
                       monthly_returns_json = excluded.monthly_returns_json,
                       quarterly_returns_json = excluded.quarterly_returns_json,
                       raw_html_path = excluded.raw_html_path,
+                      raw_json_path = excluded.raw_json_path,
                       raw_json = excluded.raw_json,
                       source_page_url = excluded.source_page_url,
                       captured_at = datetime('now')
@@ -542,13 +882,15 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                         asset_id,
                         performance.get("morningstar_fund_id"),
                         performance.get("scheme_url"),
-                        json_dumps([]),
+                        performance.get("as_of_date"),
+                        json_dumps(performance.get("growth_of_10000", {})),
                         json_dumps(performance.get("trailing_returns", [])),
                         json_dumps(performance.get("calendar_returns", [])),
                         json_dumps(performance.get("monthly_returns", [])),
                         json_dumps(performance.get("quarterly_returns", [])),
                         performance.get("raw_html_path"),
-                        json_dumps(performance.get("tables", [])),
+                        performance.get("raw_json_path"),
+                        json_dumps(performance.get("raw_json", performance)),
                         performance.get("source_page_url"),
                     ),
                 )
@@ -575,7 +917,7 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                                 generate_id(),
                                 asset_id,
                                 performance.get("morningstar_fund_id"),
-                                None,
+                                row.get("as_of_date") or performance.get("as_of_date"),
                                 row.get("horizon_code"),
                                 row.get("fund_return"),
                                 row.get("category_return"),
@@ -619,15 +961,17 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                 conn.execute(
                     """
                     INSERT INTO src_morningstar_fund_risk (
-                      id, asset_id, morningstar_fund_id, scheme_url, star_rating,
-                      morningstar_risk_label, risk_json, raw_html_path, raw_json, source_page_url
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      id, asset_id, morningstar_fund_id, scheme_url, as_of_date, star_rating,
+                      morningstar_risk_label, risk_json, raw_html_path, raw_json_path, raw_json, source_page_url
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(morningstar_fund_id, scheme_url) DO UPDATE SET
                       asset_id = excluded.asset_id,
+                      as_of_date = COALESCE(excluded.as_of_date, src_morningstar_fund_risk.as_of_date),
                       star_rating = COALESCE(excluded.star_rating, src_morningstar_fund_risk.star_rating),
                       morningstar_risk_label = COALESCE(excluded.morningstar_risk_label, src_morningstar_fund_risk.morningstar_risk_label),
                       risk_json = excluded.risk_json,
                       raw_html_path = excluded.raw_html_path,
+                      raw_json_path = excluded.raw_json_path,
                       raw_json = excluded.raw_json,
                       source_page_url = excluded.source_page_url,
                       captured_at = datetime('now')
@@ -637,11 +981,13 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                         asset_id,
                         risk.get("morningstar_fund_id"),
                         risk.get("scheme_url"),
+                        risk.get("as_of_date"),
                         metrics.get("star_rating"),
                         metrics.get("morningstar_risk_label"),
                         json_dumps(metrics),
                         risk.get("raw_html_path"),
-                        json_dumps(risk.get("tables", [])),
+                        risk.get("raw_json_path"),
+                        json_dumps(risk.get("raw_json", risk)),
                         risk.get("source_page_url"),
                     ),
                 )
@@ -671,7 +1017,7 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                             generate_id(),
                             asset_id,
                             risk.get("morningstar_fund_id"),
-                            None,
+                            risk.get("as_of_date"),
                             metrics.get("alpha"),
                             metrics.get("beta"),
                             metrics.get("r_squared"),
@@ -692,15 +1038,17 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                 conn.execute(
                     """
                     INSERT INTO src_morningstar_fund_portfolio (
-                      id, asset_id, morningstar_fund_id, scheme_url, asset_allocation_json,
-                      style_box_json, characteristics_json, raw_html_path, raw_json, source_page_url
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      id, asset_id, morningstar_fund_id, scheme_url, as_of_date, asset_allocation_json,
+                      style_box_json, characteristics_json, raw_html_path, raw_json_path, raw_json, source_page_url
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(morningstar_fund_id, scheme_url) DO UPDATE SET
                       asset_id = excluded.asset_id,
+                      as_of_date = COALESCE(excluded.as_of_date, src_morningstar_fund_portfolio.as_of_date),
                       asset_allocation_json = excluded.asset_allocation_json,
                       style_box_json = excluded.style_box_json,
                       characteristics_json = excluded.characteristics_json,
                       raw_html_path = excluded.raw_html_path,
+                      raw_json_path = excluded.raw_json_path,
                       raw_json = excluded.raw_json,
                       source_page_url = excluded.source_page_url,
                       captured_at = datetime('now')
@@ -710,11 +1058,13 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                         asset_id,
                         portfolio.get("morningstar_fund_id"),
                         portfolio.get("scheme_url"),
+                        portfolio.get("as_of_date"),
                         json_dumps(portfolio.get("asset_allocation", [])),
                         json_dumps(portfolio.get("style_box", [])),
                         json_dumps(portfolio.get("characteristics", [])),
                         portfolio.get("raw_html_path"),
-                        json_dumps(portfolio.get("tables", [])),
+                        portfolio.get("raw_json_path"),
+                        json_dumps(portfolio.get("raw_json", portfolio)),
                         portfolio.get("source_page_url"),
                     ),
                 )
@@ -739,7 +1089,10 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                         portfolio.get("scheme_url"),
                         json_dumps(portfolio.get("managers", [])),
                         portfolio.get("raw_html_path"),
-                        json_dumps(portfolio.get("tables", [])),
+                        json_dumps({
+                            "manager_summary": portfolio.get("manager_summary", {}),
+                            "raw_json_path": portfolio.get("raw_json_path"),
+                        }),
                         portfolio.get("source_page_url"),
                     ),
                 )
@@ -757,30 +1110,24 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                             (
                                 generate_id(),
                                 asset_id,
-                                None,
+                                portfolio.get("as_of_date"),
                                 row.get("asset_bucket"),
                                 row.get("weight_pct"),
                                 portfolio.get("source_page_url"),
                             ),
                         )
                     manager_rows = portfolio.get("managers", [])
-                    tenure_lookup = {
-                        entry.get("label", "").lower(): entry.get("value")
-                        for entry in manager_rows
-                        if isinstance(entry, dict)
-                    }
                     for row in manager_rows:
                         if not isinstance(row, dict):
                             continue
-                        label = normalize_space(row.get("label"))
-                        value = normalize_space(row.get("value"))
-                        if "manager" not in label.lower() or not value:
+                        manager_name = normalize_space(row.get("manager_name"))
+                        if not manager_name:
                             continue
                         conn.execute(
                             """
                             INSERT INTO mf_manager_assignments (
-                              id, asset_id, morningstar_fund_id, manager_name, role, tenure_years_text, source_page_url
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                              id, asset_id, morningstar_fund_id, manager_name, role, start_date, end_date, tenure_years_text, source_page_url
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ON CONFLICT(asset_id, manager_name, role, start_date, end_date) DO UPDATE SET
                               tenure_years_text = COALESCE(excluded.tenure_years_text, mf_manager_assignments.tenure_years_text),
                               source_page_url = excluded.source_page_url
@@ -789,9 +1136,11 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                                 generate_id(),
                                 asset_id,
                                 portfolio.get("morningstar_fund_id"),
-                                value,
-                                label,
-                                tenure_lookup.get("tenure"),
+                                manager_name,
+                                row.get("role"),
+                                row.get("start_date"),
+                                row.get("end_date"),
+                                row.get("tenure_years_text"),
                                 portfolio.get("source_page_url"),
                             ),
                         )
@@ -808,7 +1157,7 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                             (
                                 generate_id(),
                                 asset_id,
-                                None,
+                                portfolio.get("as_of_date"),
                                 row.get("style_dimension"),
                                 row.get("weight_pct"),
                                 portfolio.get("source_page_url"),
@@ -827,7 +1176,7 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                             (
                                 generate_id(),
                                 asset_id,
-                                None,
+                                portfolio.get("as_of_date"),
                                 row.get("characteristic_name"),
                                 row.get("characteristic_value"),
                                 portfolio.get("source_page_url"),
@@ -839,13 +1188,15 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                 conn.execute(
                     """
                     INSERT INTO src_morningstar_fund_holdings (
-                      id, asset_id, morningstar_fund_id, scheme_url, holdings_kind,
-                      holdings_json, raw_html_path, raw_json, source_page_url
-                    ) VALUES (?, ?, ?, ?, 'DETAILED', ?, ?, ?, ?)
+                      id, asset_id, morningstar_fund_id, scheme_url, holdings_kind, as_of_date,
+                      holdings_json, raw_html_path, raw_json_path, raw_json, source_page_url
+                    ) VALUES (?, ?, ?, ?, 'DETAILED', ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(morningstar_fund_id, scheme_url, holdings_kind) DO UPDATE SET
                       asset_id = excluded.asset_id,
+                      as_of_date = COALESCE(excluded.as_of_date, src_morningstar_fund_holdings.as_of_date),
                       holdings_json = excluded.holdings_json,
                       raw_html_path = excluded.raw_html_path,
+                      raw_json_path = excluded.raw_json_path,
                       raw_json = excluded.raw_json,
                       source_page_url = excluded.source_page_url,
                       captured_at = datetime('now')
@@ -855,9 +1206,11 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                         asset_id,
                         detailed.get("morningstar_fund_id"),
                         detailed.get("scheme_url"),
+                        detailed.get("as_of_date"),
                         json_dumps(detailed.get("holdings", [])),
                         detailed.get("raw_html_path"),
-                        json_dumps(detailed.get("tables", [])),
+                        detailed.get("raw_json_path"),
+                        json_dumps(detailed.get("raw_json", detailed)),
                         detailed.get("source_page_url"),
                     ),
                 )
@@ -866,18 +1219,33 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                         conn.execute(
                             """
                             INSERT INTO mf_holdings (
-                              id, asset_id, as_of_date, holding_name, weight_pct, rank, source_page_url
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                              id, asset_id, as_of_date, holding_name, holding_type, holding_isin, holding_ticker,
+                              weight_pct, market_value, share_count, sector, country, rank, source_page_url
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ON CONFLICT(asset_id, as_of_date, holding_name, rank) DO UPDATE SET
+                              holding_type = COALESCE(excluded.holding_type, mf_holdings.holding_type),
+                              holding_isin = COALESCE(excluded.holding_isin, mf_holdings.holding_isin),
+                              holding_ticker = COALESCE(excluded.holding_ticker, mf_holdings.holding_ticker),
                               weight_pct = COALESCE(excluded.weight_pct, mf_holdings.weight_pct),
+                              market_value = COALESCE(excluded.market_value, mf_holdings.market_value),
+                              share_count = COALESCE(excluded.share_count, mf_holdings.share_count),
+                              sector = COALESCE(excluded.sector, mf_holdings.sector),
+                              country = COALESCE(excluded.country, mf_holdings.country),
                               source_page_url = excluded.source_page_url
                             """,
                             (
                                 generate_id(),
                                 asset_id,
-                                None,
+                                detailed.get("as_of_date"),
                                 row.get("holding_name"),
+                                row.get("holding_type"),
+                                row.get("holding_isin"),
+                                row.get("holding_ticker"),
                                 row.get("weight_pct"),
+                                row.get("market_value"),
+                                row.get("share_count"),
+                                row.get("sector"),
+                                row.get("country"),
                                 row.get("rank"),
                                 detailed.get("source_page_url"),
                             ),

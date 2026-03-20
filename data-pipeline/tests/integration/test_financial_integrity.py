@@ -11,7 +11,13 @@ import pytest
 import sqlite3
 from unittest.mock import MagicMock
 from pipelines.compute_metrics import _get_ttm_values
-from artha.update_historical_data import MOCK_90S
+
+MOCK_90S = {
+    1990: {"debt": 9.2, "gold": 12.4},
+    1991: {"debt": 11.8, "gold": 18.6},
+    1992: {"debt": 10.4, "gold": 7.9},
+    1993: {"debt": 8.7, "gold": 10.8},
+}
 
 def test_ttm_strict_4_quarter_rule():
     """Ensure TTM does not compute if less than 4 quarters are provided."""

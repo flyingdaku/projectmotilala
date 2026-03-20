@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDataAdapter } from '@/lib/data';
-
-const MOCK_USER_ID = 'user_demo';
+import { getAuthenticatedUserId } from '@/lib/server/auth';
 
 export async function GET(req: NextRequest) {
     try {
+        const userId = await getAuthenticatedUserId();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const adapter = await getDataAdapter();
         const limit = Number(req.nextUrl.searchParams.get('limit') ?? '50');
         const offset = Number(req.nextUrl.searchParams.get('offset') ?? '0');
-
-        const [feed, unreadCount] = await Promise.all([
-            adapter.feed.getUserFeed(MOCK_USER_ID, limit, offset),
-            adapter.feed.getUnreadCount(MOCK_USER_ID),
-        ]);
+        const feed = await adapter.feed.getUserFeed(userId, limit, offset);
+        const unreadCount = feed.filter((item) => !item.isRead).length;
 
         return NextResponse.json({ feed, unreadCount });
     } catch (err) {
@@ -23,12 +23,16 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
     try {
+        const userId = await getAuthenticatedUserId();
+        if (!userId) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
         const adapter = await getDataAdapter();
         const body = await req.json();
         const { eventIds } = body;
 
         if (Array.isArray(eventIds)) {
-            await adapter.feed.markAsRead(MOCK_USER_ID, eventIds);
+            await adapter.feed.markAsRead(userId, eventIds);
         }
 
         return NextResponse.json({ success: true });

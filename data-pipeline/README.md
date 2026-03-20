@@ -1,6 +1,33 @@
 # Artha Market Data Pipeline
 
-Local SQLite-based data pipeline for NSE/BSE/AMFI market data.
+Data ingestion and computation stack for the Artha product.
+
+## Current Data Model
+
+The product now uses:
+
+- PostgreSQL as the relational source of truth
+- TimescaleDB as the timeseries source of truth
+
+Legacy SQLite files still exist in this repository for historical recovery,
+migration, and local debugging workflows, but the frontend no longer treats
+SQLite as its active backend.
+
+Key bootstrap files:
+
+- `db/init-postgres.sql`
+- `db/init-timescale.sql`
+- `db/migrations/002_frontend_product_tables.sql`
+
+Frontend-dependent computed tables:
+
+- `computed_ratios`
+- `technical_indicators`
+
+Frontend-dependent product tables:
+
+- `user_asset_follows`
+- `user_feed_reads`
 
 ## Quick Start
 
@@ -14,25 +41,32 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
 
-# 3. Initialize the database
-python -c "from utils.db import init_db; init_db()"
+# 3. Start PostgreSQL and TimescaleDB
+docker compose up -d
 
-# 4. Run the pipeline for yesterday
+# 4. Initialize or migrate databases
+# Apply db/init-postgres.sql and db/init-timescale.sql to fresh environments.
+# Apply db/migrations/002_frontend_product_tables.sql to older relational DBs.
+
+# 5. Run the pipeline for yesterday
 python run_pipeline.py
 
-# 5. Run for a specific date
+# 6. Run for a specific date
 python run_pipeline.py 2024-01-15
 
-# 6. Backfill Nifty indices (TRI + Price Return)
+# 7. Populate computed frontend tables
+python scripts/compute_pg_indicators.py
+
+# 8. Backfill Nifty indices (TRI + Price Return)
 python scripts/backfill_indices.py --start 2000-01-01
 
-# 7. Backfill specific indices
+# 9. Backfill specific indices
 python scripts/backfill_indices.py --indices "Nifty 50" "Nifty Bank" --start 2020-01-01
 
-# 8. Full historical backfill (from 2000-01-01)
+# 10. Full historical backfill (from 2000-01-01)
 python -m pipelines.backfill
 
-# 9. Backfill from a specific date
+# 11. Backfill from a specific date
 python -m pipelines.backfill 2020-01-01
 ```
 
