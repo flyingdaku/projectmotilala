@@ -3,8 +3,14 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import sys
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Optional
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from core.db import get_connection
 from sources.morningstar import MorningstarFundDetailsIngester, MorningstarFundDirectoryIngester
@@ -30,6 +36,16 @@ def run_morningstar_directory_pipeline(trade_date: date) -> object:
               id, run_date, source, status, pipeline_type,
               records_inserted, records_skipped, circuit_breaks, error_log, duration_ms
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              run_date = excluded.run_date,
+              source = excluded.source,
+              status = excluded.status,
+              pipeline_type = excluded.pipeline_type,
+              records_inserted = excluded.records_inserted,
+              records_skipped = excluded.records_skipped,
+              circuit_breaks = excluded.circuit_breaks,
+              error_log = excluded.error_log,
+              duration_ms = excluded.duration_ms
             """,
             (
                 run.id,
@@ -58,6 +74,16 @@ def run_morningstar_detail_pipeline(trade_date: date, limit: Optional[int] = Non
               id, run_date, source, status, pipeline_type,
               records_inserted, records_skipped, circuit_breaks, error_log, duration_ms
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+              run_date = excluded.run_date,
+              source = excluded.source,
+              status = excluded.status,
+              pipeline_type = excluded.pipeline_type,
+              records_inserted = excluded.records_inserted,
+              records_skipped = excluded.records_skipped,
+              circuit_breaks = excluded.circuit_breaks,
+              error_log = excluded.error_log,
+              duration_ms = excluded.duration_ms
             """,
             (
                 run.id,

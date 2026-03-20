@@ -11,6 +11,21 @@ _ASSET_COLUMNS = {
 
 _DDL = [
     """
+    CREATE TABLE IF NOT EXISTS pipeline_run_checkpoints (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      processed_count INTEGER NOT NULL,
+      inserted_count INTEGER NOT NULL,
+      skipped_count INTEGER NOT NULL DEFAULT 0,
+      error_count INTEGER NOT NULL DEFAULT 0,
+      details_json TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    """,
+    "CREATE INDEX IF NOT EXISTS idx_pipeline_run_checkpoints_run ON pipeline_run_checkpoints(run_id, created_at DESC);",
+    "CREATE INDEX IF NOT EXISTS idx_pipeline_run_checkpoints_source ON pipeline_run_checkpoints(source, created_at DESC);",
+    """
     CREATE TABLE IF NOT EXISTS src_morningstar_fund_directory (
       id TEXT PRIMARY KEY,
       asset_id TEXT,

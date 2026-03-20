@@ -80,6 +80,19 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_pipeline_runs_date ON pipeline_runs(run_date DESC);
 CREATE INDEX IF NOT EXISTS idx_pipeline_runs_source ON pipeline_runs(source, run_date DESC);
+CREATE TABLE IF NOT EXISTS pipeline_run_checkpoints (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  source TEXT NOT NULL,
+  processed_count INTEGER NOT NULL,
+  inserted_count INTEGER NOT NULL,
+  skipped_count INTEGER NOT NULL DEFAULT 0,
+  error_count INTEGER NOT NULL DEFAULT 0,
+  details_json TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_pipeline_run_checkpoints_run ON pipeline_run_checkpoints(run_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pipeline_run_checkpoints_source ON pipeline_run_checkpoints(source, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS trading_holidays (
   date TEXT PRIMARY KEY, description TEXT,

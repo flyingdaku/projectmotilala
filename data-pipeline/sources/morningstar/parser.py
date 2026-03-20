@@ -123,6 +123,18 @@ STYLE_BOX_LABEL_MAP = {
     9: "Small Growth",
 }
 
+STYLE_WEIGHT_FIELD_MAP = (
+    ("largeValue", "Large Value"),
+    ("largeBlend", "Large Blend"),
+    ("largeGrowth", "Large Growth"),
+    ("middleValue", "Mid Value"),
+    ("middleBlend", "Mid Blend"),
+    ("middleGrowth", "Mid Growth"),
+    ("smallValue", "Small Value"),
+    ("smallBlend", "Small Blend"),
+    ("smallGrowth", "Small Growth"),
+)
+
 SAL_PERFORMANCE_LABEL_MAP = {
     "fund": "fund",
     "category": "category",
@@ -430,6 +442,11 @@ def build_sal_endpoint_urls(context: Dict[str, Any]) -> Dict[str, str]:
         "ownership_zone": (
             f"{SAL_BASE_URL}/fund/process/ownershipZone/{sec_id}/data"
             f"?benchmarkId=category&component=stockStyle&version={SAL_RISK_PORTFOLIO_VERSION}"
+            f"&languageId=en&locale=en-IN&clientId={client_id}&currencyId=INR&secId={sec_id}"
+        ),
+        "style_weight": (
+            f"{SAL_BASE_URL}/fund/process/weighting/{sec_id}/data"
+            f"?benchmarkId=category&component=stockStyleWeight&version={SAL_RISK_PORTFOLIO_VERSION}"
             f"&languageId=en&locale=en-IN&clientId={client_id}&currencyId=INR&secId={sec_id}"
         ),
         "people": (
@@ -784,11 +801,13 @@ def parse_sal_portfolio_json(
     quote_payload: Optional[Dict[str, Any]],
     asset_payload: Optional[Dict[str, Any]],
     ownership_zone_payload: Optional[Dict[str, Any]],
+    style_weight_payload: Optional[Dict[str, Any]] = None,
     people_payload: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     quote_payload = quote_payload or {}
     asset_payload = asset_payload or {}
     ownership_zone_payload = ownership_zone_payload or {}
+    style_weight_payload = style_weight_payload or {}
     people_info = parse_sal_people_json(people_payload)
 
     asset_allocation: List[Dict[str, Any]] = []
@@ -799,8 +818,15 @@ def parse_sal_portfolio_json(
             "weight_pct": maybe_float(row.get("netAllocation")),
         })
 
+    style_box: List[Dict[str, Any]] = []
+    for source_key, label in STYLE_WEIGHT_FIELD_MAP:
+        value = maybe_float(style_weight_payload.get(source_key))
+        if value is None:
+            continue
+        style_box.append({"style_dimension": label, "weight_pct": value})
     style_box_label = STYLE_BOX_LABEL_MAP.get(maybe_int(quote_payload.get("equityStyleBox")) or 0)
-    style_box = [{"style_dimension": style_box_label, "weight_pct": 100.0}] if style_box_label else []
+    if not style_box and style_box_label:
+        style_box = [{"style_dimension": style_box_label, "weight_pct": 100.0}]
 
     characteristics: List[Dict[str, Any]] = []
     _append_characteristic(characteristics, "Asset Type", asset_payload.get("assetType"))
@@ -832,6 +858,7 @@ def parse_sal_portfolio_json(
         "managers": people_info.get("managers", []),
         "manager_summary": people_info.get("manager_summary", {}),
         "ownership_zone": ownership_zone_payload,
+        "style_weight": style_weight_payload,
     }
 
 

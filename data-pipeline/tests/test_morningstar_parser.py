@@ -201,6 +201,19 @@ SAL_OWNERSHIP = {
     }
 }
 
+SAL_STYLE_WEIGHT = {
+    "portfolioDate": "2026-02-29T00:00:00",
+    "largeValue": 4.3,
+    "largeBlend": 52.0,
+    "largeGrowth": 26.0,
+    "middleValue": 0.9,
+    "middleBlend": 7.3,
+    "middleGrowth": 5.1,
+    "smallValue": 0.0,
+    "smallBlend": 0.8,
+    "smallGrowth": 3.6,
+}
+
 SAL_PEOPLE = {
     "advisorType": "Aditya Birla Sun Life AMC Limited",
     "averageManagerTenure": 4.2,
@@ -360,6 +373,7 @@ def test_parse_sal_runtime_and_context():
     urls = build_sal_endpoint_urls(context)
     assert "/fund/quote/v7/F0000020YP/data" in urls["quote"]
     assert "/fund/portfolio/holding/v2/F0000020YP/data" in urls["holdings"]
+    assert "/fund/process/weighting/F0000020YP/data" in urls["style_weight"]
 
 
 def test_parse_sal_performance_json_maps_annual_and_trailing_returns():
@@ -388,11 +402,15 @@ def test_parse_sal_risk_json_maps_summary_and_volatility_metrics():
 
 
 def test_parse_sal_portfolio_json_maps_allocations_style_and_managers():
-    parsed = parse_sal_portfolio_json(SAL_QUOTE, SAL_ASSET, SAL_OWNERSHIP, SAL_PEOPLE)
+    parsed = parse_sal_portfolio_json(SAL_QUOTE, SAL_ASSET, SAL_OWNERSHIP, SAL_STYLE_WEIGHT, SAL_PEOPLE)
     assert parsed["as_of_date"] == "2026-02-29"
     assert parsed["asset_allocation"][0]["asset_bucket"] == "Stock"
     assert parsed["asset_allocation"][0]["weight_pct"] == 96.4
-    assert parsed["style_box"][0]["style_dimension"] == "Large Growth"
+    assert len(parsed["style_box"]) == 9
+    assert parsed["style_box"][0]["style_dimension"] == "Large Value"
+    assert parsed["style_box"][0]["weight_pct"] == 4.3
+    assert parsed["style_box"][4]["style_dimension"] == "Mid Blend"
+    assert parsed["style_box"][4]["weight_pct"] == 7.3
     assert len(parsed["managers"]) == 3
     assert parsed["managers"][0]["manager_name"] == "Amit Patel"
     assert parsed["characteristics"][0]["characteristic_name"] == "Asset Type"

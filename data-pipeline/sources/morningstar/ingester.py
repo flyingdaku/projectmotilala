@@ -140,6 +140,36 @@ def _upsert_pipeline_run(conn: DatabaseConnection, run: PipelineRun) -> None:
     )
 
 
+def _insert_pipeline_checkpoint(
+    conn: DatabaseConnection,
+    *,
+    run_id: str,
+    source: str,
+    processed_count: int,
+    inserted_count: int,
+    skipped_count: int,
+    error_count: int,
+    details: Optional[Dict[str, Any]] = None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO pipeline_run_checkpoints (
+          id, run_id, source, processed_count, inserted_count, skipped_count, error_count, details_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            generate_id(),
+            run_id,
+            source,
+            processed_count,
+            inserted_count,
+            skipped_count,
+            error_count,
+            json_dumps(details or {}),
+        ),
+    )
+
+
 class MorningstarBaseIngester(SourceIngester):
     RATE_LIMIT_QPS = float(os.getenv("MORNINGSTAR_RATE_LIMIT_QPS", "1.0") or "1.0")
 
@@ -419,6 +449,7 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
         self.limit = limit or int(os.getenv("MORNINGSTAR_DETAIL_LIMIT", "0") or "0") or None
         self.include_analysis = _env_flag("MORNINGSTAR_INCLUDE_ANALYSIS", default=False)
         self.include_factsheet = _env_flag("MORNINGSTAR_INCLUDE_FACTSHEET", default=False)
+        self.progress_every = max(1, int(os.getenv("MORNINGSTAR_PROGRESS_EVERY", "25") or "25"))
 
     def _load_candidates(self) -> List[Dict[str, Any]]:
         with get_connection() as conn:
@@ -469,283 +500,395 @@ class MorningstarFundDetailsIngester(MorningstarBaseIngester):
                 errors.append(f"{fund_id} {endpoint_name}: {exc}")
         return payloads, raw_paths, errors
 
+    def _fetch_candidate_bundle(self, trade_date: date, candidate: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], List[str]]:
+        scheme_url = canonicalize_scheme_url(candidate["scheme_url"])
+        tabs = build_tab_urls(scheme_url)
+        bundle: Dict[str, Any] = {
+            "asset_id": candidate.get("asset_id"),
+            "morningstar_fund_id": candidate["morningstar_fund_id"],
+            "scheme_url": scheme_url,
+            "directory_row": candidate,
+        }
+        errors: List[str] = []
+        try:
+            overview_page = self._download_html(
+                trade_date,
+                tabs["overview"],
+                SOURCE_TABS,
+                f"{candidate['morningstar_fund_id']}_overview",
+                use_cache=False,
+            )
+            overview_fallback = parse_overview_page(overview_page["text"], tabs["overview"])
+            overview_fallback["raw_html_path"] = overview_page["path"]
+            overview_fallback["source_page_url"] = tabs["overview"]
+            bundle["overview"] = overview_fallback
+            tabs = overview_fallback.get("tabs") or tabs
+        except Exception as exc:
+            return None, [f"{scheme_url} overview: {exc}"]
+
+        sal_runtime = self._load_sal_runtime(trade_date, overview_page["text"], tabs["overview"])
+        sal_context = parse_sal_page_context(overview_page["text"], tabs["overview"], sal_runtime)
+        quote_payload: Optional[Dict[str, Any]] = None
+        people_payload: Optional[Dict[str, Any]] = None
+
+        if sal_context:
+            sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                trade_date,
+                candidate["morningstar_fund_id"],
+                sal_context,
+                tabs["overview"],
+                ["quote"],
+            )
+            errors.extend(sal_errors)
+            quote_payload = sal_payloads.get("quote")
+            if quote_payload:
+                overview = parse_sal_overview_json(quote_payload, fallback=bundle["overview"])
+                overview.update({
+                    "morningstar_fund_id": candidate["morningstar_fund_id"],
+                    "scheme_url": scheme_url,
+                    "tabs": tabs,
+                    "raw_html_path": overview_page["path"],
+                    "raw_json_path": json_dumps(sal_paths),
+                    "raw_json": {
+                        "quote_payload_path": sal_paths.get("quote"),
+                        "overview_stats": overview.get("overview_stats", {}),
+                    },
+                    "source_page_url": tabs["overview"],
+                })
+                bundle["overview"] = overview
+
+        try:
+            performance_page = self._download_html(
+                trade_date,
+                tabs["performance"],
+                SOURCE_TABS,
+                f"{candidate['morningstar_fund_id']}_performance",
+                use_cache=False,
+            )
+            performance_fallback = parse_performance_page(performance_page["text"], tabs["performance"])
+            performance_fallback["raw_html_path"] = performance_page["path"]
+            performance_fallback["source_page_url"] = tabs["performance"]
+            performance_fallback["raw_json"] = {"tables": performance_fallback.get("tables", [])}
+            bundle["performance"] = performance_fallback
+            if sal_context:
+                sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                    trade_date,
+                    candidate["morningstar_fund_id"],
+                    sal_context,
+                    tabs["performance"],
+                    ["performance_chart", "performance_table", "trailing_returns"],
+                )
+                errors.extend(sal_errors)
+                if sal_payloads.get("performance_chart") and sal_payloads.get("trailing_returns"):
+                    performance = parse_sal_performance_json(
+                        sal_payloads.get("performance_chart"),
+                        sal_payloads.get("trailing_returns"),
+                        sal_payloads.get("performance_table"),
+                    )
+                    performance.update({
+                        "morningstar_fund_id": candidate["morningstar_fund_id"],
+                        "scheme_url": scheme_url,
+                        "raw_html_path": performance_page["path"],
+                        "raw_json_path": json_dumps(sal_paths),
+                        "raw_json": {
+                            "performance_chart_path": sal_paths.get("performance_chart"),
+                            "performance_table_path": sal_paths.get("performance_table"),
+                            "trailing_returns_path": sal_paths.get("trailing_returns"),
+                            "annual_table": performance.get("annual_table"),
+                        },
+                        "source_page_url": tabs["performance"],
+                    })
+                    bundle["performance"] = performance
+        except Exception as exc:
+            errors.append(f"{scheme_url} performance: {exc}")
+
+        try:
+            risk_page = self._download_html(
+                trade_date,
+                tabs["risk"],
+                SOURCE_TABS,
+                f"{candidate['morningstar_fund_id']}_risk",
+                use_cache=False,
+            )
+            risk_fallback = parse_risk_page(risk_page["text"], tabs["risk"])
+            risk_fallback["raw_html_path"] = risk_page["path"]
+            risk_fallback["source_page_url"] = tabs["risk"]
+            risk_fallback["raw_json"] = {"tables": risk_fallback.get("tables", [])}
+            bundle["risk"] = risk_fallback
+            if sal_context:
+                sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                    trade_date,
+                    candidate["morningstar_fund_id"],
+                    sal_context,
+                    tabs["risk"],
+                    ["risk_summary", "risk_volatility", "risk_scatter", "market_volatility"],
+                )
+                errors.extend(sal_errors)
+                if sal_payloads.get("risk_volatility") and sal_payloads.get("risk_summary") and sal_payloads.get("market_volatility"):
+                    risk = parse_sal_risk_json(
+                        quote_payload,
+                        sal_payloads.get("risk_volatility"),
+                        sal_payloads.get("risk_summary"),
+                        sal_payloads.get("market_volatility"),
+                        sal_payloads.get("risk_scatter"),
+                    )
+                    risk.update({
+                        "morningstar_fund_id": candidate["morningstar_fund_id"],
+                        "scheme_url": scheme_url,
+                        "raw_html_path": risk_page["path"],
+                        "raw_json_path": json_dumps(sal_paths),
+                        "raw_json": {
+                            "risk_summary_path": sal_paths.get("risk_summary"),
+                            "risk_volatility_path": sal_paths.get("risk_volatility"),
+                            "risk_scatter_path": sal_paths.get("risk_scatter"),
+                            "market_volatility_path": sal_paths.get("market_volatility"),
+                            "selected_period": risk.get("selected_period"),
+                        },
+                        "source_page_url": tabs["risk"],
+                    })
+                    bundle["risk"] = risk
+        except Exception as exc:
+            errors.append(f"{scheme_url} risk: {exc}")
+
+        try:
+            portfolio_page = self._download_html(
+                trade_date,
+                tabs["portfolio"],
+                SOURCE_TABS,
+                f"{candidate['morningstar_fund_id']}_portfolio",
+                use_cache=False,
+            )
+            portfolio_fallback = parse_portfolio_page(portfolio_page["text"], tabs["portfolio"])
+            portfolio_fallback["raw_html_path"] = portfolio_page["path"]
+            portfolio_fallback["source_page_url"] = tabs["portfolio"]
+            portfolio_fallback["raw_json"] = {"tables": portfolio_fallback.get("tables", [])}
+            bundle["portfolio"] = portfolio_fallback
+            if sal_context:
+                sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                    trade_date,
+                    candidate["morningstar_fund_id"],
+                    sal_context,
+                    tabs["portfolio"],
+                    ["asset_allocation", "ownership_zone", "style_weight", "people"],
+                )
+                errors.extend(sal_errors)
+                people_payload = sal_payloads.get("people")
+                if quote_payload and sal_payloads.get("asset_allocation") and sal_payloads.get("ownership_zone"):
+                    portfolio = parse_sal_portfolio_json(
+                        quote_payload,
+                        sal_payloads.get("asset_allocation"),
+                        sal_payloads.get("ownership_zone"),
+                        sal_payloads.get("style_weight"),
+                        people_payload,
+                    )
+                    portfolio.update({
+                        "morningstar_fund_id": candidate["morningstar_fund_id"],
+                        "scheme_url": scheme_url,
+                        "raw_html_path": portfolio_page["path"],
+                        "raw_json_path": json_dumps(sal_paths),
+                        "raw_json": {
+                            "asset_allocation_path": sal_paths.get("asset_allocation"),
+                            "ownership_zone_path": sal_paths.get("ownership_zone"),
+                            "style_weight_path": sal_paths.get("style_weight"),
+                            "people_path": sal_paths.get("people"),
+                            "manager_summary": portfolio.get("manager_summary", {}),
+                        },
+                        "source_page_url": tabs["portfolio"],
+                    })
+                    bundle["portfolio"] = portfolio
+                    if quote_payload:
+                        overview = parse_sal_overview_json(quote_payload, people_payload, fallback=bundle["overview"])
+                        overview.update({
+                            "morningstar_fund_id": candidate["morningstar_fund_id"],
+                            "scheme_url": scheme_url,
+                            "tabs": tabs,
+                            "raw_html_path": overview_page["path"],
+                            "raw_json_path": bundle["overview"].get("raw_json_path"),
+                            "raw_json": {
+                                **(bundle["overview"].get("raw_json") or {}),
+                                "people_payload_path": sal_paths.get("people"),
+                            },
+                            "source_page_url": tabs["overview"],
+                        })
+                        bundle["overview"] = overview
+        except Exception as exc:
+            errors.append(f"{scheme_url} portfolio: {exc}")
+
+        try:
+            detailed_page = self._download_html(
+                trade_date,
+                tabs["detailed_portfolio"],
+                SOURCE_TABS,
+                f"{candidate['morningstar_fund_id']}_detailed_portfolio",
+                use_cache=False,
+            )
+            detailed_fallback = parse_holdings_page(detailed_page["text"], tabs["detailed_portfolio"])
+            detailed_fallback["raw_html_path"] = detailed_page["path"]
+            detailed_fallback["source_page_url"] = tabs["detailed_portfolio"]
+            detailed_fallback["raw_json"] = {"tables": detailed_fallback.get("tables", [])}
+            bundle["detailed_portfolio"] = detailed_fallback
+            if sal_context:
+                sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
+                    trade_date,
+                    candidate["morningstar_fund_id"],
+                    sal_context,
+                    tabs["detailed_portfolio"],
+                    ["holdings"],
+                )
+                errors.extend(sal_errors)
+                if sal_payloads.get("holdings"):
+                    detailed = parse_sal_holdings_json(sal_payloads.get("holdings"))
+                    detailed.update({
+                        "morningstar_fund_id": candidate["morningstar_fund_id"],
+                        "scheme_url": scheme_url,
+                        "raw_html_path": detailed_page["path"],
+                        "raw_json_path": json_dumps(sal_paths),
+                        "raw_json": {
+                            "holdings_path": sal_paths.get("holdings"),
+                            "holding_summary": detailed.get("holding_summary", {}),
+                        },
+                        "source_page_url": tabs["detailed_portfolio"],
+                    })
+                    bundle["detailed_portfolio"] = detailed
+        except Exception as exc:
+            errors.append(f"{scheme_url} detailed_portfolio: {exc}")
+
+        if self.include_factsheet:
+            try:
+                page = self._download_html(trade_date, tabs["factsheet"], SOURCE_FACTSHEETS, f"{candidate['morningstar_fund_id']}_factsheet")
+                parsed = parse_factsheet_page(page["text"], tabs["factsheet"])
+                parsed["raw_html_path"] = page["path"]
+                parsed["source_page_url"] = tabs["factsheet"]
+                bundle["factsheet"] = parsed
+            except Exception as exc:
+                errors.append(f"{scheme_url} factsheet: {exc}")
+        if self.include_analysis:
+            try:
+                page = self._download_html(trade_date, tabs["analysis"], SOURCE_TABS, f"{candidate['morningstar_fund_id']}_analysis")
+                bundle["analysis"] = {
+                    "raw_html_path": page["path"],
+                    "source_page_url": tabs["analysis"],
+                    "is_login_gated": 1,
+                }
+            except Exception as exc:
+                errors.append(f"{scheme_url} analysis: {exc}")
+        return bundle, errors
+
     def fetch(self, trade_date: date) -> Dict[str, Any]:
         if self.use_playwright:
             logger.info("[MORNINGSTAR] MORNINGSTAR_USE_PLAYWRIGHT is enabled, but v1 still prefers public HTML fetches where possible.")
         records: List[Dict[str, Any]] = []
         errors: List[str] = []
         for candidate in self._load_candidates():
-            scheme_url = canonicalize_scheme_url(candidate["scheme_url"])
-            tabs = build_tab_urls(scheme_url)
-            bundle: Dict[str, Any] = {
-                "asset_id": candidate.get("asset_id"),
-                "morningstar_fund_id": candidate["morningstar_fund_id"],
-                "scheme_url": scheme_url,
-                "directory_row": candidate,
-            }
-            try:
-                overview_page = self._download_html(
-                    trade_date,
-                    tabs["overview"],
-                    SOURCE_TABS,
-                    f"{candidate['morningstar_fund_id']}_overview",
-                    use_cache=False,
-                )
-                overview_fallback = parse_overview_page(overview_page["text"], tabs["overview"])
-                overview_fallback["raw_html_path"] = overview_page["path"]
-                overview_fallback["source_page_url"] = tabs["overview"]
-                bundle["overview"] = overview_fallback
-                tabs = overview_fallback.get("tabs") or tabs
-            except Exception as exc:
-                errors.append(f"{scheme_url} overview: {exc}")
-                continue
-
-            sal_runtime = self._load_sal_runtime(trade_date, overview_page["text"], tabs["overview"])
-            sal_context = parse_sal_page_context(overview_page["text"], tabs["overview"], sal_runtime)
-            quote_payload: Optional[Dict[str, Any]] = None
-            people_payload: Optional[Dict[str, Any]] = None
-
-            if sal_context:
-                sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
-                    trade_date,
-                    candidate["morningstar_fund_id"],
-                    sal_context,
-                    tabs["overview"],
-                    ["quote"],
-                )
-                errors.extend(sal_errors)
-                quote_payload = sal_payloads.get("quote")
-                if quote_payload:
-                    overview = parse_sal_overview_json(quote_payload, fallback=bundle["overview"])
-                    overview.update({
-                        "morningstar_fund_id": candidate["morningstar_fund_id"],
-                        "scheme_url": scheme_url,
-                        "tabs": tabs,
-                        "raw_html_path": overview_page["path"],
-                        "raw_json_path": json_dumps(sal_paths),
-                        "raw_json": {
-                            "quote_payload_path": sal_paths.get("quote"),
-                            "overview_stats": overview.get("overview_stats", {}),
-                        },
-                        "source_page_url": tabs["overview"],
-                    })
-                    bundle["overview"] = overview
-
-            try:
-                performance_page = self._download_html(
-                    trade_date,
-                    tabs["performance"],
-                    SOURCE_TABS,
-                    f"{candidate['morningstar_fund_id']}_performance",
-                    use_cache=False,
-                )
-                performance_fallback = parse_performance_page(performance_page["text"], tabs["performance"])
-                performance_fallback["raw_html_path"] = performance_page["path"]
-                performance_fallback["source_page_url"] = tabs["performance"]
-                performance_fallback["raw_json"] = {"tables": performance_fallback.get("tables", [])}
-                bundle["performance"] = performance_fallback
-                if sal_context:
-                    sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
-                        trade_date,
-                        candidate["morningstar_fund_id"],
-                        sal_context,
-                        tabs["performance"],
-                        ["performance_chart", "performance_table", "trailing_returns"],
-                    )
-                    errors.extend(sal_errors)
-                    if sal_payloads.get("performance_chart") and sal_payloads.get("trailing_returns"):
-                        performance = parse_sal_performance_json(
-                            sal_payloads.get("performance_chart"),
-                            sal_payloads.get("trailing_returns"),
-                            sal_payloads.get("performance_table"),
-                        )
-                        performance.update({
-                            "morningstar_fund_id": candidate["morningstar_fund_id"],
-                            "scheme_url": scheme_url,
-                            "raw_html_path": performance_page["path"],
-                            "raw_json_path": json_dumps(sal_paths),
-                            "raw_json": {
-                                "performance_chart_path": sal_paths.get("performance_chart"),
-                                "performance_table_path": sal_paths.get("performance_table"),
-                                "trailing_returns_path": sal_paths.get("trailing_returns"),
-                                "annual_table": performance.get("annual_table"),
-                            },
-                            "source_page_url": tabs["performance"],
-                        })
-                        bundle["performance"] = performance
-            except Exception as exc:
-                errors.append(f"{scheme_url} performance: {exc}")
-
-            try:
-                risk_page = self._download_html(
-                    trade_date,
-                    tabs["risk"],
-                    SOURCE_TABS,
-                    f"{candidate['morningstar_fund_id']}_risk",
-                    use_cache=False,
-                )
-                risk_fallback = parse_risk_page(risk_page["text"], tabs["risk"])
-                risk_fallback["raw_html_path"] = risk_page["path"]
-                risk_fallback["source_page_url"] = tabs["risk"]
-                risk_fallback["raw_json"] = {"tables": risk_fallback.get("tables", [])}
-                bundle["risk"] = risk_fallback
-                if sal_context:
-                    sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
-                        trade_date,
-                        candidate["morningstar_fund_id"],
-                        sal_context,
-                        tabs["risk"],
-                        ["risk_summary", "risk_volatility", "risk_scatter", "market_volatility"],
-                    )
-                    errors.extend(sal_errors)
-                    if sal_payloads.get("risk_volatility") and sal_payloads.get("risk_summary") and sal_payloads.get("market_volatility"):
-                        risk = parse_sal_risk_json(
-                            quote_payload,
-                            sal_payloads.get("risk_volatility"),
-                            sal_payloads.get("risk_summary"),
-                            sal_payloads.get("market_volatility"),
-                            sal_payloads.get("risk_scatter"),
-                        )
-                        risk.update({
-                            "morningstar_fund_id": candidate["morningstar_fund_id"],
-                            "scheme_url": scheme_url,
-                            "raw_html_path": risk_page["path"],
-                            "raw_json_path": json_dumps(sal_paths),
-                            "raw_json": {
-                                "risk_summary_path": sal_paths.get("risk_summary"),
-                                "risk_volatility_path": sal_paths.get("risk_volatility"),
-                                "risk_scatter_path": sal_paths.get("risk_scatter"),
-                                "market_volatility_path": sal_paths.get("market_volatility"),
-                                "selected_period": risk.get("selected_period"),
-                            },
-                            "source_page_url": tabs["risk"],
-                        })
-                        bundle["risk"] = risk
-            except Exception as exc:
-                errors.append(f"{scheme_url} risk: {exc}")
-
-            try:
-                portfolio_page = self._download_html(
-                    trade_date,
-                    tabs["portfolio"],
-                    SOURCE_TABS,
-                    f"{candidate['morningstar_fund_id']}_portfolio",
-                    use_cache=False,
-                )
-                portfolio_fallback = parse_portfolio_page(portfolio_page["text"], tabs["portfolio"])
-                portfolio_fallback["raw_html_path"] = portfolio_page["path"]
-                portfolio_fallback["source_page_url"] = tabs["portfolio"]
-                portfolio_fallback["raw_json"] = {"tables": portfolio_fallback.get("tables", [])}
-                bundle["portfolio"] = portfolio_fallback
-                if sal_context:
-                    sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
-                        trade_date,
-                        candidate["morningstar_fund_id"],
-                        sal_context,
-                        tabs["portfolio"],
-                        ["asset_allocation", "ownership_zone", "people"],
-                    )
-                    errors.extend(sal_errors)
-                    people_payload = sal_payloads.get("people")
-                    if quote_payload and sal_payloads.get("asset_allocation") and sal_payloads.get("ownership_zone"):
-                        portfolio = parse_sal_portfolio_json(
-                            quote_payload,
-                            sal_payloads.get("asset_allocation"),
-                            sal_payloads.get("ownership_zone"),
-                            people_payload,
-                        )
-                        portfolio.update({
-                            "morningstar_fund_id": candidate["morningstar_fund_id"],
-                            "scheme_url": scheme_url,
-                            "raw_html_path": portfolio_page["path"],
-                            "raw_json_path": json_dumps(sal_paths),
-                            "raw_json": {
-                                "asset_allocation_path": sal_paths.get("asset_allocation"),
-                                "ownership_zone_path": sal_paths.get("ownership_zone"),
-                                "people_path": sal_paths.get("people"),
-                                "manager_summary": portfolio.get("manager_summary", {}),
-                            },
-                            "source_page_url": tabs["portfolio"],
-                        })
-                        bundle["portfolio"] = portfolio
-                        if quote_payload:
-                            overview = parse_sal_overview_json(quote_payload, people_payload, fallback=bundle["overview"])
-                            overview.update({
-                                "morningstar_fund_id": candidate["morningstar_fund_id"],
-                                "scheme_url": scheme_url,
-                                "tabs": tabs,
-                                "raw_html_path": overview_page["path"],
-                                "raw_json_path": bundle["overview"].get("raw_json_path"),
-                                "raw_json": {
-                                    **(bundle["overview"].get("raw_json") or {}),
-                                    "people_payload_path": sal_paths.get("people"),
-                                },
-                                "source_page_url": tabs["overview"],
-                            })
-                            bundle["overview"] = overview
-            except Exception as exc:
-                errors.append(f"{scheme_url} portfolio: {exc}")
-
-            try:
-                detailed_page = self._download_html(
-                    trade_date,
-                    tabs["detailed_portfolio"],
-                    SOURCE_TABS,
-                    f"{candidate['morningstar_fund_id']}_detailed_portfolio",
-                    use_cache=False,
-                )
-                detailed_fallback = parse_holdings_page(detailed_page["text"], tabs["detailed_portfolio"])
-                detailed_fallback["raw_html_path"] = detailed_page["path"]
-                detailed_fallback["source_page_url"] = tabs["detailed_portfolio"]
-                detailed_fallback["raw_json"] = {"tables": detailed_fallback.get("tables", [])}
-                bundle["detailed_portfolio"] = detailed_fallback
-                if sal_context:
-                    sal_payloads, sal_paths, sal_errors = self._fetch_sal_bundle(
-                        trade_date,
-                        candidate["morningstar_fund_id"],
-                        sal_context,
-                        tabs["detailed_portfolio"],
-                        ["holdings"],
-                    )
-                    errors.extend(sal_errors)
-                    if sal_payloads.get("holdings"):
-                        detailed = parse_sal_holdings_json(sal_payloads.get("holdings"))
-                        detailed.update({
-                            "morningstar_fund_id": candidate["morningstar_fund_id"],
-                            "scheme_url": scheme_url,
-                            "raw_html_path": detailed_page["path"],
-                            "raw_json_path": json_dumps(sal_paths),
-                            "raw_json": {
-                                "holdings_path": sal_paths.get("holdings"),
-                                "holding_summary": detailed.get("holding_summary", {}),
-                            },
-                            "source_page_url": tabs["detailed_portfolio"],
-                        })
-                        bundle["detailed_portfolio"] = detailed
-            except Exception as exc:
-                errors.append(f"{scheme_url} detailed_portfolio: {exc}")
-
-            if self.include_factsheet:
-                try:
-                    page = self._download_html(trade_date, tabs["factsheet"], SOURCE_FACTSHEETS, f"{candidate['morningstar_fund_id']}_factsheet")
-                    parsed = parse_factsheet_page(page["text"], tabs["factsheet"])
-                    parsed["raw_html_path"] = page["path"]
-                    parsed["source_page_url"] = tabs["factsheet"]
-                    bundle["factsheet"] = parsed
-                except Exception as exc:
-                    errors.append(f"{scheme_url} factsheet: {exc}")
-            if self.include_analysis:
-                try:
-                    page = self._download_html(trade_date, tabs["analysis"], SOURCE_TABS, f"{candidate['morningstar_fund_id']}_analysis")
-                    bundle["analysis"] = {
-                        "raw_html_path": page["path"],
-                        "source_page_url": tabs["analysis"],
-                        "is_login_gated": 1,
-                    }
-                except Exception as exc:
-                    errors.append(f"{scheme_url} analysis: {exc}")
-            records.append(bundle)
+            bundle, candidate_errors = self._fetch_candidate_bundle(trade_date, candidate)
+            errors.extend(candidate_errors)
+            if bundle:
+                records.append(bundle)
         return {"records": records, "errors": errors}
+
+    def run(self, trade_date: date, conn: DatabaseConnection) -> PipelineRun:  # type: ignore[override]
+        t0 = time.time()
+        run_id = generate_id()
+        errors: List[str] = []
+        inserted = 0
+        skipped = 0
+        try:
+            raw_conn = getattr(conn, "raw_connection", None)
+            if raw_conn is not None:
+                ensure_morningstar_schema_sqlite(raw_conn)
+            if self.use_playwright:
+                logger.info("[MORNINGSTAR] MORNINGSTAR_USE_PLAYWRIGHT is enabled, but v1 still prefers public HTML fetches where possible.")
+            candidates = self._load_candidates()
+            _upsert_pipeline_run(
+                conn,
+                PipelineRun(
+                    id=run_id,
+                    run_date=trade_date.isoformat(),
+                    source=self.SOURCE_ID,
+                    status="PARTIAL",
+                    pipeline_type=self.PIPELINE_TYPE,
+                    records_inserted=0,
+                    records_skipped=0,
+                    error_log=None,
+                    duration_ms=0,
+                ),
+            )
+            conn.commit()
+            for idx, candidate in enumerate(candidates, start=1):
+                bundle, candidate_errors = self._fetch_candidate_bundle(trade_date, candidate)
+                errors.extend(candidate_errors)
+                if bundle:
+                    inserted += self.ingest([bundle], conn)
+                else:
+                    skipped += 1
+                if idx % self.progress_every == 0 or idx == len(candidates):
+                    checkpoint_details = {
+                        "total_candidates": len(candidates),
+                        "last_fund_id": candidate.get("morningstar_fund_id"),
+                        "last_scheme_url": candidate.get("scheme_url"),
+                    }
+                    _insert_pipeline_checkpoint(
+                        conn,
+                        run_id=run_id,
+                        source=self.SOURCE_ID,
+                        processed_count=idx,
+                        inserted_count=inserted,
+                        skipped_count=skipped,
+                        error_count=len(errors),
+                        details=checkpoint_details,
+                    )
+                    _upsert_pipeline_run(
+                        conn,
+                        PipelineRun(
+                            id=run_id,
+                            run_date=trade_date.isoformat(),
+                            source=self.SOURCE_ID,
+                            status="PARTIAL",
+                            pipeline_type=self.PIPELINE_TYPE,
+                            records_inserted=inserted,
+                            records_skipped=skipped,
+                            error_log=json.dumps(errors[:20]) if errors else None,
+                            duration_ms=int((time.time() - t0) * 1000),
+                        ),
+                    )
+                    conn.commit()
+                    logger.info(
+                        "[MORNINGSTAR] details progress processed=%s/%s inserted=%s errors=%s",
+                        idx,
+                        len(candidates),
+                        inserted,
+                        len(errors),
+                    )
+            status = "PARTIAL" if errors else "SUCCESS"
+            return PipelineRun(
+                id=run_id,
+                run_date=trade_date.isoformat(),
+                source=self.SOURCE_ID,
+                status=status,
+                pipeline_type=self.PIPELINE_TYPE,
+                records_inserted=inserted,
+                records_skipped=skipped,
+                circuit_breaks=0,
+                error_log=json.dumps(errors[:20]) if errors else None,
+                duration_ms=int((time.time() - t0) * 1000),
+            )
+        except Exception as exc:
+            logger.exception("[%s] failed", self.SOURCE_ID)
+            conn.rollback()
+            failed_run = PipelineRun(
+                id=run_id,
+                run_date=trade_date.isoformat(),
+                source=self.SOURCE_ID,
+                status="FAILED",
+                pipeline_type=self.PIPELINE_TYPE,
+                records_inserted=inserted,
+                records_skipped=skipped,
+                error_log=str(exc),
+                duration_ms=int((time.time() - t0) * 1000),
+            )
+            _upsert_pipeline_run(conn, failed_run)
+            conn.commit()
+            return failed_run
 
     def _upsert_overview(self, conn: DatabaseConnection, asset_id: Optional[str], overview: Dict[str, Any]) -> None:
         conn.execute(
