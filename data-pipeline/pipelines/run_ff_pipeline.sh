@@ -22,14 +22,14 @@ echo ""
 
 # Step 1: Verify database has data
 echo "Step 1: Verifying database..."
-sqlite3 ../db/market_data.db "SELECT 'Assets: ' || COUNT(*) FROM assets WHERE asset_class = 'EQUITY';"
-sqlite3 ../db/market_data.db "SELECT 'Price records: ' || COUNT(*) FROM daily_prices WHERE adj_close IS NOT NULL;"
-sqlite3 ../db/market_data.db "SELECT 'Date range: ' || MIN(date) || ' to ' || MAX(date) FROM daily_prices WHERE adj_close IS NOT NULL;"
+docker exec artha_postgres  psql -U artha -d artha_relational -tAc "SELECT 'Assets: ' || COUNT(*) FROM assets WHERE asset_class = 'EQUITY';"
+docker exec artha_timescale psql -U artha -d artha_timeseries -tAc "SELECT 'Price records: ' || COUNT(*) FROM daily_prices WHERE adj_close IS NOT NULL;"
+docker exec artha_timescale psql -U artha -d artha_timeseries -tAc "SELECT 'Date range: ' || MIN(date)::text || ' to ' || MAX(date)::text FROM daily_prices WHERE adj_close IS NOT NULL;"
 echo ""
 
 # Step 2: Download IIMA validation data (if not already done)
 echo "Step 2: Downloading IIMA validation data..."
-if ! sqlite3 ../db/market_data.db "SELECT COUNT(*) FROM ff_factor_returns WHERE source = 'IIMA';" | grep -q "^[1-9]"; then
+if ! docker exec artha_timescale psql -U artha -d artha_timeseries -tAc "SELECT COUNT(*) FROM ff_factor_returns WHERE source = 'IIMA';" | grep -q "^[1-9]"; then
     echo "  Downloading IIMA daily factors..."
     python3 ff_iima_downloader.py --frequency daily
 else
@@ -63,9 +63,9 @@ echo "Pipeline Complete!"
 echo "=========================================="
 echo ""
 echo "Results:"
-sqlite3 ../db/market_data.db "SELECT 'Computed factors: ' || COUNT(*) FROM ff_factor_returns WHERE source = 'COMPUTED';"
-sqlite3 ../db/market_data.db "SELECT 'IIMA factors: ' || COUNT(*) FROM ff_factor_returns WHERE source = 'IIMA';"
-sqlite3 ../db/market_data.db "SELECT 'Validation records: ' || COUNT(*) FROM ff_validation;"
+docker exec artha_timescale psql -U artha -d artha_timeseries -tAc "SELECT 'Computed factors: ' || COUNT(*) FROM ff_factor_returns WHERE source = 'COMPUTED';"
+docker exec artha_timescale psql -U artha -d artha_timeseries -tAc "SELECT 'IIMA factors: ' || COUNT(*) FROM ff_factor_returns WHERE source = 'IIMA';"
+docker exec artha_timescale psql -U artha -d artha_timeseries -tAc "SELECT 'Validation records: ' || COUNT(*) FROM ff_validation_metrics;"
 echo ""
 echo "Logs saved to:"
 echo "  - ff_computation_${START_DATE}_${END_DATE}.log"
