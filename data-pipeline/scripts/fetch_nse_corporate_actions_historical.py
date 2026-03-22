@@ -112,7 +112,7 @@ def get_symbol_name(symbol: str) -> Optional[str]:
         row = conn.execute("""
             SELECT name 
             FROM assets 
-            WHERE nse_symbol = ?
+            WHERE nse_symbol = %s
             LIMIT 1
         """, (symbol,)).fetchone()
     

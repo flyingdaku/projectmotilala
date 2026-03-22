@@ -19,7 +19,7 @@ import logging
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.db import get_connection, generate_id
+from core.db import get_connection, get_prices_db, generate_id
 from utils.alerts import send_telegram_alert
 
 logger = logging.getLogger(__name__)
@@ -39,31 +39,31 @@ def calculate_deviation_pct(value1: Optional[float], value2: Optional[float]) ->
     return abs((value2 - value1) / value1 * 100)
 
 
-def get_price_data(conn, asset_id: str, trade_date: date, source: str) -> Optional[Dict[str, Any]]:
+def get_price_data(meta_conn, prices_conn, asset_id: str, trade_date: date, source: str) -> Optional[Dict[str, Any]]:
     """Get price data for an asset from a specific source."""
     if source in ("NSE", "BSE"):
-        row = conn.execute("""
+        row = prices_conn.execute("""
             SELECT close, adj_close, volume
             FROM daily_prices
-            WHERE asset_id = ? AND date = ? AND source_exchange = ?
+            WHERE asset_id = %s AND date = %s AND source_exchange = %s
         """, (asset_id, trade_date.isoformat(), source)).fetchone()
     elif source in ("EODHD_NSE", "EODHD_BSE"):
         exchange = source.replace("EODHD_", "")
-        row = conn.execute("""
+        row = meta_conn.execute("""
             SELECT close, adjusted_close as adj_close, volume
             FROM eodhd_daily_prices
-            WHERE asset_id = ? AND date = ? AND exchange = ?
+            WHERE asset_id = %s AND date = %s AND exchange = %s
         """, (asset_id, trade_date.isoformat(), exchange)).fetchone()
     else:
         return None
-    
+
     if row:
         return {
             "close": row["close"],
             "adj_close": row["adj_close"],
             "volume": row["volume"]
         }
-    
+
     return None
 
 
@@ -155,18 +155,18 @@ def reconcile_prices(trade_date: date, alert_on_major: bool = True) -> Dict[str,
     """
     logger.info(f"Reconciling prices for {trade_date}...")
     
-    with get_connection() as conn:
-        
+    with get_connection() as meta_conn, get_prices_db() as prices_conn:
+
         # Get all assets with EODHD mappings
-        assets = conn.execute("""
+        assets = meta_conn.execute("""
             SELECT DISTINCT a.id, a.nse_symbol, a.name
             FROM assets a
             JOIN eodhd_symbol_mapping esm ON a.id = esm.asset_id
             WHERE a.is_active = 1 AND esm.is_active = 1
         """).fetchall()
-        
+
         logger.info(f"Reconciling {len(assets)} assets...")
-        
+
         stats = {
             "total": len(assets),
             "match": 0,
@@ -175,19 +175,19 @@ def reconcile_prices(trade_date: date, alert_on_major: bool = True) -> Dict[str,
             "missing_source": 0,
             "eodhd_only": 0
         }
-        
+
         major_deviations = []
-        
+
         for asset in assets:
             asset_id = asset["id"]
             nse_symbol = asset["nse_symbol"]
             name = asset["name"]
-            
+
             # Get price data from all sources
-            nse_data = get_price_data(conn, asset_id, trade_date, "NSE")
-            bse_data = get_price_data(conn, asset_id, trade_date, "BSE")
-            eodhd_nse_data = get_price_data(conn, asset_id, trade_date, "EODHD_NSE")
-            eodhd_bse_data = get_price_data(conn, asset_id, trade_date, "EODHD_BSE")
+            nse_data = get_price_data(meta_conn, prices_conn, asset_id, trade_date, "NSE")
+            bse_data = get_price_data(meta_conn, prices_conn, asset_id, trade_date, "BSE")
+            eodhd_nse_data = get_price_data(meta_conn, prices_conn, asset_id, trade_date, "EODHD_NSE")
+            eodhd_bse_data = get_price_data(meta_conn, prices_conn, asset_id, trade_date, "EODHD_BSE")
             
             # Determine status and flags
             status, flags = determine_status_and_flags(
@@ -206,12 +206,22 @@ def reconcile_prices(trade_date: date, alert_on_major: bool = True) -> Dict[str,
                     )
             
             # Insert reconciliation record
-            conn.execute("""
-                INSERT OR REPLACE INTO price_reconciliation
+            meta_conn.execute("""
+                INSERT INTO price_reconciliation
                 (id, asset_id, date, nse_close, bse_close, eodhd_nse_close, eodhd_bse_close,
                  internal_adj_close, eodhd_adj_close, close_deviation_pct, adj_close_deviation_pct,
                  volume_nse, volume_eodhd, status, flags, reconciled_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (asset_id, date) DO UPDATE SET
+                  nse_close = EXCLUDED.nse_close, bse_close = EXCLUDED.bse_close,
+                  eodhd_nse_close = EXCLUDED.eodhd_nse_close, eodhd_bse_close = EXCLUDED.eodhd_bse_close,
+                  internal_adj_close = EXCLUDED.internal_adj_close,
+                  eodhd_adj_close = EXCLUDED.eodhd_adj_close,
+                  close_deviation_pct = EXCLUDED.close_deviation_pct,
+                  adj_close_deviation_pct = EXCLUDED.adj_close_deviation_pct,
+                  volume_nse = EXCLUDED.volume_nse, volume_eodhd = EXCLUDED.volume_eodhd,
+                  status = EXCLUDED.status, flags = EXCLUDED.flags,
+                  reconciled_at = EXCLUDED.reconciled_at
             """, (
                 generate_id(),
                 asset_id,

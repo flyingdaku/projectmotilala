@@ -35,7 +35,7 @@ def run_morningstar_directory_pipeline(trade_date: date) -> object:
             INSERT INTO pipeline_runs (
               id, run_date, source, status, pipeline_type,
               records_inserted, records_skipped, circuit_breaks, error_log, duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT(id) DO UPDATE SET
               run_date = excluded.run_date,
               source = excluded.source,
@@ -73,7 +73,7 @@ def run_morningstar_detail_pipeline(trade_date: date, limit: Optional[int] = Non
             INSERT INTO pipeline_runs (
               id, run_date, source, status, pipeline_type,
               records_inserted, records_skipped, circuit_breaks, error_log, duration_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT(id) DO UPDATE SET
               run_date = excluded.run_date,
               source = excluded.source,

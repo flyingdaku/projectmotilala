@@ -54,20 +54,22 @@ def main():
                             weight = (ffmc / total_ffmc) * 100.0
                             
                             # Resolve asset_id
-                            stock_row = conn.execute("SELECT id FROM assets WHERE nse_symbol = ?", (sym,)).fetchone()
+                            stock_row = conn.execute("SELECT id FROM assets WHERE nse_symbol = %s", (sym,)).fetchone()
                             if stock_row:
                                 stock_id = stock_row['id']
                             else:
                                 stock_id = generate_id()
                                 conn.execute(
-                                    "INSERT INTO assets (id, nse_symbol, name, asset_class, is_active) VALUES (?, ?, ?, 'EQUITY', 1)",
+                                    "INSERT INTO assets (id, nse_symbol, name, asset_class, is_active) VALUES (%s, %s, %s, 'EQUITY', 1) ON CONFLICT (id) DO NOTHING",
                                     (stock_id, sym, sym)
                                 )
                                 
                             conn.execute(
-                                """INSERT OR REPLACE INTO index_constituents 
+                                """INSERT INTO index_constituents 
                                    (index_id, asset_id, date, weight, ffmc)
-                                   VALUES (?, ?, ?, ?, ?)""",
+                                   VALUES (%s, %s, %s, %s, %s)
+                                   ON CONFLICT (index_id, asset_id, date) DO UPDATE SET
+                                     weight = EXCLUDED.weight, ffmc = EXCLUDED.ffmc""",
                                 (idx_id, stock_id, trade_date, weight, ffmc)
                             )
                             inserted += 1

@@ -135,9 +135,12 @@ def fetch_index(index_name: str, start_date: date, end_date: date) -> Tuple[str,
 
 def write_index(conn, idx_id: str, rows: List[Tuple], src_exchange: str):
     conn.executemany(
-        """INSERT OR REPLACE INTO daily_prices
+        """INSERT INTO daily_prices
            (asset_id, date, open, high, low, close, source_exchange, is_verified)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 1)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, 1)
+           ON CONFLICT (asset_id, date, source_exchange) DO UPDATE SET
+             open = EXCLUDED.open, high = EXCLUDED.high,
+             low = EXCLUDED.low, close = EXCLUDED.close""",
         [(idx_id, iso_date, o, h, l, c, src_exchange) for iso_date, o, h, l, c in rows],
     )
 
@@ -161,11 +164,11 @@ def main():
             target = []
             for name in args.indices:
                 symbol = f"^{name.upper().replace(' ', '')}"
-                row = conn.execute("SELECT id FROM assets WHERE nse_symbol = ?", (symbol,)).fetchone()
+                row = conn.execute("SELECT id FROM assets WHERE nse_symbol = %s", (symbol,)).fetchone()
                 if not row:
                     idx_id = generate_id()
                     conn.execute(
-                        "INSERT INTO assets (id, nse_symbol, name, asset_class, is_active) VALUES (?, ?, ?, 'INDEX', 1)",
+                        "INSERT INTO assets (id, nse_symbol, name, asset_class, is_active) VALUES (%s, %s, %s, 'INDEX', 1) ON CONFLICT (id) DO NOTHING",
                         (idx_id, symbol, name))
                 else:
                     idx_id = row["id"]
@@ -188,9 +191,9 @@ def main():
                 if not name:
                     continue
                 symbol = f"^{name.upper().replace(' ', '')}"
-                if not conn.execute("SELECT 1 FROM assets WHERE nse_symbol = ?", (symbol,)).fetchone():
+                if not conn.execute("SELECT 1 FROM assets WHERE nse_symbol = %s", (symbol,)).fetchone():
                     conn.execute(
-                        "INSERT INTO assets (id, nse_symbol, name, asset_class, is_active) VALUES (?, ?, ?, 'INDEX', 1)",
+                        "INSERT INTO assets (id, nse_symbol, name, asset_class, is_active) VALUES (%s, %s, %s, 'INDEX', 1) ON CONFLICT (id) DO NOTHING",
                         (generate_id(), symbol, name))
 
             rows = conn.execute("SELECT id, name, nse_symbol FROM assets WHERE asset_class = 'INDEX'").fetchall()

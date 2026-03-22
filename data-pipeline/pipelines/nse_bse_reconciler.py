@@ -34,7 +34,7 @@ def run_reconciliation(from_date: date, to_date: date, raise_on_critical: bool =
             SELECT ca.*, a.nse_symbol, a.name 
             FROM corporate_actions ca
             JOIN assets a ON a.id = ca.asset_id
-            WHERE ca.source_exchange = 'NSE' AND ca.ex_date BETWEEN ? AND ?
+            WHERE ca.source_exchange = 'NSE' AND ca.ex_date BETWEEN %s AND %s
         """, (start_date, end_date)).fetchall()
         
         # Get BSE actions
@@ -42,7 +42,7 @@ def run_reconciliation(from_date: date, to_date: date, raise_on_critical: bool =
             SELECT ca.*, a.bse_code, a.name 
             FROM corporate_actions ca
             JOIN assets a ON a.id = ca.asset_id
-            WHERE ca.source_exchange = 'BSE' AND ca.ex_date BETWEEN ? AND ?
+            WHERE ca.source_exchange = 'BSE' AND ca.ex_date BETWEEN %s AND %s
         """, (start_date, end_date)).fetchall()
         
     # Group by asset_id and action_type

@@ -11,7 +11,7 @@ import requests
 from datetime import date, datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 
-from core.db import get_db, generate_id
+from core.db import get_db, get_prices_db, generate_id
 from utils.storage import save_raw_file, raw_file_exists, load_raw_file
 from pipelines.bse_corporate_actions_parser import (
     classify_bse_action,
@@ -119,10 +119,10 @@ def _parse_bse_action_record(raw: dict, bse_cache: dict, isin_cache: dict) -> Op
     # Calculate adjustment factor
     from pipelines.corporate_actions import calculate_adjustment_factor
     prev_close = 0.0
-    with get_db() as conn:
-        prev_row = conn.execute("""
+    with get_prices_db() as ts_conn:
+        prev_row = ts_conn.execute("""
             SELECT close FROM daily_prices
-            WHERE asset_id = ? AND date < ?
+            WHERE asset_id = %s AND date < %s
             ORDER BY date DESC LIMIT 1
         """, (asset_id, ex_date.isoformat())).fetchone()
         if prev_row:
@@ -231,18 +231,20 @@ def run_bse_corporate_actions_pipeline(from_date: date, to_date: date):
 
             with get_db() as conn:
                 conn.executemany("""
-                    INSERT OR IGNORE INTO corporate_actions
+                    INSERT INTO corporate_actions
                     (id, asset_id, action_type, ex_date, ratio_numerator, ratio_denominator,
                      dividend_amount, rights_price, adjustment_factor, source_exchange, raw_announcement)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (asset_id, ex_date, action_type) DO NOTHING
                 """, batch)
 
                 if src_batch:
                     conn.executemany("""
-                        INSERT OR IGNORE INTO src_bse_corporate_actions
+                        INSERT INTO src_bse_corporate_actions
                         (id, asset_id, scrip_code, scrip_name, purpose, ex_date, record_date, 
                          bc_start_date, bc_end_date, nd_start_date, nd_end_date, raw_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (id) DO NOTHING
                     """, src_batch)
 
             inserted += len(batch)

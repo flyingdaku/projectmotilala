@@ -40,9 +40,12 @@ def _ingest_intraday_rows(conn: Any, rows: List[Dict], asset_id: str, eodhd_symb
         
         try:
             conn.execute("""
-                INSERT OR REPLACE INTO eodhd_intraday_prices
+                INSERT INTO eodhd_intraday_prices
                 (asset_id, timestamp, resolution, open, high, low, close, volume, eodhd_symbol, exchange, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (asset_id, timestamp, resolution) DO UPDATE SET
+                  open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                  close = EXCLUDED.close, volume = EXCLUDED.volume, fetched_at = EXCLUDED.fetched_at
             """, (
                 asset_id, dt_str, resolution,
                 row.get("open"), row.get("high"), row.get("low"), row.get("close"),

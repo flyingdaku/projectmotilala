@@ -30,7 +30,7 @@ def get_last_ingested_date(source: str) -> date:
     """Return the most recent date we have data for, from pipeline_runs."""
     row = execute_one(
         """SELECT MAX(run_date) as last_date FROM pipeline_runs
-           WHERE source = ? AND status = 'SUCCESS'""",
+           WHERE source = %s AND status = 'SUCCESS'""",
         (source,),
     )
     if row and row["last_date"]:
@@ -45,7 +45,7 @@ def _run_single_nse(trade_date, skip_existing):
     if skip_existing:
         existing = execute_one(
             """SELECT 1 FROM pipeline_runs
-               WHERE source = 'NSE_BHAVCOPY' AND run_date = ? AND status = 'SUCCESS'""",
+               WHERE source = 'NSE_BHAVCOPY' AND run_date = %s AND status = 'SUCCESS'""",
             (trade_date.isoformat(),),
         )
         if existing:
@@ -102,7 +102,7 @@ def _run_single_bse(trade_date, skip_existing):
     if skip_existing:
         existing = execute_one(
             """SELECT 1 FROM pipeline_runs
-               WHERE source = 'BSE_BHAVCOPY' AND run_date = ? AND status = 'SUCCESS'""",
+               WHERE source = 'BSE_BHAVCOPY' AND run_date = %s AND status = 'SUCCESS'""",
             (trade_date.isoformat(),),
         )
         if existing:
@@ -184,7 +184,7 @@ def backfill_iima_factors(run_date: date, skip_existing: bool = True):
     if skip_existing:
         existing = execute_one(
             """SELECT 1 FROM pipeline_runs
-               WHERE source = 'IIMA_FF' AND run_date = ? AND status = 'SUCCESS'""",
+               WHERE source = 'IIMA_FF' AND run_date = %s AND status = 'SUCCESS'""",
             (run_date.isoformat(),),
         )
         if existing:

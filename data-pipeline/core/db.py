@@ -269,3 +269,38 @@ def get_db(dsn: Optional[str] = None) -> Iterator[PostgresConnection]:
     """
     with get_pg_connection(dsn) as conn:
         yield conn
+
+
+@contextmanager
+def get_prices_db(dsn: Optional[str] = None) -> Iterator[PostgresConnection]:
+    """
+    Connection for the timeseries database (daily_prices, fundamentals, etc.).
+    Use this wherever daily_prices, eodhd_daily_prices, or fundamentals are accessed.
+    """
+    with get_ts_connection(dsn) as conn:
+        yield conn
+
+
+@contextmanager
+def get_metadata_db(dsn: Optional[str] = None) -> Iterator[PostgresConnection]:
+    """
+    Connection for the relational database (assets, corporate_actions, pipeline_runs, etc.).
+    Explicit alias for get_db() / get_pg_connection().
+    """
+    with get_pg_connection(dsn) as conn:
+        yield conn
+
+
+def execute_query_ts(sql: str, params: tuple = ()) -> List[Dict[str, Any]]:
+    """execute_query() routed to the timeseries database."""
+    with get_prices_db() as conn:
+        cursor = conn.execute(sql, params)
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def execute_one_ts(sql: str, params: tuple = ()) -> Optional[Dict[str, Any]]:
+    """execute_one() routed to the timeseries database."""
+    with get_prices_db() as conn:
+        cursor = conn.execute(sql, params)
+        row = cursor.fetchone()
+        return dict(row) if row else None

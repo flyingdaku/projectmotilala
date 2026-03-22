@@ -109,7 +109,7 @@ def main():
 
     with get_db() as conn:
         if args.symbol:
-            assets = conn.execute("SELECT id, nse_symbol, bse_code FROM assets WHERE nse_symbol = ?", (args.symbol,)).fetchall()
+            assets = conn.execute("SELECT id, nse_symbol, bse_code FROM assets WHERE nse_symbol = %s", (args.symbol,)).fetchall()
         else:
             # Prioritize assets with missing descriptions or management
             assets = conn.execute("""
@@ -117,7 +117,7 @@ def main():
                 WHERE is_active = 1 
                 AND (description IS NULL OR management_json IS NULL)
                 ORDER BY nse_listed DESC, bse_listed DESC
-                LIMIT ?
+                LIMIT %s
             """, (args.limit,)).fetchall()
 
     logger.info(f"Processing {len(assets)} assets for official profiles...")
@@ -164,13 +164,13 @@ def main():
             update_cols = []
             vals = []
             for k, v in profile_data.items():
-                update_cols.append(f"{k} = COALESCE({k}, ?)")
+                update_cols.append(f"{k} = COALESCE({k}, %s)")
                 vals.append(v)
             
             if update_cols:
                 vals.append(asset_id)
                 with get_db() as conn:
-                    conn.execute(f"UPDATE assets SET {', '.join(update_cols)} WHERE id = ?", vals)
+                    conn.execute(f"UPDATE assets SET {', '.join(update_cols)} WHERE id = %s", vals)
                 processed += 1
 
         # Throttle to be polite

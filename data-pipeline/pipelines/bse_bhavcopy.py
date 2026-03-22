@@ -16,7 +16,7 @@ import requests
 from utils.alerts import alert_pipeline_failure, alert_pipeline_success
 from utils.calendar import ensure_holiday_cache, is_trading_day
 from utils.circuit_breakers import run_circuit_breakers
-from core.db import generate_id, get_db
+from core.db import generate_id, get_db, get_prices_db
 from utils.storage import load_raw_file, raw_file_exists, save_raw_file
 
 logger = logging.getLogger(__name__)
@@ -241,12 +241,12 @@ def upsert_bse_assets(df: pd.DataFrame):
         # Batch updates
         if update_with_isin:
             conn.executemany(
-                "UPDATE assets SET bse_code = ?, bse_listed = 1, isin = COALESCE(isin, ?) WHERE id = ?",
+                "UPDATE assets SET bse_code = %s, bse_listed = 1, isin = COALESCE(isin, %s) WHERE id = %s",
                 update_with_isin,
             )
         if update_no_isin:
             conn.executemany(
-                "UPDATE assets SET bse_code = ?, bse_listed = 1 WHERE id = ?",
+                "UPDATE assets SET bse_code = %s, bse_listed = 1 WHERE id = %s",
                 update_no_isin,
             )
         # Batch insert new assets
@@ -254,7 +254,8 @@ def upsert_bse_assets(df: pd.DataFrame):
             conn.executemany(
                 """INSERT INTO assets
                    (id, isin, bse_code, name, asset_class, bse_listed, is_active)
-                   VALUES (?, ?, ?, ?, 'EQUITY', 1, 1)""",
+                   VALUES (%s, %s, %s, %s, 'EQUITY', 1, 1)
+                   ON CONFLICT (isin) DO NOTHING""",
                 new_assets,
             )
             logger.info(f"Registered {len(new_assets)} new BSE assets")
@@ -262,21 +263,22 @@ def upsert_bse_assets(df: pd.DataFrame):
 
 def insert_bse_prices(df: pd.DataFrame, trade_date: date):
     """
-    Insert BSE prices. Only inserts for assets where NSE price is absent
-    (BSE is secondary source; NSE takes priority for dual-listed stocks).
+    Insert BSE prices into the timeseries database. Only inserts for assets
+    where NSE price is absent (BSE is secondary source).
 
     Optimized: resolves asset_ids via in-memory cache, checks NSE presence
     in bulk, then uses executemany for insertion.
     """
     date_str = trade_date.isoformat()
 
-    with get_db() as conn:
-        isin_cache, code_cache = _build_bse_asset_cache(conn)
+    with get_db() as meta_conn:
+        isin_cache, code_cache = _build_bse_asset_cache(meta_conn)
 
+    with get_prices_db() as conn:
         # Pre-fetch which asset_ids already have an NSE price for this date
         nse_present = set()
         nse_rows = conn.execute(
-            "SELECT asset_id FROM daily_prices WHERE date = ? AND source_exchange = 'NSE'",
+            "SELECT asset_id FROM daily_prices WHERE date = %s AND source_exchange = 'NSE'",
             (date_str,),
         ).fetchall()
         for r in nse_rows:
@@ -310,9 +312,13 @@ def insert_bse_prices(df: pd.DataFrame, trade_date: date):
 
         if price_rows:
             conn.executemany(
-                """INSERT OR REPLACE INTO daily_prices
+                """INSERT INTO daily_prices
                    (asset_id, date, open, high, low, close, adj_close, volume, trades, source_exchange)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'BSE')""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'BSE')
+                   ON CONFLICT (asset_id, date, source_exchange) DO UPDATE SET
+                     open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                     close = EXCLUDED.close, adj_close = EXCLUDED.adj_close,
+                     volume = EXCLUDED.volume, trades = EXCLUDED.trades""",
                 price_rows,
             )
 
@@ -352,7 +358,7 @@ def run_bse_bhavcopy_pipeline(trade_date: date = None):
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, records_inserted, records_skipped, circuit_breaks, duration_ms)
-                   VALUES (?, ?, ?, 'SUCCESS', ?, ?, ?, ?)""",
+                   VALUES (%s, %s, %s, 'SUCCESS', %s, %s, %s, %s)""",
                 (run_id, trade_date.isoformat(), source, records_inserted,
                  len(df_raw) - records_inserted, len(flagged), duration_ms),
             )
@@ -367,7 +373,7 @@ def run_bse_bhavcopy_pipeline(trade_date: date = None):
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, error_log, duration_ms)
-                   VALUES (?, ?, ?, 'FAILED', ?, ?)""",
+                   VALUES (%s, %s, %s, 'FAILED', %s, %s)""",
                 (run_id, trade_date.isoformat(), source, str(e), duration_ms),
             )
         alert_pipeline_failure(source, str(e), trade_date.isoformat())

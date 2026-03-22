@@ -25,24 +25,20 @@ export const BACKTEST_LINKS = [
   { name: "Backtest Portfolio", href: "/backtest" },
   { name: "Backtest Tactical Allocation", href: "/analytics/tactical-allocation" },
   { name: "Backtest Dynamic Allocation", href: "/analytics/dynamic-allocation" },
-  { name: "Manager Performance Analysis", href: "/analytics/manager-performance" },
 ];
 
 export const ASSET_LINKS = [
-  { name: "Asset Class Correlations", href: "/analytics/asset-class-correlations" },
   { name: "Asset Correlations", href: "/analytics/asset-correlations" },
   { name: "Asset Autocorrelations", href: "/analytics/autocorrelations" },
   { name: "Asset Cointegration", href: "/analytics/cointegration" },
 ];
 
 export const FACTOR_LINKS = [
-  { name: "Factor Analysis", href: "/analytics/factor-analysis" },
   { name: "Factor Regression", href: "/analytics/factor-regression" },
   { name: "Risk Factor Allocation", href: "/analytics/risk-factor-allocation" },
   { name: "Principal Component Analysis", href: "/analytics/pca" },
   { name: "Fund Factor Regressions", href: "/analytics/fund-factor-regressions" },
   { name: "Fund Rankings", href: "/analytics/fund-rankings" },
-  { name: "Manager Performance", href: "/analytics/manager-performance" },
 ];
 
 export const QUANT_LINKS = [

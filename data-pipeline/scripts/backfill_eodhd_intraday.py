@@ -50,9 +50,12 @@ def _ingest_intraday_rows(conn: Any, rows: List[Dict], asset_id: str, eodhd_symb
         
         try:
             conn.execute("""
-                INSERT OR REPLACE INTO eodhd_intraday_prices
+                INSERT INTO eodhd_intraday_prices
                 (asset_id, timestamp, resolution, open, high, low, close, volume, eodhd_symbol, exchange, fetched_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (asset_id, timestamp, resolution, exchange) DO UPDATE SET
+                  open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
+                  close=EXCLUDED.close, volume=EXCLUDED.volume, fetched_at=EXCLUDED.fetched_at
             """, (
                 asset_id, dt_str, resolution,
                 row.get("open"), row.get("high"), row.get("low"), row.get("close"),
@@ -81,7 +84,7 @@ def backfill_symbol_intraday(
         existing = conn.execute("""
             SELECT 1 as has_data
             FROM eodhd_intraday_prices
-            WHERE asset_id = ? AND resolution = ? AND exchange = ?
+            WHERE asset_id = %s AND resolution = %s AND exchange = %s
             LIMIT 1
         """, (asset_id, interval, exchange)).fetchone()
         
@@ -148,7 +151,7 @@ def main():
         q_parts = ["SELECT asset_id, eodhd_nse_symbol, eodhd_bse_symbol FROM eodhd_symbol_mapping WHERE is_active = 1"]
         params = []
         if args.symbol:
-            q_parts.append("AND (eodhd_nse_symbol = ? OR eodhd_bse_symbol = ?)")
+            q_parts.append("AND (eodhd_nse_symbol = %s OR eodhd_bse_symbol = %s)")
             eodhd_sym = f"{args.symbol.upper()}.{args.exchange}"
             params += [eodhd_sym, eodhd_sym.replace(f".{args.exchange}", ".BSE")]
             

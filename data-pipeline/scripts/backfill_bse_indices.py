@@ -28,7 +28,7 @@ def resolve_asset(conn, name: str) -> str:
     """Find or create asset."""
     # Ensure it's a valid string mapping, not numeric since some ids match
     asset = conn.execute(
-        "SELECT id FROM assets WHERE name = ? AND asset_class = 'INDEX'",
+        "SELECT id FROM assets WHERE name = %s AND asset_class = 'INDEX'",
         (name,)
     ).fetchone()
     
@@ -37,7 +37,7 @@ def resolve_asset(conn, name: str) -> str:
         
     asset_id = generate_id()
     conn.execute(
-        "INSERT INTO assets (id, name, asset_class, is_active) VALUES (?, ?, 'INDEX', 1)",
+        "INSERT INTO assets (id, name, asset_class, is_active) VALUES (%s, %s, 'INDEX', 1) ON CONFLICT (id) DO NOTHING",
         (asset_id, name)
     )
     conn.commit()
@@ -114,18 +114,24 @@ def process_bse_index(idx_id: int, start_date_str: str, end_date_str: str):
                 
             if len(batch) >= 1000:
                 conn.executemany('''
-                    INSERT OR REPLACE INTO daily_prices
+                    INSERT INTO daily_prices
                     (asset_id, date, open, high, low, close, volume, source_exchange)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (asset_id, date, source_exchange) DO UPDATE SET
+                      close = EXCLUDED.close, open = EXCLUDED.open,
+                      high = EXCLUDED.high, low = EXCLUDED.low
                 ''', batch)
                 inserted += len(batch)
                 batch = []
                 
         if batch:
             conn.executemany('''
-                INSERT OR REPLACE INTO daily_prices
+                INSERT INTO daily_prices
                 (asset_id, date, open, high, low, close, volume, source_exchange)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (asset_id, date, source_exchange) DO UPDATE SET
+                  close = EXCLUDED.close, open = EXCLUDED.open,
+                  high = EXCLUDED.high, low = EXCLUDED.low
             ''', batch)
             inserted += len(batch)
             

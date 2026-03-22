@@ -16,7 +16,7 @@ from typing import Optional
 
 from utils.alerts import alert_pipeline_failure, send_telegram_alert
 from utils.calendar import ensure_holiday_cache, get_trading_dates_in_range, is_trading_day
-from core.db import execute_one, execute_query, generate_id, get_db
+from core.db import execute_one, execute_query, execute_one_ts, execute_query_ts, generate_id, get_db
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +35,17 @@ def check_data_completeness(trade_date: date) -> dict:
     if total == 0:
         return {"status": "SKIP", "reason": "No active NSE assets in database"}
 
-    covered = execute_one(
-        """SELECT COUNT(DISTINCT dp.asset_id) as cnt
-           FROM daily_prices dp
-           JOIN assets a ON dp.asset_id = a.id
-           WHERE dp.date = ? AND a.is_active = 1 AND a.nse_listed = 1""",
+    # daily_prices lives in the timeseries DB; assets is in the relational DB.
+    # Fetch distinct asset_ids with prices from timeseries DB, then count overlap
+    # with active NSE assets from relational DB.
+    active_ids = {r["id"] for r in execute_query(
+        "SELECT id FROM assets WHERE is_active = 1 AND nse_listed = 1"
+    )}
+    price_rows = execute_query_ts(
+        "SELECT DISTINCT asset_id FROM daily_prices WHERE date = %s",
         (trade_date.isoformat(),),
-    )["cnt"]
+    )
+    covered = sum(1 for r in price_rows if r["asset_id"] in active_ids)
 
     coverage_pct = (covered / total * 100) if total > 0 else 0.0
     status = "PASS" if coverage_pct >= 95 else "WARN"
@@ -77,16 +81,23 @@ def check_adj_close_integrity() -> dict:
     Find cases where adj_close deviates from close by more than 99% or less than 1%.
     These indicate either a missing corporate action or a calculation error.
     """
-    anomalies = execute_query(
-        """SELECT a.nse_symbol, dp.date, dp.close, dp.adj_close,
-                  ROUND((dp.adj_close / dp.close - 1) * 100, 2) as pct_diff
-           FROM daily_prices dp
-           JOIN assets a ON dp.asset_id = a.id
-           WHERE dp.adj_close IS NOT NULL AND dp.close > 0
-             AND (dp.adj_close > dp.close * 100 OR dp.adj_close < dp.close * 0.01)
-           ORDER BY ABS(dp.adj_close / dp.close - 1) DESC
+    # daily_prices is in timeseries DB; JOIN manually with relational assets
+    symbol_map = {r["id"]: r["nse_symbol"] for r in execute_query(
+        "SELECT id, nse_symbol FROM assets"
+    )}
+    raw_anomalies = execute_query_ts(
+        """SELECT asset_id, date, close, adj_close,
+                  ROUND((adj_close / close - 1) * 100, 2) as pct_diff
+           FROM daily_prices
+           WHERE adj_close IS NOT NULL AND close > 0
+             AND (adj_close > close * 100 OR adj_close < close * 0.01)
+           ORDER BY ABS(adj_close / close - 1) DESC
            LIMIT 20"""
     )
+    anomalies = [
+        {**r, "nse_symbol": symbol_map.get(r["asset_id"], r["asset_id"])}
+        for r in raw_anomalies
+    ]
 
     status = "FAIL" if anomalies else "PASS"
     if anomalies:
@@ -111,7 +122,7 @@ def check_adj_close_integrity() -> dict:
 
 def check_no_duplicate_prices() -> dict:
     """Verify no (asset_id, date) duplicates exist in daily_prices."""
-    duplicates = execute_query(
+    duplicates = execute_query_ts(
         """SELECT asset_id, date, COUNT(*) as cnt
            FROM daily_prices
            GROUP BY asset_id, date
@@ -147,8 +158,8 @@ def check_trading_calendar_consistency(lookback_days: int = 30) -> dict:
 
     expected_trading_dates = get_trading_dates_in_range(start_date, end_date)
 
-    # Dates we actually have data for
-    rows = execute_query(
+    # Dates we actually have data for (timeseries DB)
+    rows = execute_query_ts(
         """SELECT DISTINCT date FROM daily_prices
            WHERE date >= ? AND date <= ?""",
         (start_date.isoformat(), end_date.isoformat()),
@@ -202,7 +213,7 @@ def check_pipeline_run_health(trade_date: date) -> dict:
     results = execute_query(
         """SELECT source, status, records_inserted, circuit_breaks, error_log
            FROM pipeline_runs
-           WHERE run_date = ?
+           WHERE run_date = %s
            ORDER BY created_at DESC""",
         (trade_date.isoformat(),),
     )
@@ -343,7 +354,7 @@ def run_verification_pipeline(trade_date: date = None):
         conn.execute(
             """INSERT INTO pipeline_runs
                (id, run_date, source, status, duration_ms)
-               VALUES (?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s)""",
             (run_id, trade_date.isoformat(), source, overall_status, duration_ms),
         )
 
@@ -408,7 +419,7 @@ def check_price_reconciliation_health(trade_date: date) -> dict:
     Alert if >1% of assets have major deviations.
     """
     total = execute_one(
-        "SELECT COUNT(*) as cnt FROM price_reconciliation WHERE date = ?",
+        "SELECT COUNT(*) as cnt FROM price_reconciliation WHERE date = %s",
         (trade_date.isoformat(),),
     )["cnt"]
 
@@ -417,13 +428,13 @@ def check_price_reconciliation_health(trade_date: date) -> dict:
 
     major_deviations = execute_one(
         """SELECT COUNT(*) as cnt FROM price_reconciliation
-           WHERE date = ? AND status = 'MAJOR_DEVIATION'""",
+           WHERE date = %s AND status = 'MAJOR_DEVIATION'""",
         (trade_date.isoformat(),),
     )["cnt"]
 
     minor_deviations = execute_one(
         """SELECT COUNT(*) as cnt FROM price_reconciliation
-           WHERE date = ? AND status = 'MINOR_DEVIATION'""",
+           WHERE date = %s AND status = 'MINOR_DEVIATION'""",
         (trade_date.isoformat(),),
     )["cnt"]
 
@@ -457,7 +468,7 @@ def check_adjusted_close_validation(trade_date: date) -> dict:
     """
     total = execute_one(
         """SELECT COUNT(*) as cnt FROM price_reconciliation
-           WHERE date = ? AND internal_adj_close IS NOT NULL 
+           WHERE date = %s AND internal_adj_close IS NOT NULL 
            AND eodhd_adj_close IS NOT NULL""",
         (trade_date.isoformat(),),
     )["cnt"]
@@ -467,7 +478,7 @@ def check_adjusted_close_validation(trade_date: date) -> dict:
 
     deviations = execute_one(
         """SELECT COUNT(*) as cnt FROM price_reconciliation
-           WHERE date = ? AND adj_close_deviation_pct > 2.0""",
+           WHERE date = %s AND adj_close_deviation_pct > 2.0""",
         (trade_date.isoformat(),),
     )["cnt"]
 

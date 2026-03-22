@@ -39,7 +39,7 @@ def main():
     for i, td in enumerate(trading_dates):
         # Check if already done
         ex = execute_one(
-            "SELECT 1 FROM pipeline_runs WHERE source='BSE_BHAVCOPY' AND run_date=? AND status='SUCCESS'",
+            "SELECT 1 FROM pipeline_runs WHERE source='BSE_BHAVCOPY' AND run_date=%s AND status='SUCCESS'",
             (td.isoformat(),),
         )
         if ex:

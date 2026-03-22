@@ -32,14 +32,14 @@ logger = logging.getLogger(__name__)
 
 def _resolve_asset_id(conn, asset_id: Optional[str] = None, symbol: Optional[str] = None, isin: Optional[str] = None) -> str:
     if asset_id:
-        row = conn.fetchone("SELECT id FROM assets WHERE id = ?", (asset_id,))
+        row = conn.fetchone("SELECT id FROM assets WHERE id = %s", (asset_id,))
         if row:
             return row["id"]
         raise ValueError(f"Asset id not found: {asset_id}")
     if symbol:
         row = conn.fetchone(
             """SELECT id FROM assets
-               WHERE nse_symbol = ? OR bse_code = ? OR screener_id = ?
+               WHERE nse_symbol = %s OR bse_code = %s OR screener_id = %s
                ORDER BY is_active DESC LIMIT 1""",
             (symbol, symbol, symbol),
         )
@@ -47,7 +47,7 @@ def _resolve_asset_id(conn, asset_id: Optional[str] = None, symbol: Optional[str
             return row["id"]
         raise ValueError(f"Asset symbol not found: {symbol}")
     if isin:
-        row = conn.fetchone("SELECT id FROM assets WHERE isin = ? LIMIT 1", (isin,))
+        row = conn.fetchone("SELECT id FROM assets WHERE isin = %s LIMIT 1", (isin,))
         if row:
             return row["id"]
         raise ValueError(f"Asset ISIN not found: {isin}")

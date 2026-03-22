@@ -1,505 +1,298 @@
-# EODHD Data Source
+# EODHD Pipeline
 
-## Overview
+This document is the consolidated reference for the EODHD integration in the
+Artha data pipeline. It replaces scattered status notes as the main place to
+understand what the pipeline does, where data lands, how it is run, and what
+is still incomplete.
 
-EODHD (End-of-Day Historical Data) is a supplementary validation and gap-filling source for NSE/BSE equity prices. It provides both raw and adjusted OHLCV data through a REST API.
+## Purpose
 
-**Integration Strategy**: EODHD supplements existing NSE/BSE pipelines; it does NOT replace them. NSE/BSE remain the primary sources for Indian market data.
+EODHD is a supplementary market-data source used for:
 
-**API Token**: `685c39e666b732.62337737`
+- end-of-day OHLCV cross-validation
+- adjusted-close validation
+- symbol mapping for alternate coverage
+- corporate-actions cross-checking
+- intraday backfills
 
-## Endpoints
+It is not the primary daily market-data source for Indian equities. NSE/BSE
+and internal adjusted-price computation remain the primary production path.
 
-### 1. EOD Historical Data
-| Format | URL Pattern | Active Period |
-|--------|-------------|---------------|
-| JSON | `https://eodhd.com/api/eod/{SYMBOL}.{EXCHANGE}?api_token={TOKEN}&fmt=json&from={START}&to={END}` | All historical data |
+## Source Code Inventory
 
-**Parameters**:
-- `SYMBOL`: Stock symbol (e.g., RELIANCE)
-- `EXCHANGE`: NSE or BSE
-- `api_token`: API authentication token
-- `fmt`: Response format (json or csv)
-- `from`: Start date (YYYY-MM-DD)
-- `to`: End date (YYYY-MM-DD)
+Core EODHD implementation:
 
-**Response Fields**:
-```json
-[
-  {
-    "date": "2024-01-15",
-    "open": 2450.50,
-    "high": 2475.00,
-    "low": 2440.00,
-    "close": 2460.75,
-    "adjusted_close": 2460.75,
-    "volume": 12500000
-  }
-]
-```
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/client.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/client.py)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/eodhd_eod.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/eodhd_eod.py)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/eodhd_corporate_actions.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/eodhd_corporate_actions.py)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/pipelines/eodhd_reconciliation.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/pipelines/eodhd_reconciliation.py)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/build_eodhd_mapping.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/build_eodhd_mapping.py)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/backfill_eodhd_intraday.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/backfill_eodhd_intraday.py)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/audit_eodhd_ca.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/audit_eodhd_ca.py)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/audit_eodhd_intraday.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/audit_eodhd_intraday.py)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/run_pipeline.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/run_pipeline.py)
 
-**Key Feature**: Returns both `close` (raw) and `adjusted_close` (pre-computed by EODHD) in a single call.
+Supporting docs retained for historical context:
 
-### 2. Exchange Symbol List
-| Format | URL Pattern | Active Period |
-|--------|-------------|---------------|
-| JSON | `https://eodhd.com/api/exchange-symbol-list/{EXCHANGE}?api_token={TOKEN}&fmt=json` | Current |
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/EODHD_AUDIT.md](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/EODHD_AUDIT.md)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/docs/EODHD_INTEGRATION_STATUS.md](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/docs/EODHD_INTEGRATION_STATUS.md)
 
-**Response Fields**:
-```json
-[
-  {
-    "Code": "RELIANCE",
-    "Name": "Reliance Industries Limited",
-    "Country": "India",
-    "Exchange": "NSE",
-    "Currency": "INR",
-    "Type": "Common Stock",
-    "Isin": "INE002A01018"
-  }
-]
-```
+## What The Pipeline Covers
 
-**Usage**: Symbol mapping and discovery.
+### 1. Symbol mapping
 
-### 3. Dividends API
-| Format | URL Pattern | Active Period |
-|--------|-------------|---------------|
-| JSON | `https://eodhd.com/api/div/{SYMBOL}.{EXCHANGE}?api_token={TOKEN}&fmt=json&from={START}` | Historical |
+Script:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/build_eodhd_mapping.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/build_eodhd_mapping.py)
 
-**Usage**: Corporate action validation.
+Purpose:
+- maps internal `assets.id` to EODHD ticker forms
+- supports active and delisted assets
+- prefers ISIN matches
+- falls back to symbol/name heuristics
 
-### 4. Splits API
-| Format | URL Pattern | Active Period |
-|--------|-------------|---------------|
-| JSON | `https://eodhd.com/api/splits/{SYMBOL}.{EXCHANGE}?api_token={TOKEN}&fmt=json&from={START}` | Historical |
+Matching order:
+1. ISIN
+2. NSE symbol / BSE code
+3. normalized company name
 
-**Usage**: Corporate action validation.
+Important behavior:
+- current code treats `NSE` as the only active Indian equity exchange on EODHD
+- BSE exchange codes are explicitly treated as unsupported in the symbol-fetch layer
+- mapping still stores both `eodhd_nse_symbol` and `eodhd_bse_symbol` columns for compatibility
 
-## Rate Limits
+### 2. EOD daily prices
 
-- **Standard Plan**: 20 API calls/second, 100,000 calls/day
-- **Implementation**: 0.05s delay between requests (20 req/sec max)
-- **Retry Strategy**: Exponential backoff on 429 errors
-- **Max Retries**: 5 attempts
+Ingester:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/eodhd_eod.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/eodhd_eod.py)
 
-## Data Coverage
+Client:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/client.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/client.py)
 
-### NSE Coverage
-- **Equities**: ~2,000-2,500 active stocks
-- **Historical Depth**: Varies by symbol, typically 10+ years
-- **Update Frequency**: Daily after market close
+Behavior:
+- uses the EODHD bulk EOD endpoint
+- archives raw JSON under `raw_data/EODHD/`
+- resolves each EODHD code to an internal `asset_id`
+- writes supplementary EOD prices without overwriting primary exchange data
 
-### BSE Coverage
-- **Equities**: ~3,000+ stocks (including BSE-only)
-- **Historical Depth**: Varies by symbol
-- **Update Frequency**: Daily after market close
+Fields captured:
+- `open`
+- `high`
+- `low`
+- `close`
+- `adjusted_close`
+- `volume`
+- `eodhd_symbol`
+- `exchange`
+- `fetched_at`
 
-### Coverage Gaps
-- Not all BSE-only micro-caps available
-- Some delisted stocks may have incomplete history
-- ISIN matching required for reliable symbol mapping
+### 3. Corporate actions
 
-## Symbol Mapping Strategy
+Ingester:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/eodhd_corporate_actions.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/sources/eodhd/eodhd_corporate_actions.py)
 
-### Mapping Process
+Behavior:
+- fetches splits and dividends
+- stores them as validation data against our internal corporate-actions pipeline
+- handles Indian-market limitations in EODHD’s dividend payloads
 
-1. **ISIN-Based Matching** (Primary)
-   - Most reliable method
-   - Fetch EODHD symbol lists for NSE/BSE
-   - Match with `assets` table by ISIN
-   - ~85-90% success rate
+Important limitation:
+- declaration, record, and payment dates are generally not available for Indian stocks in EODHD the way they are for some US securities
 
-2. **Symbol Name Matching** (Fallback)
-   - Normalize symbols (uppercase, remove special chars)
-   - Match by NSE symbol, BSE code, or company name
-   - ~5-10% additional coverage
+### 4. Price reconciliation
 
-3. **Manual Review** (Final)
-   - Unmapped assets logged to `logs/eodhd_unmapped_assets.json`
-   - Quarterly review and manual mapping
+Pipeline:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/pipelines/eodhd_reconciliation.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/pipelines/eodhd_reconciliation.py)
 
-### Mapping Table
+Purpose:
+- compare internal NSE/BSE prices to EODHD prices
+- flag deviations
+- support alerts and downstream verification checks
 
-**Table**: `eodhd_symbol_mapping`
+Status categories:
+- `MATCH`
+- `MINOR_DEVIATION`
+- `MAJOR_DEVIATION`
+- `MISSING_SOURCE`
+- `EODHD_ONLY`
 
-**Fields**:
-- `asset_id`: Internal asset ID (FK to assets)
-- `eodhd_nse_symbol`: EODHD NSE ticker (e.g., RELIANCE.NSE)
-- `eodhd_bse_symbol`: EODHD BSE ticker (e.g., RELIANCE.BSE)
-- `isin`: ISIN code for validation
-- `exchange_preference`: NSE or BSE (for dual-listed stocks)
-- `is_active`: 1 = active, 0 = inactive
-- `last_verified`: Last verification timestamp
-- `notes`: Mapping method and notes
+Current thresholds:
+- close deviation > `0.5%` => minor
+- close deviation > `2.0%` => major
+- adjusted close deviation > `2.0%` => flagged
+- volume deviation > `50%` => flagged
 
-### Building Mappings
+### 5. Intraday backfill
 
-```bash
-# Initial mapping build
-python scripts/build_eodhd_mapping.py
+Script:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/backfill_eodhd_intraday.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/scripts/backfill_eodhd_intraday.py)
 
-# Rebuild all mappings
-python scripts/build_eodhd_mapping.py --refresh
-```
+Purpose:
+- fetch `1h`, `5m`, and optionally `1m` intraday bars
+- backfill by mapped symbol
+- ingest into `eodhd_intraday_prices`
 
-## Data Storage
+Important constraints baked into the script:
+- EODHD intraday requests use Unix timestamps
+- `5m` and `1h` history are expected back to roughly October 2020
+- one request span is capped to about 120 days
 
-### EODHD Daily Prices
+## Database Tables
 
-**Table**: `eodhd_daily_prices`
+### Relational Postgres
 
-**Schema**:
-```sql
-CREATE TABLE eodhd_daily_prices (
-  asset_id TEXT NOT NULL,
-  date TEXT NOT NULL,
-  open REAL,
-  high REAL,
-  low REAL,
-  close REAL NOT NULL,
-  adjusted_close REAL,      -- EODHD's pre-computed adjusted close
-  volume INTEGER,
-  eodhd_symbol TEXT,
-  exchange TEXT,             -- NSE or BSE
-  fetched_at TEXT,
-  PRIMARY KEY (asset_id, date, exchange)
-);
-```
+Defined in:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/db/init-postgres.sql](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/db/init-postgres.sql)
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/db/schema.sql](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/db/schema.sql)
 
-**Key Points**:
-- Stores EODHD's `adjusted_close` separately from our computed `adj_close`
-- Supports both NSE and BSE data for dual-listed stocks
-- Idempotent inserts (INSERT OR REPLACE)
+Relational EODHD tables:
+- `eodhd_symbol_mapping`
+- `eodhd_corporate_actions`
 
-### Price Reconciliation
+### Timescale / time-series Postgres
 
-**Table**: `price_reconciliation`
+Defined in:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/db/init-timescale.sql](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/db/init-timescale.sql)
 
-**Schema**:
-```sql
-CREATE TABLE price_reconciliation (
-  id TEXT PRIMARY KEY,
-  asset_id TEXT NOT NULL,
-  date TEXT NOT NULL,
-  nse_close REAL,
-  bse_close REAL,
-  eodhd_nse_close REAL,
-  eodhd_bse_close REAL,
-  internal_adj_close REAL,  -- Our computed adj_close
-  eodhd_adj_close REAL,     -- EODHD's adjusted_close
-  close_deviation_pct REAL,
-  adj_close_deviation_pct REAL,
-  volume_nse INTEGER,
-  volume_eodhd INTEGER,
-  status TEXT,               -- MATCH, MINOR_DEVIATION, MAJOR_DEVIATION, etc.
-  flags TEXT,                -- JSON array of issues
-  reconciled_at TEXT
-);
-```
+Time-series EODHD tables:
+- `eodhd_daily_prices`
+- `eodhd_intraday_prices`
+- `price_reconciliation`
 
-**Reconciliation Statuses**:
-- `MATCH`: All prices match within thresholds
-- `MINOR_DEVIATION`: Close price deviation 0.5-2%
-- `MAJOR_DEVIATION`: Close price deviation >2% (alert)
-- `MISSING_SOURCE`: Data missing in primary source
-- `EODHD_ONLY`: Only EODHD has data
+## Runtime Flow
 
-## Price Reconciliation Engine
+Daily runner:
+- [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/run_pipeline.py](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/run_pipeline.py)
 
-### Reconciliation Rules
-
-| Metric | Minor Deviation | Major Deviation | Action |
-|--------|----------------|-----------------|--------|
-| Close Price | 0.5% - 2% | >2% | Alert + manual review |
-| Adjusted Close | 2% - 5% | >5% | Alert + CA audit |
-| Volume | 20% - 50% | >50% | Flag only (informational) |
-
-### Running Reconciliation
-
-```bash
-# Reconcile yesterday's prices
-python -m pipelines.eodhd_reconciliation
-
-# Reconcile specific date
-python -m pipelines.eodhd_reconciliation 2024-01-15
-
-# Disable Telegram alerts
-python -m pipelines.eodhd_reconciliation 2024-01-15 --no-alert
-```
-
-### Reconciliation Workflow
-
-1. **Fetch Prices**: Get NSE, BSE, EODHD NSE, EODHD BSE prices
-2. **Compare**: Calculate deviations for close, adj_close, volume
-3. **Classify**: Assign status (MATCH, MINOR, MAJOR, etc.)
-4. **Store**: Insert reconciliation record
-5. **Alert**: Send Telegram alert on major deviations
-
-## Integration with Daily Pipeline
-
-### Pipeline Execution Order
-
-1. NSE/BSE Corporate Actions
-2. **Parallel Ingestion** (includes EODHD EOD)
-   - NSE Bhavcopy
-   - BSE Bhavcopy
-   - AMFI NAV
-   - Fundamentals
+Current orchestration:
+1. NSE/BSE corporate actions
+2. parallel ingestion:
+   - NSE
+   - BSE
+   - AMFI
+   - fundamentals
    - IIMA FF
-   - Nifty Indices
-   - BSE Indices
-   - **EODHD EOD** ← New
-3. **EODHD Reconciliation** ← New
-4. Recompute Adjusted Close
-5. Compute Nightly Metrics
-6. Verification Checks
+   - Nifty/BSE indices
+   - EODHD EOD
+   - EODHD corporate actions
+   - Morningstar
+3. EODHD reconciliation
+4. adjusted-close recomputation
+5. nightly metrics
+6. verification
 
-### CLI Options
+CLI flags:
+- `--skip-eodhd`
+- `--skip-eodhd-reconcile`
 
-```bash
-# Run full pipeline with EODHD
-python run_pipeline.py
+## Raw Data and Caching
 
-# Skip EODHD ingestion
-python run_pipeline.py --skip-eodhd
+Raw EODHD responses are cached under:
+- `raw_data/EODHD/`
 
-# Skip EODHD reconciliation
-python run_pipeline.py --skip-eodhd-reconcile
+The older audit note also references a more structured organization:
+- `raw_data/EODHD/eod`
+- `raw_data/EODHD/intraday`
+- `raw_data/EODHD/dividends`
+- `raw_data/EODHD/splits`
+- `raw_data/EODHD/master`
 
-# Skip both
-python run_pipeline.py --skip-eodhd --skip-eodhd-reconcile
-```
+This is still the intended cache layout for audit/backfill workflows.
 
-## Verification Checks
+## External API Behavior Encoded In The Client
 
-### 1. EODHD Completeness
-- **Check**: % of mapped assets with EODHD data
-- **Threshold**: >=90% coverage
-- **Status**: PASS if >=90%, WARN otherwise
+From the current client implementation:
 
-### 2. Price Reconciliation Health
-- **Check**: % of assets with major deviations
-- **Threshold**: <=1% major deviations
-- **Status**: PASS if <=1%, WARN otherwise
+- bulk EOD: `eod-bulk-last-day/{exchange}`
+- bulk splits: same endpoint with `type=splits`
+- bulk dividends: same endpoint with `type=dividends`
+- per-symbol EOD history: `eod/{SYMBOL}.{EXCHANGE}`
+- per-symbol dividends: `div/{SYMBOL}.{EXCHANGE}`
+- intraday: `intraday/{SYMBOL}.{EXCHANGE}`
+- exchange symbol list: `exchange-symbol-list/{EXCHANGE}`
 
-### 3. Adjusted Close Validation
-- **Check**: % of assets with adj_close deviation >2%
-- **Threshold**: <=5% deviations
-- **Status**: PASS if <=5%, WARN otherwise
+Client rules currently implemented:
+- safe request delay around `0.1s`
+- `MAX_RETRIES = 5`
+- exponential backoff on request failures
+- JSON raw-response caching
 
-## Corner Cases
+## Operational Commands
 
-### 1. Symbol Changes
-- **Issue**: NSE/BSE symbols change over time (NAME_CHANGE events)
-- **Solution**: ISIN-based matching remains valid; symbol mapping needs periodic refresh
-- **Frequency**: Quarterly re-sync recommended
-
-### 2. Delisted Stocks
-- **Issue**: EODHD may not have data for recently delisted stocks
-- **Solution**: Mark mapping as inactive, log to unmapped report
-- **Action**: Manual review for historical backfill
-
-### 3. BSE-Only Stocks
-- **Issue**: EODHD coverage lower for BSE-only micro-caps
-- **Solution**: Accept lower coverage, use NSE/BSE as primary
-- **Monitoring**: Track BSE-only coverage separately
-
-### 4. Adjusted Close Discrepancies
-- **Issue**: EODHD's adjustment methodology may differ from ours
-- **Solution**: 
-  - Compare adjustment factors
-  - Fetch EODHD corporate actions
-  - Audit discrepancies >5%
-  - Our internal CA engine remains authoritative
-
-### 5. Volume Differences
-- **Issue**: NSE/BSE report volume differently (trades vs shares)
-- **Solution**: Flag only extreme deviations (>50%), don't auto-correct
-- **Note**: Volume is informational, not critical for backtests
-
-### 6. Timezone Handling
-- **Issue**: EODHD timestamps may be UTC, ours are IST
-- **Solution**: Store all dates in YYYY-MM-DD format (no time component)
-- **Validation**: Verify date alignment in reconciliation
-
-### 7. Missing Data Days
-- **Issue**: EODHD may not have data for all trading days
-- **Solution**: 
-  - Log missing dates
-  - Don't fail pipeline
-  - Use NSE/BSE as fallback
-
-## Best Practices
-
-### 1. Never Overwrite Primary Data
-- ❌ **Don't**: Replace NSE/BSE prices with EODHD
-- ✅ **Do**: Store EODHD separately, reconcile, flag deviations
-
-### 2. Validate Adjusted Prices
-- ❌ **Don't**: Trust EODHD adjusted_close blindly
-- ✅ **Do**: Compare with our adj_close, audit CA events
-
-### 3. Handle Missing Data Gracefully
-- ❌ **Don't**: Fail pipeline on 404 errors
-- ✅ **Do**: Log missing symbols, continue processing
-
-### 4. Respect Rate Limits
-- ❌ **Don't**: Hammer API without delays
-- ✅ **Do**: Implement 0.05s delay, exponential backoff
-
-### 5. Archive Raw Responses
-- ❌ **Don't**: Discard API responses after parsing
-- ✅ **Do**: Save to `raw_data/EODHD/` for auditability
-
-### 6. Monitor Reconciliation Health
-- ❌ **Don't**: Ignore major deviations
-- ✅ **Do**: Alert on >1% major deviations, investigate root cause
-
-## Monitoring & Alerts
-
-### Daily Monitoring
-
-1. **EODHD Pipeline Health**
-   - Check `pipeline_runs` for EODHD_EOD status
-   - Monitor API call count vs 100K limit
-   - Track success rate and latency
-
-2. **Reconciliation Metrics**
-   - % assets with MATCH status
-   - Count of MAJOR_DEVIATION cases
-   - Top 10 problematic assets
-
-3. **Data Freshness**
-   - Latest EODHD data date
-   - Lag vs NSE/BSE data
-
-### Alert Thresholds
-
-| Metric | Warning | Critical |
-|--------|---------|----------|
-| EODHD completeness | <95% | <90% |
-| Major deviations | >1% | >5% |
-| Adj close mismatches | >5% | >10% |
-| API failures | >5% | >10% |
-
-### Telegram Alerts
-
-- **MAJOR_DEVIATION**: Sent automatically with top 5 deviations
-- **Low Coverage**: Sent if <90% completeness
-- **Pipeline Failure**: Sent on EODHD ingestion failure
-
-## Backfill Strategy
-
-### Historical Backfill
+Build or refresh symbol mappings:
 
 ```bash
-# Full backfill from 2000-01-01
-python scripts/backfill_eodhd.py --from 2000-01-01 --workers 5
-
-# Backfill specific date range
-python scripts/backfill_eodhd.py --from 2020-01-01 --to 2023-12-31
-
-# Resume from last checkpoint
-python scripts/backfill_eodhd.py --resume
+cd /Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline
+python3 scripts/build_eodhd_mapping.py
+python3 scripts/build_eodhd_mapping.py --refresh
 ```
 
-### Backfill Process
+Run the main pipeline with EODHD enabled:
 
-1. **Symbol Mapping** (Day 0): Build complete EODHD symbol mapping (~2-3 hours)
-2. **Historical Fetch** (Days 1-3): Fetch EOD data in 1-year chunks (~100K API calls)
-3. **Reconciliation** (Day 4): Run reconciliation for all historical dates
-4. **CA Validation** (Day 5): Fetch EODHD dividends/splits, compare with our CA table
+```bash
+cd /Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline
+python3 run_pipeline.py
+```
 
-**Estimated Time**: 5-7 days for full backfill (2000-present)
+Skip EODHD during a daily run:
 
-## Troubleshooting
+```bash
+python3 run_pipeline.py --skip-eodhd
+python3 run_pipeline.py --skip-eodhd --skip-eodhd-reconcile
+```
 
-### Issue: Low EODHD Coverage
+Run reconciliation only:
 
-**Symptoms**: <90% of mapped assets have EODHD data
+```bash
+python3 -m pipelines.eodhd_reconciliation
+```
 
-**Causes**:
-- Symbol mapping incomplete
-- EODHD API downtime
-- BSE-only stocks not covered
+Backfill intraday:
 
-**Solutions**:
-1. Run `python scripts/build_eodhd_mapping.py --refresh`
-2. Check EODHD API status
-3. Review `logs/eodhd_unmapped_assets.json`
+```bash
+python3 scripts/backfill_eodhd_intraday.py --interval 1h --from 2020-10-01 --to 2024-03-01
+```
 
-### Issue: High Major Deviations
+## Known Gaps and Caveats
 
-**Symptoms**: >5% of assets have MAJOR_DEVIATION status
+### 1. Documentation drift existed
 
-**Causes**:
-- Corporate action missing in our DB
-- EODHD data error
-- Symbol mapping incorrect
+The status doc referenced:
+- `docs/sources/eodhd.md`
 
-**Solutions**:
-1. Check `price_reconciliation` table for specific assets
-2. Fetch EODHD corporate actions for affected symbols
-3. Compare with our `corporate_actions` table
-4. Add missing CA events if needed
+That file did not exist before this consolidation. This file is now the intended primary reference.
 
-### Issue: API Rate Limit Exceeded
+### 2. Exchange assumptions are opinionated
 
-**Symptoms**: 429 errors in logs
+Current mapping/client code says:
+- NSE is the valid Indian equity exchange in EODHD
+- BSE is not fetchable as a primary exchange symbol list
 
-**Causes**:
-- Too many parallel requests
-- Insufficient delay between requests
+That assumption may be right for the current implementation, but any production rollout should periodically verify it against the live EODHD account and API behavior.
 
-**Solutions**:
-1. Reduce worker count in backfill
-2. Increase `REQUEST_DELAY` in `eodhd_eod.py`
-3. Check daily API call count vs 100K limit
+### 3. Some implementation details still reflect SQLite-era code
 
-### Issue: Adjusted Close Mismatches
+There are still legacy `INSERT OR REPLACE` patterns in EODHD-related scripts and sources. Runtime compatibility shims currently make some of these work, but the code should eventually be normalized to explicit Postgres upserts.
 
-**Symptoms**: >10% of assets have adj_close deviation >2%
+### 4. Status doc contains stale items
 
-**Causes**:
-- Different adjustment methodology
-- Missing corporate actions
-- EODHD data error
+The older status note still says the pipeline was blocked on an invalid token. That is historical context, not a trustworthy live operational statement.
 
-**Solutions**:
-1. Run `python scripts/validate_adjustments.py {SYMBOL}`
-2. Fetch EODHD corporate actions
-3. Compare adjustment factors
-4. Audit discrepancies manually
+### 5. DB split matters
 
-## Integration Priority
+The integration spans both relational and time-series Postgres:
+- relational for symbol mapping / CA metadata
+- time-series for EOD and intraday bars and reconciliation
 
-- **Golden source for**: None (EODHD is supplementary)
-- **Validation source for**: NSE/BSE close prices, adjusted close
-- **Fallback from**: None
-- **Fallback to**: NSE/BSE (always primary)
+Anyone modifying this pipeline needs to check which database a table actually lives in before changing ingestion or validation code.
 
-## Future Enhancements (Phase 2)
+## Recommended Next Cleanup
 
-### Intraday Data
-- 5-minute and 1-hour resolutions
-- 90-day rolling window storage
-- Liquidity analysis metrics
-
-### Corporate Action Validation
-- Automated CA audit pipeline
-- Missing event detection
-- Adjustment factor comparison
-
-### Advanced Reconciliation
-- Multi-source consensus pricing
-- Outlier detection algorithms
-- Automated correction suggestions
-
-## References
-
-- EODHD API Documentation: https://eodhd.com/financial-apis/
-- Internal Plan: `/Users/a404a/.windsurf/plans/eodhd-integration-plan-becafa.md`
-- Schema: `db/schema.sql` (EODHD section)
-- Source Code: `sources/eodhd/eodhd_eod.py`
-- Reconciliation: `pipelines/eodhd_reconciliation.py`
+High-value follow-up work:
+- standardize all EODHD writes to explicit Postgres `ON CONFLICT`
+- verify that every EODHD writer is using the intended database target
+- add one lightweight health-check doc section with:
+  - mapping row count
+  - latest EOD date
+  - reconciliation status mix
+  - raw-cache freshness
+- retire or merge the historical audit/status docs once this consolidated doc is accepted

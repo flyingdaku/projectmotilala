@@ -224,11 +224,21 @@ def build_mappings(refresh: bool = False) -> Dict[str, Any]:
                 continue
 
             conn.execute("""
-                INSERT OR REPLACE INTO eodhd_symbol_mapping
+                INSERT INTO eodhd_symbol_mapping
                 (asset_id, eodhd_nse_symbol, eodhd_bse_symbol, isin,
                  exchange_preference, is_active, is_delisted,
                  match_method, last_verified, notes)
-                VALUES (?,?,?,?,?,1,?,?,?,?)
+                VALUES (%s,%s,%s,%s,%s,1,%s,%s,%s,%s)
+                ON CONFLICT (asset_id) DO UPDATE SET
+                  eodhd_nse_symbol = EXCLUDED.eodhd_nse_symbol,
+                  eodhd_bse_symbol = EXCLUDED.eodhd_bse_symbol,
+                  isin = EXCLUDED.isin,
+                  exchange_preference = EXCLUDED.exchange_preference,
+                  is_active = EXCLUDED.is_active,
+                  is_delisted = EXCLUDED.is_delisted,
+                  match_method = EXCLUDED.match_method,
+                  last_verified = EXCLUDED.last_verified,
+                  notes = EXCLUDED.notes
             """, (
                 asset["id"], nse_sym, bse_sym, asset["isin"],
                 pref, 1 if is_delisted else 0,

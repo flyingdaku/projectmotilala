@@ -94,10 +94,14 @@ def process_nse_fundamentals(asset_id: str, results: List[Dict]):
             
             # Upsert into nse_fundamentals
             conn.execute("""
-                INSERT OR REPLACE INTO nse_fundamentals (
+                INSERT INTO nse_fundamentals (
                     id, asset_id, period_end_date, is_consolidated,
                     revenue, operating_profit, interest, pbt, tax, pat, eps, raw_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (asset_id, period_end_date, is_consolidated) DO UPDATE SET
+                  revenue = EXCLUDED.revenue, operating_profit = EXCLUDED.operating_profit,
+                  interest = EXCLUDED.interest, pbt = EXCLUDED.pbt, tax = EXCLUDED.tax,
+                  pat = EXCLUDED.pat, eps = EXCLUDED.eps, raw_json = EXCLUDED.raw_json
             """, (
                 generate_id(), asset_id, period_date, is_cons,
                 _safe_float(row.get("income_from_operations")),

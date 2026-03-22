@@ -41,7 +41,7 @@ def get_last_successful_date(source: str = "NSE_BHAVCOPY") -> date:
     """Get the most recent date with successful pipeline run."""
     row = execute_one(
         """SELECT MAX(run_date) as last_date FROM pipeline_runs
-           WHERE source = ? AND status = 'SUCCESS'""",
+           WHERE source = %s AND status = 'SUCCESS'""",
         (source,),
     )
     if row and row["last_date"]:

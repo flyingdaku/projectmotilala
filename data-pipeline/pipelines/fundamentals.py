@@ -8,7 +8,7 @@ import calendar
 from datetime import date, datetime
 from typing import Dict, Any, Optional, List
 
-from core.db import get_db, generate_id
+from core.db import get_ts_connection, generate_id
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,7 @@ UNIFIED_FIELDS = [
     'cfo', 'cash_from_investing', 'cash_from_financing', 'net_change_in_cash', 'cash_begin_of_year', 'cash_end_of_year',
     'capex', 'fcf', 'book_value_per_share', 'shares_outstanding'
 ]
+UNIFIED_INSERT_COLUMNS = ['id', 'asset_id', 'period_end_date', 'is_consolidated', *UNIFIED_FIELDS, 'source']
 
 def map_nse_field(row: Dict, field: str) -> Optional[float]:
     if not row: return None
@@ -193,11 +194,31 @@ def _ensure_fundamentals_columns(conn):
         if column not in existing:
             conn.execute(f"ALTER TABLE fundamentals ADD COLUMN {column} {col_type}")
 
+def _ensure_fundamental_conflicts_table(conn):
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS fundamental_conflicts (
+          id TEXT PRIMARY KEY,
+          asset_id TEXT NOT NULL,
+          period_end_date TEXT NOT NULL,
+          field_name TEXT NOT NULL,
+          nse_value REAL,
+          bse_value REAL,
+          scr_value REAL,
+          chosen_source TEXT,
+          pct_deviation REAL,
+          resolved_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+
 def log_conflict(conn, p, field, values, chosen_val, chosen_source, conflict_type, pct_dev):
     conn.execute("""
-        INSERT OR REPLACE INTO fundamental_conflicts (
+        INSERT INTO fundamental_conflicts (
             id, asset_id, period_end_date, field_name, nse_value, bse_value, scr_value, chosen_source, pct_deviation
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (asset_id, period_end_date, field_name) DO UPDATE SET
+          nse_value = EXCLUDED.nse_value, bse_value = EXCLUDED.bse_value,
+          scr_value = EXCLUDED.scr_value, chosen_source = EXCLUDED.chosen_source,
+          pct_deviation = EXCLUDED.pct_deviation
     """, (
         generate_id(), p['asset_id'], p['period_end_date'], field,
         values.get('MSI', values.get('NSE')), values.get('BSE'), values.get('SCREENER'),
@@ -211,7 +232,7 @@ def _resolve_table_name(conn, candidates: List[str]) -> Optional[str]:
             SELECT table_name AS name
             FROM information_schema.tables
             WHERE table_schema = current_schema()
-              AND table_name = ?
+              AND table_name = %s
             """,
             (candidate,),
         ).fetchone()
@@ -219,9 +240,11 @@ def _resolve_table_name(conn, candidates: List[str]) -> Optional[str]:
             return candidate
     return None
 
-def _normalize_period_date(date_str: Optional[str]) -> Optional[str]:
+def _normalize_period_date(date_str: Optional[Any]) -> Optional[str]:
     if not date_str:
         return None
+    if isinstance(date_str, date):
+        return date_str.isoformat()
     if len(date_str) == 10 and date_str.count("-") == 2:
         return date_str
     for fmt in ("%b-%y", "%b %Y"):
@@ -254,23 +277,24 @@ def _load_rows_by_period_multi(conn, tables: List[tuple[str, int]]) -> Dict[tupl
         indexed.update(_load_rows_by_period(conn, table_name, default_is_consolidated))
     return indexed
 
-def upsert_unified(conn, p, merged):
-    merged_clean = {k: v for k, v in merged.items() if v is not None}
-    merged_clean['id'] = generate_id()
-    merged_clean['asset_id'] = p['asset_id']
-    merged_clean['period_end_date'] = p['period_end_date']
-    merged_clean['is_consolidated'] = p['is_consolidated']
-    
-    placeholders = ", ".join(["?"] * len(merged_clean))
-    columns = ", ".join(merged_clean.keys())
-    
-    conn.execute(f"INSERT OR REPLACE INTO fundamentals ({columns}) VALUES ({placeholders})", list(merged_clean.values()))
+def build_unified_row(p, merged) -> tuple:
+    row = {
+        'id': generate_id(),
+        'asset_id': p['asset_id'],
+        'period_end_date': p['period_end_date'],
+        'is_consolidated': p['is_consolidated'],
+        'source': merged.get('source'),
+    }
+    for field in UNIFIED_FIELDS:
+        row[field] = merged.get(field)
+    return tuple(row.get(col) for col in UNIFIED_INSERT_COLUMNS)
 
 def refresh_unified_view():
     """Merge source tables into unified fundamentals with conflict detection."""
     logger.info("[FUNDAMENTALS] Refreshing unified view...")
-    with get_db() as conn:
+    with get_ts_connection() as conn:
         _ensure_fundamentals_columns(conn)
+        _ensure_fundamental_conflicts_table(conn)
         msi_q_table = _resolve_table_name(conn, ['src_msi_quarterly', 'msi_fundamentals_quarterly'])
         msi_q_table_standalone = _resolve_table_name(conn, ['src_msi_quarterly_standalone'])
         msi_bs_table = _resolve_table_name(conn, ['src_msi_balance_sheet', 'msi_balance_sheets'])
@@ -307,6 +331,13 @@ def refresh_unified_view():
             .union(scr_bs_rows.keys())
             .union(scr_cf_rows.keys())
         )
+        insert_rows = []
+        upsert_sql = f"""
+            INSERT INTO fundamentals ({", ".join(UNIFIED_INSERT_COLUMNS)})
+            VALUES ({', '.join(['%s'] * len(UNIFIED_INSERT_COLUMNS))})
+            ON CONFLICT (asset_id, period_end_date, is_consolidated)
+            DO UPDATE SET {", ".join(f"{col} = EXCLUDED.{col}" for col in UNIFIED_INSERT_COLUMNS if col not in {'id', 'asset_id', 'period_end_date', 'is_consolidated'})}
+        """
 
         for asset_id, normalized_period_end_date, is_consolidated in periods:
             p = {
@@ -353,8 +384,13 @@ def refresh_unified_view():
                 merged['source'] = 'MSI'
             elif scr_q or scr_bs or scr_cf:
                 merged['source'] = 'SCREENER'
-                
-            upsert_unified(conn, p, merged)
+            else:
+                merged['source'] = None
+
+            insert_rows.append(build_unified_row(p, merged))
+
+        if insert_rows:
+            conn.executemany(upsert_sql, insert_rows)
             
     logger.info(f"[FUNDAMENTALS] Refreshed {len(periods)} unified records.")
 

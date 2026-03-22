@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 const MAIN_NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard", icon: Home },
   { label: "My Feed", href: "/feed", icon: Bell },
+  { label: "Analytics Hub", href: "/analytics", icon: BarChart2 },
 ];
 
 const CATEGORIES = [
@@ -67,12 +68,10 @@ const CATEGORIES = [
     icon: BarChart2,
     title: "Factor Analysis",
     items: [
-      { label: "Factor Analysis", href: "/analytics/factor-analysis" },
       { label: "Factor Regression", href: "/analytics/factor-regression" },
       { label: "Fund Factor Regressions", href: "/analytics/fund-factor-regressions" },
       { label: "Principal Component Analysis", href: "/analytics/pca" },
       { label: "Fund Rankings", href: "/analytics/fund-rankings" },
-      { label: "Manager Performance", href: "/analytics/manager-performance" },
     ],
   },
   {
@@ -80,7 +79,6 @@ const CATEGORIES = [
     icon: Activity,
     title: "Correlations",
     items: [
-      { label: "Asset Class Correlations", href: "/analytics/asset-class-correlations" },
       { label: "Asset Correlations", href: "/analytics/asset-correlations" },
       { label: "Asset Autocorrelations", href: "/analytics/autocorrelations" },
       { label: "Asset Cointegration", href: "/analytics/cointegration" },

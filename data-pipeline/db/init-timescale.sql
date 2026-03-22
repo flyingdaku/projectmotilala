@@ -34,6 +34,19 @@ CREATE TABLE IF NOT EXISTS fundamentals (
 SELECT create_hypertable('fundamentals','period_end_date',if_not_exists=>TRUE,chunk_time_interval=>INTERVAL '2 years');
 CREATE INDEX IF NOT EXISTS idx_fund_asset ON fundamentals(asset_id,period_end_date DESC);
 
+CREATE TABLE IF NOT EXISTS fundamental_conflicts (
+  id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL,
+  period_end_date TEXT NOT NULL,
+  field_name TEXT NOT NULL,
+  nse_value REAL,
+  bse_value REAL,
+  scr_value REAL,
+  chosen_source TEXT,
+  pct_deviation REAL,
+  resolved_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS src_msi_quarterly (
   asset_id TEXT NOT NULL, period_end_date DATE NOT NULL,
   revenue_ops REAL, total_revenue REAL, operating_profit REAL, ebit REAL,

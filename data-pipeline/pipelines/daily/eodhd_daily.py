@@ -46,10 +46,14 @@ def ingest_bulk_data(conn: Any, rows: List[Dict], exchange: str) -> int:
             
         try:
             conn.execute("""
-                INSERT OR REPLACE INTO eodhd_daily_prices
+                INSERT INTO eodhd_daily_prices
                 (asset_id, date, open, high, low, close, adjusted_close,
                  volume, eodhd_symbol, exchange, fetched_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (asset_id, date) DO UPDATE SET
+                  open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                  close = EXCLUDED.close, adjusted_close = EXCLUDED.adjusted_close,
+                  volume = EXCLUDED.volume, fetched_at = EXCLUDED.fetched_at
             """, (
                 asset_id,
                 row.get("date"),

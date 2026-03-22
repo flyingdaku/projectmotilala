@@ -39,7 +39,7 @@ def _run_single_nse(trade_date: date, skip_existing: bool):
 
     if skip_existing:
         existing = execute_one(
-            "SELECT 1 FROM pipeline_runs WHERE source = 'NSE_BHAVCOPY' AND run_date = ? AND status = 'SUCCESS'",
+            "SELECT 1 FROM pipeline_runs WHERE source = 'NSE_BHAVCOPY' AND run_date = %s AND status = 'SUCCESS'",
             (trade_date.isoformat(),),
         )
         if existing:
@@ -58,7 +58,7 @@ def _run_single_bse(trade_date: date, skip_existing: bool):
 
     if skip_existing:
         existing = execute_one(
-            "SELECT 1 FROM pipeline_runs WHERE source = 'BSE_BHAVCOPY' AND run_date = ? AND status = 'SUCCESS'",
+            "SELECT 1 FROM pipeline_runs WHERE source = 'BSE_BHAVCOPY' AND run_date = %s AND status = 'SUCCESS'",
             (trade_date.isoformat(),),
         )
         if existing:

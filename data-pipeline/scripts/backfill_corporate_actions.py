@@ -168,10 +168,11 @@ def process_nse_chunk(from_date: date, to_date: date, isin_cache: dict, existing
     if rows_to_insert:
         with get_db() as conn:
             conn.executemany("""
-                INSERT OR IGNORE INTO corporate_actions
+                INSERT INTO corporate_actions
                 (id, asset_id, action_type, ex_date, ratio_numerator, ratio_denominator,
                  dividend_amount, rights_price, adjustment_factor, source_exchange, raw_announcement)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (asset_id, ex_date, action_type) DO NOTHING
             """, rows_to_insert)
 
     return len(rows_to_insert), skipped, 0
@@ -242,10 +243,11 @@ def process_bse_chunk(from_date: date, to_date: date, bse_cache: dict, isin_cach
 
         # Get prev_close for factor (but NO adjustment applied)
         prev_close = 0.0
-        with get_db() as conn:
+        from core.db import get_prices_db
+        with get_prices_db() as conn:
             prev_row = conn.execute("""
                 SELECT close FROM daily_prices
-                WHERE asset_id = ? AND date < ?
+                WHERE asset_id = %s AND date < %s
                 ORDER BY date DESC LIMIT 1
             """, (asset_id, ex_date.isoformat())).fetchone()
             if prev_row:
@@ -270,10 +272,11 @@ def process_bse_chunk(from_date: date, to_date: date, bse_cache: dict, isin_cach
     if rows_to_insert:
         with get_db() as conn:
             conn.executemany("""
-                INSERT OR IGNORE INTO corporate_actions
+                INSERT INTO corporate_actions
                 (id, asset_id, action_type, ex_date, ratio_numerator, ratio_denominator,
                  dividend_amount, rights_price, adjustment_factor, source_exchange, raw_announcement)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (asset_id, ex_date, action_type) DO NOTHING
             """, rows_to_insert)
 
     return len(rows_to_insert), skipped, 0

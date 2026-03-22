@@ -59,12 +59,10 @@
    - `check_adjusted_close_validation()` - <=5% adj_close deviations
    - Integrated into nightly verification pipeline
 
-3. **Documentation** - `docs/sources/eodhd.md`
-   - Comprehensive API documentation
-   - Symbol mapping strategy
-   - Reconciliation rules
-   - Best practices and pitfalls
-   - Troubleshooting guide
+3. **Documentation**
+   - Primary consolidated reference:
+     [/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/docs/sources/eodhd.md](/Users/a404a/AllForOne/Skunk/projectmotilala/data-pipeline/docs/sources/eodhd.md)
+   - Historical status/audit notes retained in this file and `EODHD_AUDIT.md`
 
 ## Pending Items
 
@@ -140,14 +138,14 @@ Once API token is validated:
 
 ## File Inventory
 
-### Created Files
+### Created / Maintained Files
 ```
 db/schema.sql                              # EODHD tables added (lines 1302-1398)
 sources/eodhd/__init__.py                  # Package init
 sources/eodhd/eodhd_eod.py                 # EOD ingester (370 lines)
 scripts/build_eodhd_mapping.py             # Symbol mapping script (300 lines)
 pipelines/eodhd_reconciliation.py          # Reconciliation engine (350 lines)
-docs/sources/eodhd.md                      # Comprehensive documentation (650 lines)
+docs/sources/eodhd.md                      # Consolidated EODHD reference
 docs/EODHD_INTEGRATION_STATUS.md           # This file
 ```
 

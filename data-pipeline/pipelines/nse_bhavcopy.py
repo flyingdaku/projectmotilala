@@ -22,7 +22,7 @@ import requests
 from utils.alerts import alert_pipeline_failure, alert_pipeline_success
 from utils.calendar import ensure_holiday_cache, get_previous_trading_date, is_trading_day
 from utils.circuit_breakers import run_circuit_breakers
-from core.db import generate_id, get_db
+from core.db import generate_id, get_db, get_prices_db
 from utils.storage import raw_file_exists, save_raw_file
 
 logger = logging.getLogger(__name__)
@@ -386,12 +386,12 @@ def upsert_assets(df: pd.DataFrame, security_master: pd.DataFrame):
         # Batch update existing assets
         if update_symbol:
             conn.executemany(
-                "UPDATE assets SET nse_symbol = ?, nse_listed = 1, is_active = 1 WHERE id = ?",
+                "UPDATE assets SET nse_symbol = %s, nse_listed = 1, is_active = 1 WHERE id = %s",
                 update_symbol,
             )
         if update_isin:
             conn.executemany(
-                "UPDATE assets SET isin = ? WHERE id = ? AND (isin IS NULL OR isin = '')",
+                "UPDATE assets SET isin = %s WHERE id = %s AND (isin IS NULL OR isin = '')",
                 update_isin,
             )
         # Batch insert new assets
@@ -399,7 +399,8 @@ def upsert_assets(df: pd.DataFrame, security_master: pd.DataFrame):
             conn.executemany(
                 """INSERT INTO assets
                    (id, isin, nse_symbol, name, asset_class, series, nse_listed, is_active, listing_date)
-                   VALUES (?, ?, ?, ?, 'EQUITY', ?, 1, 1, ?)""",
+                   VALUES (%s, %s, %s, %s, 'EQUITY', %s, 1, 1, %s)
+                   ON CONFLICT (isin) DO NOTHING""",
                 new_assets,
             )
             logger.info(f"Registered {len(new_assets)} new NSE assets")
@@ -407,14 +408,16 @@ def upsert_assets(df: pd.DataFrame, security_master: pd.DataFrame):
 
 def insert_prices(df: pd.DataFrame):
     """
-    Insert daily prices into the database.
+    Insert daily prices into the timeseries database.
     Uses INSERT OR REPLACE to handle re-runs idempotently.
     Falls back to symbol matching for legacy rows where isin is None.
 
     Optimized: resolves asset_ids via in-memory cache, then bulk-inserts.
     """
-    with get_db() as conn:
-        isin_cache, symbol_cache = _build_asset_cache(conn)
+    with get_db() as meta_conn:
+        isin_cache, symbol_cache = _build_asset_cache(meta_conn)
+
+    with get_prices_db() as conn:
 
         price_rows = []
         skipped = 0
@@ -448,13 +451,18 @@ def insert_prices(df: pd.DataFrame):
 
         if price_rows:
             conn.executemany(
-                """INSERT OR REPLACE INTO daily_prices
+                """INSERT INTO daily_prices
                    (asset_id, date, open, high, low, close, adj_close, volume, trades, source_exchange)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'NSE')""",
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'NSE')
+                   ON CONFLICT (asset_id, date, source_exchange) DO UPDATE SET
+                     open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
+                     close = EXCLUDED.close, adj_close = EXCLUDED.adj_close,
+                     volume = EXCLUDED.volume, trades = EXCLUDED.trades""",
                 price_rows,
             )
         if skipped:
             logger.warning(f"Skipped {skipped} price rows (unresolved assets)")
+
 
 
 def run_nse_bhavcopy_pipeline(trade_date: date = None):
@@ -516,7 +524,7 @@ def run_nse_bhavcopy_pipeline(trade_date: date = None):
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, records_inserted, records_skipped, circuit_breaks, duration_ms)
-                   VALUES (?, ?, ?, 'SUCCESS', ?, ?, ?, ?)""",
+                   VALUES (%s, %s, %s, 'SUCCESS', %s, %s, %s, %s)""",
                 (run_id, trade_date.isoformat(), source, records_inserted, records_skipped, len(flagged), duration_ms),
             )
 
@@ -534,7 +542,7 @@ def run_nse_bhavcopy_pipeline(trade_date: date = None):
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, error_log, duration_ms)
-                   VALUES (?, ?, ?, 'FAILED', ?, ?)""",
+                   VALUES (%s, %s, %s, 'FAILED', %s, %s)""",
                 (run_id, trade_date.isoformat(), source, str(e), duration_ms),
             )
 

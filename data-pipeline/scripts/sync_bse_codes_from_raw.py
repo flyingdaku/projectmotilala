@@ -56,7 +56,7 @@ def sync_bse_codes_from_raw():
     updated = 0
     with get_db() as conn:
         for isin, code in isin_map.items():
-            res = conn.execute("UPDATE assets SET bse_code = ? WHERE isin = ? AND (bse_code IS NULL OR bse_code = '')", (code, isin))
+            res = conn.execute("UPDATE assets SET bse_code = %s WHERE isin = %s AND (bse_code IS NULL OR bse_code = '')", (code, isin))
             if res.rowcount > 0:
                 updated += 1
                 

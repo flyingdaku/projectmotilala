@@ -157,17 +157,17 @@ def update_asset_classification(asset_id: str, data: dict):
         conn.execute(
             """
             UPDATE assets SET
-                screener_id                  = ?,
-                sector                       = ?,
-                screener_sector_code         = ?,
-                industry_group               = ?,
-                screener_industry_group_code = ?,
-                industry                     = ?,
-                screener_industry_code       = ?,
-                sub_industry                 = ?,
-                screener_sub_industry_code   = ?,
-                classification_updated_at    = ?
-            WHERE id = ?
+                screener_id                  = %s,
+                sector                       = %s,
+                screener_sector_code         = %s,
+                industry_group               = %s,
+                screener_industry_group_code = %s,
+                industry                     = %s,
+                screener_industry_code       = %s,
+                sub_industry                 = %s,
+                screener_sub_industry_code   = %s,
+                classification_updated_at    = %s
+            WHERE id = %s
             """,
             (
                 data["screener_id"],

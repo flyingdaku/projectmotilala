@@ -24,7 +24,7 @@ from typing import Optional
 import requests
 
 from utils.alerts import alert_pipeline_failure, alert_pipeline_success
-from core.db import generate_id, get_db
+from core.db import generate_id, get_db, get_prices_db
 from utils.storage import raw_file_exists, save_raw_file, load_raw_file
 
 logger = logging.getLogger(__name__)
@@ -196,14 +196,14 @@ def retroactively_adjust_history(asset_id: str, ex_date: date, adjustment_factor
         logger.debug(f"Adjustment factor ≈ 1.0 for asset {asset_id[:8]}, skipping retroactive update")
         return
 
-    with get_db() as conn:
+    with get_prices_db() as conn:
         conn.execute(
             """UPDATE daily_prices
-               SET adj_close = ROUND(adj_close * ?, 4)
-               WHERE asset_id = ? AND date < ?""",
+               SET adj_close = ROUND(adj_close * %s, 4)
+               WHERE asset_id = %s AND date < %s""",
             (adjustment_factor, asset_id, ex_date.isoformat()),
         )
-        rows_updated = conn.total_changes
+        rows_updated = 0  # psycopg2 rowcount not available after UPDATE without cursor
 
     logger.info(
         f"Retroactively adjusted {rows_updated} historical prices "
@@ -269,11 +269,11 @@ def _map_action_type(nse_purpose: str) -> Optional[str]:
 
 
 def _get_prev_close(asset_id: str, ex_date: date) -> float:
-    """Get the closing price of the last trading day before ex_date."""
-    with get_db() as conn:
+    """Get the closing price of the last trading day before ex_date (from timeseries DB)."""
+    with get_prices_db() as conn:
         row = conn.execute(
             """SELECT close FROM daily_prices
-               WHERE asset_id = ? AND date < ?
+               WHERE asset_id = %s AND date < %s
                ORDER BY date DESC LIMIT 1""",
             (asset_id, ex_date.isoformat()),
         ).fetchone()
@@ -313,7 +313,7 @@ def process_corporate_action(raw: dict) -> bool:
 
     with get_db() as conn:
         asset = conn.execute(
-            "SELECT id FROM assets WHERE isin = ?", (isin,)
+            "SELECT id FROM assets WHERE isin = %s", (isin,)
         ).fetchone()
 
         if not asset:
@@ -325,7 +325,7 @@ def process_corporate_action(raw: dict) -> bool:
         # Check for duplicate
         existing = conn.execute(
             """SELECT id FROM corporate_actions
-               WHERE asset_id = ? AND action_type = ? AND ex_date = ?""",
+               WHERE asset_id = %s AND action_type = %s AND ex_date = %s""",
             (asset_id, action_type, ex_date.isoformat()),
         ).fetchone()
 
@@ -367,7 +367,7 @@ def process_corporate_action(raw: dict) -> bool:
             """INSERT INTO corporate_actions
                (id, asset_id, action_type, ex_date, ratio_numerator, ratio_denominator,
                 dividend_amount, rights_price, adjustment_factor, source_exchange, raw_announcement)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'NSE', ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'NSE', %s)""",
             (
                 action_id, asset_id, action_type, ex_date.isoformat(),
                 ratio_num, ratio_den, dividend_amount, rights_price,
@@ -391,7 +391,7 @@ def process_corporate_action(raw: dict) -> bool:
     if action_type in ("MERGER", "DEMERGER"):
         with get_db() as conn:
             conn.execute(
-                "UPDATE assets SET delisting_date = ? WHERE id = ?",
+                "UPDATE assets SET delisting_date = %s WHERE id = %s",
                 (ex_date.isoformat(), asset_id),
             )
 
@@ -406,7 +406,7 @@ def _handle_merger(acquired_asset_id: str, raw: dict, effective_date: date):
 
     with get_db() as conn:
         acquirer = conn.execute(
-            "SELECT id FROM assets WHERE isin = ?", (acquirer_isin,)
+            "SELECT id FROM assets WHERE isin = %s", (acquirer_isin,)
         ).fetchone()
 
         if not acquirer:
@@ -417,10 +417,11 @@ def _handle_merger(acquired_asset_id: str, raw: dict, effective_date: date):
         swap_num, swap_den = _parse_ratio(swap_str)
 
         conn.execute(
-            """INSERT OR IGNORE INTO merger_events
+            """INSERT INTO merger_events
                (id, acquired_asset_id, acquirer_asset_id, effective_date,
                 swap_ratio_acquired, swap_ratio_acquirer, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               ON CONFLICT (acquired_asset_id, effective_date) DO NOTHING""",
             (
                 generate_id(), acquired_asset_id, acquirer["id"],
                 effective_date.isoformat(), swap_num, swap_den,
@@ -464,21 +465,22 @@ def run_corporate_actions_pipeline(from_date: date = None, to_date: date = None)
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, records_inserted, records_skipped, duration_ms)
-                   VALUES (?, ?, ?, 'SUCCESS', ?, ?, ?)""",
+                   VALUES (%s, %s, %s, 'SUCCESS', %s, %s, %s)""",
                 (run_id, to_date.isoformat(), source, inserted, skipped, duration_ms),
             )
 
-        logger.info(f"[{source}] ✅ Done. {inserted} inserted, {skipped} skipped, {duration_ms}ms")
+        logger.info(f"[{source}] Done. {inserted} inserted, {skipped} skipped, {duration_ms}ms")
         alert_pipeline_success(source, inserted, 0, duration_ms)
 
     except Exception as e:
         duration_ms = int((datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds() * 1000)
+        logger.error(f"[{source}] Pipeline failed: {e}", exc_info=True)
         logger.error(f"[{source}] ❌ Pipeline failed: {e}", exc_info=True)
         with get_db() as conn:
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, error_log, duration_ms)
-                   VALUES (?, ?, ?, 'FAILED', ?, ?)""",
+                   VALUES (%s, %s, %s, 'FAILED', %s, %s)""",
                 (run_id, to_date.isoformat(), source, str(e), duration_ms),
             )
         alert_pipeline_failure(source, str(e), to_date.isoformat())

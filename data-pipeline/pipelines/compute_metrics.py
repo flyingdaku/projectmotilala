@@ -16,7 +16,7 @@ from typing import Optional
 import pandas as pd
 
 from utils.alerts import alert_pipeline_failure, alert_pipeline_success
-from core.db import generate_id, get_db
+from core.db import generate_id, get_db, get_prices_db
 
 logger = logging.getLogger(__name__)
 
@@ -24,12 +24,12 @@ NIFTY50_SYMBOL = "NIFTY 50"
 RISK_FREE_RATE = 0.065  # 6.5% annualized (approximate India 91-day T-bill)
 
 
-def _get_price_series(asset_id: str, lookback_days: int, conn) -> pd.Series:
+def _get_price_series(asset_id: str, lookback_days: int, prices_conn) -> pd.Series:
     """Return adj_close price series as a pandas Series indexed by date."""
     cutoff = (date.today() - timedelta(days=lookback_days)).isoformat()
-    rows = conn.execute(
+    rows = prices_conn.execute(
         """SELECT date, adj_close FROM daily_prices
-           WHERE asset_id = ? AND date >= ? AND adj_close IS NOT NULL
+           WHERE asset_id = %s AND date >= %s AND adj_close IS NOT NULL
            ORDER BY date ASC""",
         (asset_id, cutoff),
     ).fetchall()
@@ -119,7 +119,7 @@ def _get_ttm_values(conn, asset_id: str) -> dict:
                net_profit as pat, basic_eps as eps,
                finance_costs as interest, depreciation
         FROM src_msi_quarterly
-        WHERE asset_id = ?
+        WHERE asset_id = %s
         ORDER BY period_end_date DESC
         LIMIT 4
         """,
@@ -133,7 +133,7 @@ def _get_ttm_values(conn, asset_id: str) -> dict:
             SELECT sales as revenue, operating_profit, pbt, net_profit as pat, eps,
                    interest, depreciation
             FROM src_screener_quarterly
-            WHERE asset_id = ?
+            WHERE asset_id = %s
             ORDER BY period_end_date DESC
             LIMIT 4
             """,
@@ -162,30 +162,34 @@ def _get_ttm_values(conn, asset_id: str) -> dict:
     return ttm
 
 
-def _get_nifty50_prices(conn) -> pd.Series:
+def _get_nifty50_prices(meta_conn, prices_conn) -> pd.Series:
     """Get Nifty 50 index price series for beta calculation."""
-    rows = conn.execute(
-        """SELECT dp.date, dp.adj_close
-           FROM daily_prices dp
-           JOIN assets a ON dp.asset_id = a.id
-           WHERE a.nse_symbol = ? AND dp.adj_close IS NOT NULL
-             AND dp.date >= ?
-           ORDER BY dp.date ASC""",
-        (NIFTY50_SYMBOL, (date.today() - timedelta(days=400)).isoformat()),
+    nifty_row = meta_conn.execute(
+        "SELECT id FROM assets WHERE nse_symbol = %s LIMIT 1",
+        (NIFTY50_SYMBOL,),
+    ).fetchone()
+    if not nifty_row:
+        return pd.Series(dtype=float)
+    rows = prices_conn.execute(
+        """SELECT date, adj_close FROM daily_prices
+           WHERE asset_id = %s AND adj_close IS NOT NULL
+             AND date >= %s
+           ORDER BY date ASC""",
+        (nifty_row["id"], (date.today() - timedelta(days=400)).isoformat()),
     ).fetchall()
     if not rows:
         return pd.Series(dtype=float)
     return pd.Series({r["date"]: float(r["adj_close"]) for r in rows}, dtype=float)
 
 
-def compute_metrics_for_asset(asset_id: str, conn, nifty_prices: pd.Series) -> Optional[dict]:
+def compute_metrics_for_asset(asset_id: str, meta_conn, prices_conn, nifty_prices: pd.Series) -> Optional[dict]:
     """Compute all metrics for a single asset. Returns dict or None if insufficient data."""
-    prices_1y = _get_price_series(asset_id, 400, conn)  # Extra buffer for 1y
+    prices_1y = _get_price_series(asset_id, 400, prices_conn)  # Extra buffer for 1y
 
     if prices_1y.empty:
         return None
 
-    prices_10y = _get_price_series(asset_id, 3700, conn)
+    prices_10y = _get_price_series(asset_id, 3700, prices_conn)
 
     metrics = {
         "asset_id": asset_id,
@@ -205,11 +209,11 @@ def compute_metrics_for_asset(asset_id: str, conn, nifty_prices: pd.Series) -> O
         "sharpe_1y": _compute_sharpe(prices_1y),
     }
 
-    # Valuation from latest fundamentals
-    fund = conn.execute(
+    # Valuation from latest fundamentals (relational DB)
+    fund = meta_conn.execute(
         """SELECT eps, book_value_per_share, shares_outstanding
            FROM fundamentals
-           WHERE asset_id = ?
+           WHERE asset_id = %s
            ORDER BY period_end_date DESC LIMIT 1""",
         (asset_id,),
     ).fetchone()
@@ -240,34 +244,43 @@ def run_compute_metrics_pipeline():
     source = "COMPUTE_METRICS"
 
     try:
-        with get_db() as conn:
-            assets = conn.execute(
+        with get_db() as meta_conn, get_prices_db() as prices_conn:
+            assets = meta_conn.execute(
                 "SELECT id FROM assets WHERE is_active = 1"
             ).fetchall()
-            nifty_prices = _get_nifty50_prices(conn)
+            nifty_prices = _get_nifty50_prices(meta_conn, prices_conn)
 
-        logger.info(f"[{source}] Computing metrics for {len(assets)} assets...")
+            logger.info(f"[{source}] Computing metrics for {len(assets)} assets...")
 
-        computed = 0
-        skipped = 0
+            computed = 0
+            skipped = 0
 
-        for asset in assets:
-            asset_id = asset["id"]
-            with get_db() as conn:
-                metrics = compute_metrics_for_asset(asset_id, conn, nifty_prices)
+            for asset in assets:
+                asset_id = asset["id"]
+                metrics = compute_metrics_for_asset(asset_id, meta_conn, prices_conn, nifty_prices)
 
-            if not metrics:
-                skipped += 1
-                continue
+                if not metrics:
+                    skipped += 1
+                    continue
 
-            with get_db() as conn:
-                conn.execute(
-                    """INSERT OR REPLACE INTO asset_metrics
+                meta_conn.execute(
+                    """INSERT INTO asset_metrics
                        (asset_id, computed_on, return_1d, return_1w, return_1m, return_3m,
                         return_6m, return_1y, return_3y, return_5y, return_10y,
                         volatility_1y, beta_1y, max_drawdown_1y, sharpe_1y,
                         pe_ratio, pb_ratio, ev_ebitda, market_cap)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                       ON CONFLICT (asset_id) DO UPDATE SET
+                         computed_on = EXCLUDED.computed_on,
+                         return_1d = EXCLUDED.return_1d, return_1w = EXCLUDED.return_1w,
+                         return_1m = EXCLUDED.return_1m, return_3m = EXCLUDED.return_3m,
+                         return_6m = EXCLUDED.return_6m, return_1y = EXCLUDED.return_1y,
+                         return_3y = EXCLUDED.return_3y, return_5y = EXCLUDED.return_5y,
+                         return_10y = EXCLUDED.return_10y,
+                         volatility_1y = EXCLUDED.volatility_1y, beta_1y = EXCLUDED.beta_1y,
+                         max_drawdown_1y = EXCLUDED.max_drawdown_1y, sharpe_1y = EXCLUDED.sharpe_1y,
+                         pe_ratio = EXCLUDED.pe_ratio, pb_ratio = EXCLUDED.pb_ratio,
+                         ev_ebitda = EXCLUDED.ev_ebitda, market_cap = EXCLUDED.market_cap""",
                     (
                         metrics["asset_id"], metrics["computed_on"],
                         metrics["return_1d"], metrics["return_1w"], metrics["return_1m"],
@@ -278,7 +291,7 @@ def run_compute_metrics_pipeline():
                         metrics["ev_ebitda"], metrics["market_cap"],
                     ),
                 )
-            computed += 1
+                computed += 1
 
         duration_ms = int((datetime.now(timezone.utc).replace(tzinfo=None) - start_time).total_seconds() * 1000)
 
@@ -286,7 +299,7 @@ def run_compute_metrics_pipeline():
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, records_inserted, records_skipped, duration_ms)
-                   VALUES (?, ?, ?, 'SUCCESS', ?, ?, ?)""",
+                   VALUES (%s, %s, %s, 'SUCCESS', %s, %s, %s)""",
                 (run_id, date.today().isoformat(), source, computed, skipped, duration_ms),
             )
 
@@ -300,7 +313,7 @@ def run_compute_metrics_pipeline():
             conn.execute(
                 """INSERT INTO pipeline_runs
                    (id, run_date, source, status, error_log, duration_ms)
-                   VALUES (?, ?, ?, 'FAILED', ?, ?)""",
+                   VALUES (%s, %s, %s, 'FAILED', %s, %s)""",
                 (run_id, date.today().isoformat(), source, str(e), duration_ms),
             )
         alert_pipeline_failure(source, str(e), date.today().isoformat())

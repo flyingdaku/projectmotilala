@@ -289,7 +289,7 @@ def validate_symbol(symbol: str) -> Dict:
     """Validate adjusted_close for a specific symbol."""
     with get_connection() as conn:
         # Get asset_id
-        asset = conn.execute('SELECT id FROM assets WHERE nse_symbol = ?', (symbol,)).fetchone()
+        asset = conn.execute('SELECT id FROM assets WHERE nse_symbol = %s', (symbol,)).fetchone()
         if not asset:
             return {'status': 'ERROR', 'message': f'Symbol {symbol} not found'}
         
@@ -299,7 +299,7 @@ def validate_symbol(symbol: str) -> Dict:
         prices = conn.execute('''
             SELECT date, close, adjusted_close, volume
             FROM eodhd_daily_prices
-            WHERE asset_id = ?
+            WHERE asset_id = %s
             ORDER BY date DESC
             LIMIT 100
         ''', (asset_id,)).fetchall()
@@ -324,8 +324,8 @@ def validate_symbol(symbol: str) -> Dict:
         ca = conn.execute('''
             SELECT action_type, ex_date, adjustment_factor, ratio_numerator, ratio_denominator, dividend_amount
             FROM corporate_actions
-            WHERE asset_id = ?
-            AND ex_date >= date('now', '-365 days')
+            WHERE asset_id = %s
+            AND ex_date >= CURRENT_DATE - INTERVAL \'365 days\'
             ORDER BY ex_date DESC
         ''', (asset_id,)).fetchall()
         

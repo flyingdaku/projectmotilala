@@ -92,8 +92,8 @@ def _already_has_data(conn: Any, asset_id: str, exchange: str, from_date: date, 
     row = conn.execute("""
         SELECT COUNT(*) as cnt
         FROM   eodhd_daily_prices
-        WHERE  asset_id = ? AND exchange = ?
-          AND  date BETWEEN ? AND ?
+        WHERE  asset_id = %s AND exchange = %s
+          AND  date BETWEEN %s AND %s
     """, (asset_id, exchange, from_date.isoformat(), to_date.isoformat())).fetchone()
     return (row["cnt"] if row else 0) > 0
 
@@ -111,7 +111,7 @@ def _ingest_rows(conn: Any, rows: List[Dict], asset_id: str, eodhd_symbol: str, 
                 INSERT INTO eodhd_daily_prices
                 (asset_id, date, open, high, low, close, adjusted_close,
                  volume, eodhd_symbol, exchange, fetched_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 ON CONFLICT (asset_id, date, exchange) DO UPDATE SET
                 open=EXCLUDED.open, high=EXCLUDED.high, low=EXCLUDED.low,
                 close=EXCLUDED.close, adjusted_close=EXCLUDED.adjusted_close,
@@ -218,7 +218,7 @@ def run_backfill(
             q_parts.append("AND is_delisted = 0")
 
         if symbol_filter:
-            q_parts.append("AND (eodhd_nse_symbol = ? OR eodhd_bse_symbol = ?)")
+            q_parts.append("AND (eodhd_nse_symbol = %s OR eodhd_bse_symbol = %s)")
             eodhd_sym = f"{symbol_filter.upper()}.{exchange_filter or 'NSE'}"
             params += [eodhd_sym, eodhd_sym.replace(".NSE", ".BSE")]
 
@@ -353,7 +353,7 @@ def backfill_ca_symbol(
                         (id, asset_id, date, type, value,
                          declaration_date, payment_date, record_date,
                          raw_json, fetched_at)
-                        VALUES (?,?,?,?,?,?,?,?,?,?)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         ON CONFLICT DO NOTHING
                     """, row)
                     inserted += 1
