@@ -112,6 +112,13 @@ def is_trading_day(check_date: date) -> bool:
     return check_date.isoformat() not in holidays
 
 
+def _is_trading_day_with_holidays(check_date: date, holidays: Set[str]) -> bool:
+    """Fast-path trading day check when holiday set is already loaded."""
+    if check_date.weekday() >= 5:  # Saturday=5, Sunday=6
+        return False
+    return check_date.isoformat() not in holidays
+
+
 def get_previous_trading_date(from_date: date) -> date:
     """Return the most recent trading day before from_date."""
     candidate = from_date - timedelta(days=1)
@@ -134,10 +141,11 @@ def get_next_trading_date(from_date: date) -> date:
 
 def get_trading_dates_in_range(start: date, end: date) -> list[date]:
     """Return all trading dates between start and end (inclusive)."""
+    holidays = get_cached_holidays()
     result = []
     current = start
     while current <= end:
-        if is_trading_day(current):
+        if _is_trading_day_with_holidays(current, holidays):
             result.append(current)
         current += timedelta(days=1)
     return result

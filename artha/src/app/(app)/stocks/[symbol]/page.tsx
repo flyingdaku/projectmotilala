@@ -14,6 +14,8 @@ import { PeersSection } from "@/components/stock/PeersSection";
 import { FollowButton } from "@/components/stock/FollowButton";
 import { FloatingNavButton } from "@/components/stock/FloatingNavButton";
 import { getSectorEmoji } from "@/lib/utils/emojis";
+import { ApiError, apiGet } from "@/lib/api-client";
+import type { StockOverviewResponse } from "@/lib/api-types";
 import type { StockDetail } from "@/lib/data";
 import type { CompanyProfile } from "@/lib/data/types";
 import type { DataMeta } from "@/lib/stock/presentation";
@@ -28,7 +30,7 @@ import {
   formatVolume,
 } from "@/lib/utils/formatters";
 
-type OverviewResponse = {
+type OverviewResponse = StockOverviewResponse & {
   stock: StockDetail | null;
   profile: CompanyProfile | null;
   meta?: {
@@ -50,18 +52,8 @@ export default function StockPage() {
 
   useEffect(() => {
     if (!symbol) return;
-    fetch(`/api/stocks/${symbol}/overview`)
-      .then(r => {
-        if (r.status === 404) {
-          setNotFound(true);
-          setOverviewMeta(null);
-          setLoadedSymbol(symbol);
-          return null;
-        }
-        return r.json();
-      })
+    apiGet<OverviewResponse>(`/api/stocks/${symbol}/overview`)
       .then(data => {
-        if (!data) return;
         setNotFound(false);
         setStock(data.stock ?? null);
         setProfile(data.profile ?? null);
@@ -69,7 +61,13 @@ export default function StockPage() {
         setShowFullDescription(false);
         setLoadedSymbol(symbol);
       })
-      .catch(() => {
+      .catch((error) => {
+        if (error instanceof ApiError && error.status === 404) {
+          setNotFound(true);
+          setOverviewMeta(null);
+          setLoadedSymbol(symbol);
+          return;
+        }
         setOverviewMeta(null);
         setLoadedSymbol(symbol);
       });

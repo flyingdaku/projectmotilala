@@ -88,7 +88,7 @@ def load_all_eod():
                     ts_conn.commit()
                     total_inserted += len(batch)
             except Exception as e:
-                print(f"Error processing {fp_name}: {e}")
+                print(f"Error processing {fp.name}: {e}")
                 
             if (i+1) % 100 == 0:
                 print(f"Processed {i+1}/{len(eod_files)} files. Inserted {total_inserted} rows...")

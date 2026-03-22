@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/utilities/layout,_N_T_/(app)/utilities/direct-vs-regular/layout,_N_T_/(app)/utilities/direct-vs-regular/page,_N_T_/utilities/direct-vs-regular"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/utilities/direct-vs-regular/__PAGE__",
+    "/!KGFwcCk/utilities/direct-vs-regular",
+    "/!KGFwcCk/utilities",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

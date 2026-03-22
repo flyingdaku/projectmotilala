@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/portfolio/layout,_N_T_/(app)/portfolio/rebalance/layout,_N_T_/(app)/portfolio/rebalance/page,_N_T_/portfolio/rebalance"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/portfolio/rebalance/__PAGE__",
+    "/!KGFwcCk/portfolio/rebalance",
+    "/!KGFwcCk/portfolio",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

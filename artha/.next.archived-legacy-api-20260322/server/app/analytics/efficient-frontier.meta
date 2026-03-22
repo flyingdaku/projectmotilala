@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/analytics/layout,_N_T_/(app)/analytics/efficient-frontier/layout,_N_T_/(app)/analytics/efficient-frontier/page,_N_T_/analytics/efficient-frontier"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/analytics/efficient-frontier/__PAGE__",
+    "/!KGFwcCk/analytics/efficient-frontier",
+    "/!KGFwcCk/analytics",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

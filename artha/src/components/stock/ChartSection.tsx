@@ -6,6 +6,8 @@ import {
   ResponsiveContainer, ReferenceLine, Legend,
 } from "recharts";
 import { TrendingUp, TrendingDown, BarChart2 } from "lucide-react";
+import { apiGet } from "@/lib/api-client";
+import type { ChartResponse } from "@/lib/api-types";
 import type { DailyPrice, CorporateAction } from "@/lib/data/types";
 
 const RANGES = ["1m", "3m", "6m", "1y", "3y", "5y"] as const;
@@ -45,12 +47,11 @@ export function ChartSection({ symbol, currentPrice, priceChange }: Props) {
   useEffect(() => {
     setLoading(true);
     const apiRange = range === "1m" ? "1y" : range === "3m" ? "1y" : range;
-    fetch(`/api/stocks/${symbol}/chart?range=${apiRange}`)
-      .then((r) => r.json())
+    apiGet<ChartResponse>(`/api/stocks/${symbol}/chart`, { range: apiRange })
       .then((d) => {
-        setPrices(d.prices ?? []);
-        setCorpActions(d.corpActions ?? []);
-        setBenchmark(d.benchmark ?? []);
+        setPrices((d.prices ?? []) as DailyPrice[]);
+        setCorpActions((d.corpActions ?? []) as CorporateAction[]);
+        setBenchmark((d.benchmark ?? []) as DailyPrice[]);
       })
       .finally(() => setLoading(false));
   }, [symbol, range]);

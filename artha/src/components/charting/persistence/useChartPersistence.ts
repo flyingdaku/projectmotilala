@@ -9,6 +9,8 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
+import { apiDelete, apiGet, apiPost, apiPut } from '@/lib/api-client';
+import type { ChartDrawings, ChartLayout } from '@/lib/api-types';
 import { useChartStore } from '../store/useChartStore';
 import type { LayoutState } from '../core/types';
 
@@ -22,9 +24,8 @@ export function useChartPersistence() {
 
   const fetchLayouts = useCallback(async () => {
     try {
-      const res  = await fetch('/api/charts/layouts');
-      const data = await res.json();
-      store.setSavedLayouts(data.layouts ?? []);
+      const data = await apiGet<{ layouts: ChartLayout[] }>('/api/charts/layouts');
+      store.setSavedLayouts((data.layouts ?? []).map((layout) => layout.content as unknown as LayoutState));
     } catch {
       // silently ignore — layouts are non-critical
     }
@@ -44,11 +45,10 @@ export function useChartPersistence() {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
       try {
-        await fetch(`/api/charts/drawings/${symbol}/${timeframe}`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body:    JSON.stringify({ drawings }),
-        });
+        await apiPut<{ ok: boolean; symbol: string; timeframe: string }>(
+          `/api/charts/drawings/${symbol}/${timeframe}`,
+          { drawings }
+        );
       } catch {
         // silently ignore
       }
@@ -67,12 +67,11 @@ export function useChartPersistence() {
     const { symbol, timeframe } = store;
     if (!symbol) return;
 
-    fetch(`/api/charts/drawings/${symbol}/${timeframe}`)
-      .then(r => r.json())
+    apiGet<ChartDrawings>(`/api/charts/drawings/${symbol}/${timeframe}`)
       .then(data => {
         // Only restore if user hasn't already added drawings in this session
         if (data.drawings?.length && store.drawings.length === 0) {
-          data.drawings.forEach((d: Parameters<typeof store.addDrawing>[0]) => store.addDrawing(d));
+          data.drawings.forEach((d) => store.addDrawing(d as unknown as Parameters<typeof store.addDrawing>[0]));
         }
       })
       .catch(() => {});
@@ -92,14 +91,13 @@ export function useChartPersistence() {
       priceScaleAutoScale: true,
     };
     try {
-      const res  = await fetch('/api/charts/layouts', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(layout),
+      const data = await apiPost<{ layout: ChartLayout }>('/api/charts/layouts', {
+        name,
+        content: layout,
+        is_default: false,
       });
-      const data = await res.json();
       await fetchLayouts();
-      return data.layout;
+      return (data.layout?.content as unknown as LayoutState | undefined) ?? layout;
     } catch {
       return null;
     }
@@ -107,9 +105,8 @@ export function useChartPersistence() {
 
   const loadLayout = useCallback(async (id: string) => {
     try {
-      const res  = await fetch(`/api/charts/layouts/${id}`);
-      const data = await res.json();
-      const layout: LayoutState = data.layout;
+      const data = await apiGet<{ layout: ChartLayout }>(`/api/charts/layouts/${id}`);
+      const layout = (data.layout?.content as unknown as LayoutState | undefined) ?? null;
       if (!layout) return;
 
       store.setTimeframe(layout.timeframe);
@@ -127,7 +124,7 @@ export function useChartPersistence() {
 
   const deleteLayout = useCallback(async (id: string) => {
     try {
-      await fetch(`/api/charts/layouts/${id}`, { method: 'DELETE' });
+      await apiDelete(`/api/charts/layouts/${id}`);
       await fetchLayouts();
     } catch {}
   }, [fetchLayouts]);

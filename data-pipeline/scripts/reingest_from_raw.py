@@ -542,6 +542,15 @@ def reingest_bse(
         logger.info(f"Skip-existing: {len(already_done)} dates already ingested")
 
     isin_cache, _, code_cache = build_asset_caches()
+    with get_ts_connection() as conn:
+        rows = conn.execute(
+            """SELECT asset_id, date
+               FROM daily_prices
+               WHERE source_exchange = 'NSE'
+                 AND date BETWEEN %s AND %s""",
+            (start.isoformat(), end.isoformat()),
+        ).fetchall()
+    nse_dates = {(str(r["asset_id"]), str(r["date"])) for r in rows}
 
     total_inserted = 0
     total_skipped = 0
@@ -554,7 +563,7 @@ def reingest_bse(
             return td, 0, 0, "skipped"
         t0 = datetime.utcnow()
         try:
-            ins, skp = _ingest_bse_file(filepath, td, isin_cache, code_cache, None, dry_run)
+            ins, skp = _ingest_bse_file(filepath, td, isin_cache, code_cache, nse_dates, dry_run)
             ms = int((datetime.utcnow() - t0).total_seconds() * 1000)
             if not dry_run:
                 _log_pipeline_run("BSE_BHAVCOPY_REINGEST", td, ins, skp, ms)

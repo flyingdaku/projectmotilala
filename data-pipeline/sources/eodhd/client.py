@@ -41,6 +41,7 @@ import json
 import logging
 import time
 from datetime import date, datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -65,6 +66,7 @@ BASE_BACKOFF  = 2      # seconds; doubled each retry
 # MCX is valid for Indian commodity futures.
 INDIAN_EXCHANGES = ["NSE"]          # Equity + MF + ETF
 INDIAN_EXCHANGES_ALL = ["NSE"]  # Including commodities
+RAW_DATA_DIR = Path(__file__).resolve().parents[2] / "raw_data" / "EODHD"
 
 
 class EODHDClient:
@@ -88,6 +90,19 @@ class EODHDClient:
             "Accept": "application/json",
         })
         return s
+
+    def _load_latest_cached_json(self, prefix: str) -> Optional[List[Dict]]:
+        """Fallback to the latest matching cached JSON file when today's cache is absent."""
+        candidates = sorted(RAW_DATA_DIR.rglob(f"{prefix}*.json"))
+        if not candidates:
+            return None
+
+        latest = candidates[-1]
+        try:
+            return json.loads(latest.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("Could not read cached EODHD file %s: %s", latest, exc)
+            return None
 
     # ── Core HTTP primitive ────────────────────────────────────
 
@@ -299,6 +314,10 @@ class EODHDClient:
         suffix    = "_delisted" if include_delisted else "_active"
         today     = date.today()
         cache_key = f"symlist_{exchange}{suffix}_{today.isoformat()}.json"
+        cached = self._load_latest_cached_json(f"symlist_{exchange}{suffix}_")
+        if isinstance(cached, list):
+            logger.info("Using latest cached EODHD symbol list for %s%s", exchange, suffix)
+            return cached
         params: Dict[str, Any] = {}
         if include_delisted:
             params["delisted"] = 1

@@ -1,0 +1,5 @@
+1:"$Sreact.fragment"
+2:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/a2dfb6fc5208ab9b.js"],"OutletBoundary"]
+3:"$Sreact.suspense"
+0:{"buildId":"PKL10v0f3kEgSwbXWeYxN","rsc":["$","$1","c",{"children":[["$","div",null,{"className":"space-y-6 pb-20","children":[["$","div",null,{"className":"flex items-center justify-between gap-4 flex-wrap mb-2","children":["$","div",null,{"children":[["$","h1",null,{"className":"text-xl font-semibold mb-1","style":{"color":"var(--text-primary)"},"children":"Fund Rankings"}],["$","p",null,{"className":"text-sm","style":{"color":"var(--text-muted)"},"children":"This feature is currently under development."}]]}]}],["$","div",null,{"className":"p-12 text-center border rounded-xl border-dashed","style":{"borderColor":"var(--border)","color":"var(--text-muted)"},"children":"Coming soon..."}]]}],null,["$","$L2",null,{"children":["$","$3",null,{"name":"Next.MetadataOutlet","children":"$@4"}]}]]}],"loading":null,"isPartial":false}
+4:null

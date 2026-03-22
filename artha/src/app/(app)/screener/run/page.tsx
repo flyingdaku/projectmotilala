@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, TrendingUp, TrendingDown, Minus, Code2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { ApiError, apiPost } from "@/lib/api-client";
+import type { ScreenerResponse } from "@/lib/api-types";
 
 interface ScreenerResult {
   symbol: string;
@@ -40,20 +42,11 @@ export default function ScreenerRunPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/screener/run", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filters }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || `Server error ${res.status}`);
-      }
-      const data = await res.json();
-      setResults(data.results ?? []);
+      const data = await apiPost<ScreenerResponse>("/api/screener/run", { filters });
+      setResults((data.results ?? []) as ScreenerResult[]);
       setTotalCount(data.total ?? data.results?.length ?? 0);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
       setResults(null);
     } finally {
       setIsLoading(false);

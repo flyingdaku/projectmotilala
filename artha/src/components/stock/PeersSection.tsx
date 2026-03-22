@@ -6,6 +6,8 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
+import { apiGet } from "@/lib/api-client";
+import type { AnalyticsResponse } from "@/lib/api-types";
 import type { ComputedRatios, PeerComparison } from "@/lib/data/types";
 import type { DataMeta } from "@/lib/stock/presentation";
 import { buildDataMeta, completenessScore, dedupeByKey, getCoverage } from "@/lib/stock/presentation";
@@ -98,15 +100,15 @@ export function PeersSection({ symbol, currentRatios }: Props) {
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/stocks/${symbol}/peers`).then((response) => response.json()),
-      fetch(`/api/stocks/${symbol}/analytics`).then((response) => response.json()),
+      apiGet<PeersPayload>(`/api/stocks/${symbol}/peers`),
+      apiGet<AnalyticsResponse>(`/api/stocks/${symbol}/analytics`),
     ])
-      .then(([peersPayload, analyticsPayload]: [PeersPayload, { ratios?: Partial<ComputedRatios> }]) => {
+      .then(([peersPayload, analyticsPayload]: [PeersPayload, AnalyticsResponse]) => {
         setPeers(peersPayload.peers ?? []);
         setPeerMeta(peersPayload.meta ?? null);
         setSelfRatios({
           ...currentRatios,
-          ...(analyticsPayload?.ratios ?? {}),
+          ...((analyticsPayload?.ratios as Partial<ComputedRatios> | null | undefined) ?? {}),
         });
         setLoadedSymbol(symbol);
       })
@@ -120,8 +122,7 @@ export function PeersSection({ symbol, currentRatios }: Props) {
 
   useEffect(() => {
     const requestKey = `${symbol}-${correlationPeriod}`;
-    fetch(`/api/stocks/${symbol}/peer-correlations?period=${correlationPeriod}`)
-      .then((response) => response.json())
+    apiGet<PeerCorrelationResponse>(`/api/stocks/${symbol}/peer-correlations`, { period: correlationPeriod })
       .then((payload) => {
         setCorrelationData(payload);
         setCorrelationKey(requestKey);

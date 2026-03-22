@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/utilities/layout,_N_T_/(app)/utilities/fire-calculator/layout,_N_T_/(app)/utilities/fire-calculator/page,_N_T_/utilities/fire-calculator"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/utilities/fire-calculator/__PAGE__",
+    "/!KGFwcCk/utilities/fire-calculator",
+    "/!KGFwcCk/utilities",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

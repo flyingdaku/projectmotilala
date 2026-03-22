@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/utilities/layout,_N_T_/(app)/utilities/prepay-vs-invest/layout,_N_T_/(app)/utilities/prepay-vs-invest/page,_N_T_/utilities/prepay-vs-invest"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/utilities/prepay-vs-invest/__PAGE__",
+    "/!KGFwcCk/utilities/prepay-vs-invest",
+    "/!KGFwcCk/utilities",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

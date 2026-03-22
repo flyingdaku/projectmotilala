@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { X, Play, Save, Code2, Plus, ChevronRight, AlertCircle, Sparkles, TerminalSquare, Trash2, Wand2 } from 'lucide-react';
+import { ApiError, apiPost } from '@/lib/api-client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { FormulaCell } from './FormulaCell';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -422,14 +423,12 @@ export default function ConditionBuilder({ filters, onChange, onRun, rulesViewMo
         if (!saveScreenName.trim()) return;
         setIsSaving(true);
         try {
-            const res = await fetch('/api/screener/screens', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: saveScreenName, filtersJson: filters }),
-            });
-            if (res.ok) { setSaveScreenName(''); window.location.reload(); }
-            else { const d = await res.json(); alert(`Error: ${d.error}`); }
-        } catch { alert('Failed to save screen'); }
+            await apiPost<unknown>('/api/screener/screens', { name: saveScreenName, filtersJson: filters });
+            setSaveScreenName('');
+            window.location.reload();
+        } catch (error) {
+            alert(error instanceof ApiError ? `Error: ${error.message}` : 'Failed to save screen');
+        }
         finally { setIsSaving(false); }
     };
 

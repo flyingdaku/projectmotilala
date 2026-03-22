@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/analytics/layout,_N_T_/(app)/analytics/factor-analysis/layout,_N_T_/(app)/analytics/factor-analysis/page,_N_T_/analytics/factor-analysis"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/analytics/factor-analysis/__PAGE__",
+    "/!KGFwcCk/analytics/factor-analysis",
+    "/!KGFwcCk/analytics",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

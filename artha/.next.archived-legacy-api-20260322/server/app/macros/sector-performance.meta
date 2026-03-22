@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/macros/layout,_N_T_/(app)/macros/sector-performance/layout,_N_T_/(app)/macros/sector-performance/page,_N_T_/macros/sector-performance"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/macros/sector-performance/__PAGE__",
+    "/!KGFwcCk/macros/sector-performance",
+    "/!KGFwcCk/macros",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

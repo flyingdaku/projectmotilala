@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/analytics/layout,_N_T_/(app)/analytics/monte-carlo/layout,_N_T_/(app)/analytics/monte-carlo/page,_N_T_/analytics/monte-carlo"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/analytics/monte-carlo/__PAGE__",
+    "/!KGFwcCk/analytics/monte-carlo",
+    "/!KGFwcCk/analytics",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

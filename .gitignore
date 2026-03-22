@@ -6,6 +6,7 @@
 *.csv
 *.zip
 *.txt
+*.json
 !README.md
 !requirements.txt
 !indiaquant/package.json

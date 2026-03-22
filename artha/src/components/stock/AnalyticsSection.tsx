@@ -6,6 +6,8 @@ import {
   ResponsiveContainer, ReferenceLine, RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
 import { TrendingUp, BarChart2 } from "lucide-react";
+import { apiGet } from "@/lib/api-client";
+import type { AnalyticsResponse } from "@/lib/api-types";
 import type { FactorExposure, FactorContext, EarningsQuality, ComputedRatios } from "@/lib/data/types";
 import type { DataMeta } from "@/lib/stock/presentation";
 import { buildDataMeta, getCoverage } from "@/lib/stock/presentation";
@@ -37,10 +39,9 @@ export function AnalyticsSection({ symbol }: Props) {
   };
 
   useEffect(() => {
-    fetch(`/api/stocks/${symbol}/analytics`)
-      .then((r) => r.json())
+    apiGet<AnalyticsResponse>(`/api/stocks/${symbol}/analytics`)
       .then((payload) => {
-        setData(payload);
+        setData(payload as typeof data);
         setLoadedSymbol(symbol);
       });
   }, [symbol]);

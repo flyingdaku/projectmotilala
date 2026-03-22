@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/screener/layout,_N_T_/(app)/screener/page,_N_T_/screener"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/screener/__PAGE__",
+    "/!KGFwcCk/screener",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

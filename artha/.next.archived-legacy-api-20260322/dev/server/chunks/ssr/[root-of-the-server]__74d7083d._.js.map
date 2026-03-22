@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 22, "column": 0}, "map": {"version":3,"sources":["file:///Users/a404a/AllForOne/Skunk/projectmotilala/artha/src/app/%28app%29/analytics/factor-regression/page.tsx"],"sourcesContent":["\nexport default function Page() {\n  return (\n    <div className=\"space-y-6 pb-20\">\n      <div className=\"flex items-center justify-between gap-4 flex-wrap mb-2\">\n        <div>\n          <h1 className=\"text-xl font-semibold mb-1\" style={{ color: \"var(--text-primary)\" }}>Factor Regression</h1>\n          <p className=\"text-sm\" style={{ color: \"var(--text-muted)\" }}>\n            This feature is currently under development.\n          </p>\n        </div>\n      </div>\n      \n      <div className=\"p-12 text-center border rounded-xl border-dashed\" style={{ borderColor: \"var(--border)\", color: \"var(--text-muted)\" }}>\n        Coming soon...\n      </div>\n    </div>\n  );\n}\n"],"names":[],"mappings":";;;;;;AACe,SAAS;IACtB,qBACE,8OAAC;QAAI,WAAU;;0BACb,8OAAC;gBAAI,WAAU;0BACb,cAAA,8OAAC;;sCACC,8OAAC;4BAAG,WAAU;4BAA6B,OAAO;gCAAE,OAAO;4BAAsB;sCAAG;;;;;;sCACpF,8OAAC;4BAAE,WAAU;4BAAU,OAAO;gCAAE,OAAO;4BAAoB;sCAAG;;;;;;;;;;;;;;;;;0BAMlE,8OAAC;gBAAI,WAAU;gBAAmD,OAAO;oBAAE,aAAa;oBAAiB,OAAO;gBAAoB;0BAAG;;;;;;;;;;;;AAK7I"}}]
+}

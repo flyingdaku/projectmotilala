@@ -88,7 +88,7 @@ def _safe_float(value) -> Optional[float]:
 
 def _get_previous_closes(trade_date: date) -> dict[str, float]:
     """Return {isin: close} for the most recent trading day before trade_date."""
-    from core.db import get_db
+    from core.db import get_metadata_db, get_prices_db
     from utils.calendar import get_previous_trading_date
 
     try:
@@ -96,16 +96,40 @@ def _get_previous_closes(trade_date: date) -> dict[str, float]:
     except RuntimeError:
         return {}
 
-    with get_db() as conn:
+    with get_prices_db() as conn:
         rows = conn.execute(
-            """SELECT a.isin, dp.close
-               FROM daily_prices dp
-               JOIN assets a ON dp.asset_id = a.id
-               WHERE dp.date = ?""",
+            """SELECT asset_id, close
+               FROM daily_prices
+               WHERE date = ?""",
             (prev_date.isoformat(),),
         ).fetchall()
 
-    return {row["isin"]: float(row["close"]) for row in rows}
+    if not rows:
+        return {}
+
+    asset_ids = [row["asset_id"] for row in rows if row.get("asset_id")]
+    if not asset_ids:
+        return {}
+
+    with get_metadata_db() as conn:
+        asset_rows = conn.execute(
+            """SELECT id, isin
+               FROM assets
+               WHERE id = ANY(%s)""",
+            (asset_ids,),
+        ).fetchall()
+
+    isin_by_asset_id = {
+        row["id"]: row["isin"]
+        for row in asset_rows
+        if row.get("id") and row.get("isin")
+    }
+
+    return {
+        isin_by_asset_id[row["asset_id"]]: float(row["close"])
+        for row in rows
+        if row.get("asset_id") in isin_by_asset_id and row.get("close") is not None
+    }
 
 
 def _get_corp_action_isins_for_date(trade_date: date) -> set[str]:

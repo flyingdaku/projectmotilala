@@ -17,6 +17,8 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Logo } from "@/components/ui/logo";
+import { apiGet } from "@/lib/api-client";
+import type { StockSummary } from "@/lib/api-types";
 import { useWatchlist } from "@/contexts/watchlist-context";
 import { useTheme, type Theme } from "@/contexts/theme-context";
 import {
@@ -49,12 +51,13 @@ export function TopBar() {
     if (!search.trim()) { setSearchResults([]); setSearchOpen(false); return; }
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(search)}&limit=8`);
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.results ?? []);
-          setSearchOpen(true);
-        }
+        const data = await apiGet<{ results: StockSummary[] }>("/api/search", { q: search, limit: 8 });
+        setSearchResults((data.results ?? []).map((item, index) => ({
+          id: Number(item.id ?? index),
+          symbol: item.symbol,
+          name: item.name,
+        })));
+        setSearchOpen(true);
       } finally { /* noop */ }
     }, 250);
     return () => clearTimeout(timer);

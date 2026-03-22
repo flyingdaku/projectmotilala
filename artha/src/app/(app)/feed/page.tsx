@@ -6,7 +6,8 @@ import {
   TrendingUp, TrendingDown, AlertTriangle, Zap, Cpu, Clock,
   Bell, BellOff, CheckCheck, Loader2, RefreshCw,
 } from "lucide-react";
-import type { FeedItem } from "@/lib/data/types";
+import { apiGet, apiPost } from "@/lib/api-client";
+import type { FeedEvent, FeedResponse } from "@/lib/api-types";
 
 const EVENT_META: Record<string, { icon: React.ReactNode; label: string; color: string }> = {
   RED_FLAG:            { icon: <AlertTriangle size={14} />, label: "Red Flag",       color: "#EF4444" },
@@ -34,7 +35,7 @@ function timeAgo(dateStr: string) {
   return new Date(dateStr).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
-function FeedCard({ item, onRead }: { item: FeedItem; onRead: (id: string) => void }) {
+function FeedCard({ item, onRead }: { item: FeedEvent; onRead: (id: string) => void }) {
   const meta = EVENT_META[item.eventType] ?? EVENT_META.ANNOUNCEMENT;
   const borderClass = SEVERITY_BORDER[item.severity ?? "INFO"] ?? SEVERITY_BORDER.INFO;
 
@@ -120,7 +121,7 @@ function FeedCard({ item, onRead }: { item: FeedItem; onRead: (id: string) => vo
 }
 
 export default function FeedPage() {
-  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [feed, setFeed] = useState<FeedEvent[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -131,8 +132,7 @@ export default function FeedPage() {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const res = await fetch("/api/feed?limit=100");
-      const data = await res.json();
+      const data = await apiGet<FeedResponse>("/api/feed", { limit: 100 });
       setFeed(data.feed ?? []);
       setUnreadCount(data.unreadCount ?? 0);
     } finally {
@@ -146,11 +146,7 @@ export default function FeedPage() {
   const handleRead = async (eventId: string) => {
     setFeed((prev) => prev.map((f) => f.id === eventId ? { ...f, isRead: true } : f));
     setUnreadCount((c) => Math.max(0, c - 1));
-    await fetch("/api/feed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventIds: [eventId] }),
-    });
+    await apiPost<{ marked: number }>("/api/feed", { eventIds: [eventId] });
   };
 
   const handleMarkAllRead = async () => {
@@ -158,11 +154,7 @@ export default function FeedPage() {
     if (unreadIds.length === 0) return;
     setFeed((prev) => prev.map((f) => ({ ...f, isRead: true })));
     setUnreadCount(0);
-    await fetch("/api/feed", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventIds: unreadIds }),
-    });
+    await apiPost<{ marked: number }>("/api/feed", { eventIds: unreadIds });
   };
 
   const eventTypes = ["ALL", ...Array.from(new Set(feed.map((f) => f.eventType)))];
@@ -175,7 +167,7 @@ export default function FeedPage() {
   });
 
   // Group by date
-  const groups = filtered.reduce<Record<string, FeedItem[]>>((acc, item) => {
+  const groups = filtered.reduce<Record<string, FeedEvent[]>>((acc, item) => {
     const label = timeAgo(item.eventDate);
     if (!acc[label]) acc[label] = [];
     acc[label].push(item);

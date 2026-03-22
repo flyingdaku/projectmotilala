@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { ApiError, apiDelete, apiGet, apiPost, apiPut } from '@/lib/api-client';
 import type {
   UserDashboard,
   DashboardSummary,
@@ -26,12 +27,10 @@ export function useDashboardList() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/dashboard');
-      if (!res.ok) throw new Error(`Failed to load dashboards: ${res.status}`);
-      const data = await res.json();
+      const data = await apiGet<{ dashboards: DashboardSummary[] }>('/api/dashboard');
       setDashboards(data.dashboards ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -40,15 +39,13 @@ export function useDashboardList() {
   useEffect(() => { load(); }, [load]);
 
   const createDashboard = useCallback(async (name: string): Promise<DashboardSummary | null> => {
-    const res = await fetch('/api/dashboard', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    await load();
-    return data.dashboard;
+    try {
+      const data = await apiPost<{ dashboard: DashboardSummary }>('/api/dashboard', { name });
+      await load();
+      return data.dashboard;
+    } catch {
+      return null;
+    }
   }, [load]);
 
   return { dashboards, loading, error, reload: load, createDashboard };
@@ -67,12 +64,10 @@ export function useDashboard(dashboardId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/dashboard/${id}`);
-      if (!res.ok) throw new Error(`Failed to load dashboard: ${res.status}`);
-      const data = await res.json();
+      const data = await apiGet<{ dashboard: UserDashboard }>(`/api/dashboard/${id}`);
       setDashboard(data.dashboard);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
@@ -89,11 +84,7 @@ export function useDashboard(dashboardId: string | null) {
     if (layoutSaveTimer.current) clearTimeout(layoutSaveTimer.current);
     layoutSaveTimer.current = setTimeout(async () => {
       try {
-        await fetch(`/api/dashboard/${dashboard.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ layout_json: layout }),
-        });
+        await apiPut(`/api/dashboard/${dashboard.id}`, { layout_json: layout });
       } catch {
         // silent — layout will sync on next load
       }
@@ -104,11 +95,7 @@ export function useDashboard(dashboardId: string | null) {
     if (!dashboard) return;
     setSaving(true);
     try {
-      await fetch(`/api/dashboard/${dashboard.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      });
+      await apiPut(`/api/dashboard/${dashboard.id}`, { name });
       setDashboard(prev => prev ? { ...prev, name } : null);
     } finally {
       setSaving(false);
@@ -117,16 +104,22 @@ export function useDashboard(dashboardId: string | null) {
 
   const deleteDashboard = useCallback(async (): Promise<boolean> => {
     if (!dashboard) return false;
-    const res = await fetch(`/api/dashboard/${dashboard.id}`, { method: 'DELETE' });
-    return res.ok;
+    try {
+      await apiDelete(`/api/dashboard/${dashboard.id}`);
+      return true;
+    } catch {
+      return false;
+    }
   }, [dashboard]);
 
   const duplicateDashboard = useCallback(async (): Promise<string | null> => {
     if (!dashboard) return null;
-    const res = await fetch(`/api/dashboard/${dashboard.id}/duplicate`, { method: 'POST' });
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.id ?? null;
+    try {
+      const data = await apiPost<{ dashboard?: UserDashboard }>(`/api/dashboard/${dashboard.id}/duplicate`, {});
+      return data.dashboard?.id ?? null;
+    } catch {
+      return null;
+    }
   }, [dashboard]);
 
   const addWidget = useCallback(async (
@@ -135,18 +128,20 @@ export function useDashboard(dashboardId: string | null) {
     config: WidgetConfig,
   ): Promise<UserWidget | null> => {
     if (!dashboard) return null;
-    const res = await fetch(`/api/dashboard/${dashboard.id}/widget`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ widget_type, title, config_json: config }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const widget = data.widget as UserWidget;
-    setDashboard(prev =>
-      prev ? { ...prev, widgets: [...(prev.widgets ?? []), widget] } : null
-    );
-    return widget;
+    try {
+      const data = await apiPost<{ widget: UserWidget }>(`/api/dashboard/${dashboard.id}/widget`, {
+        widget_type,
+        title,
+        config_json: config,
+      });
+      const widget = data.widget as UserWidget;
+      setDashboard(prev =>
+        prev ? { ...prev, widgets: [...(prev.widgets ?? []), widget] } : null
+      );
+      return widget;
+    } catch {
+      return null;
+    }
   }, [dashboard]);
 
   const updateWidget = useCallback(async (
@@ -154,37 +149,37 @@ export function useDashboard(dashboardId: string | null) {
     updates: Partial<Pick<UserWidget, 'title' | 'widget_type' | 'config_json'>>,
   ): Promise<boolean> => {
     if (!dashboard) return false;
-    const res = await fetch(`/api/dashboard/${dashboard.id}/widget/${widgetId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-    });
-    if (!res.ok) return false;
-    setDashboard(prev =>
-      prev
-        ? {
-            ...prev,
-            widgets: (prev.widgets ?? []).map(w =>
-              w.id === widgetId ? { ...w, ...updates } : w
-            ),
-          }
-        : null
-    );
-    return true;
+    try {
+      await apiPut(`/api/dashboard/${dashboard.id}/widget/${widgetId}`, updates);
+      setDashboard(prev =>
+        prev
+          ? {
+              ...prev,
+              widgets: (prev.widgets ?? []).map(w =>
+                w.id === widgetId ? { ...w, ...updates } : w
+              ),
+            }
+          : null
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }, [dashboard]);
 
   const deleteWidget = useCallback(async (widgetId: string): Promise<boolean> => {
     if (!dashboard) return false;
-    const res = await fetch(`/api/dashboard/${dashboard.id}/widget/${widgetId}`, {
-      method: 'DELETE',
-    });
-    if (!res.ok) return false;
-    setDashboard(prev =>
-      prev
-        ? { ...prev, widgets: (prev.widgets ?? []).filter(w => w.id !== widgetId) }
-        : null
-    );
-    return true;
+    try {
+      await apiDelete(`/api/dashboard/${dashboard.id}/widget/${widgetId}`);
+      setDashboard(prev =>
+        prev
+          ? { ...prev, widgets: (prev.widgets ?? []).filter(w => w.id !== widgetId) }
+          : null
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }, [dashboard]);
 
   return {
@@ -218,19 +213,10 @@ export function useWidgetData(config: WidgetConfig, widgetType: WidgetType, enab
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch('/api/dashboard/widget/query', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config: cfg, widget_type: wt }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? `Query failed: ${res.status}`);
-      }
-      const result = await res.json();
+      const result = await apiPost<WidgetQueryResponse>('/api/dashboard/widget/query', { config: cfg, widget_type: wt });
       setData(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof ApiError ? e.message : e instanceof Error ? e.message : String(e));
       setData(null);
     } finally {
       setLoading(false);

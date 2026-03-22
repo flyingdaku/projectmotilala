@@ -6,6 +6,8 @@ import {
   ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from "recharts";
 import { AlertTriangle, Shield, Users } from "lucide-react";
+import { apiGet } from "@/lib/api-client";
+import type { OwnershipResponse } from "@/lib/api-types";
 import type { ShareholdingPattern, GovernanceScore } from "@/lib/data/types";
 import type { DataMeta } from "@/lib/stock/presentation";
 import { buildDataMeta, getCoverage } from "@/lib/stock/presentation";
@@ -36,13 +38,12 @@ export function OwnershipSection({ symbol }: Props) {
   const governance = data?.governance ?? null;
 
   useEffect(() => {
-    fetch(`/api/stocks/${symbol}/ownership`)
-      .then((r) => r.json())
+    apiGet<OwnershipResponse>(`/api/stocks/${symbol}/ownership`)
       .then((payload) => {
         setData({
-          shareholding: Array.isArray(payload?.shareholding) ? payload.shareholding : [],
-          governance: payload?.governance ?? null,
-          meta: payload?.meta,
+          shareholding: Array.isArray(payload?.shareholding) ? payload.shareholding as ShareholdingPattern[] : [],
+          governance: payload?.governance as GovernanceScore | null,
+          meta: payload?.meta as DataMeta | undefined,
         });
         setLoadedSymbol(symbol);
       })

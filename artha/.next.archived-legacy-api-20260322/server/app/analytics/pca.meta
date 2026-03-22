@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/analytics/layout,_N_T_/(app)/analytics/pca/layout,_N_T_/(app)/analytics/pca/page,_N_T_/analytics/pca"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/analytics/pca/__PAGE__",
+    "/!KGFwcCk/analytics/pca",
+    "/!KGFwcCk/analytics",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/utilities/layout,_N_T_/(app)/utilities/tax-harvesting/layout,_N_T_/(app)/utilities/tax-harvesting/page,_N_T_/utilities/tax-harvesting"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/utilities/tax-harvesting/__PAGE__",
+    "/!KGFwcCk/utilities/tax-harvesting",
+    "/!KGFwcCk/utilities",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

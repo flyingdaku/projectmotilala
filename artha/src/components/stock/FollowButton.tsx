@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Star, Bell, Check, Loader2 } from "lucide-react";
+import { apiGet, apiPost } from "@/lib/api-client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,12 +34,9 @@ export function FollowButton({ symbol }: Props) {
   const [fetched, setFetched] = useState(false);
 
   useEffect(() => {
-    fetch(`/api/stocks/${symbol}/follow`)
-      .then((r) => r.json())
+    apiGet<{ following: boolean }>(`/api/stocks/${symbol}/follow`)
       .then((data) => {
-        setIsFollowing(data.isFollowing);
-        setFollowerCount(data.followerCount);
-        if (data.alertConfig) setAlertConfig(data.alertConfig);
+        setIsFollowing(data.following);
         setFetched(true);
       })
       .catch(() => setFetched(true));
@@ -48,15 +46,11 @@ export function FollowButton({ symbol }: Props) {
     setLoading(true);
     try {
       if (isFollowing) {
-        await fetch(`/api/stocks/${symbol}/follow`, { method: "DELETE" });
+        await apiPost<{ following: boolean }>(`/api/stocks/${symbol}/follow`, { action: "unfollow" });
         setIsFollowing(false);
         setFollowerCount((c) => (c !== null ? Math.max(0, c - 1) : null));
       } else {
-        await fetch(`/api/stocks/${symbol}/follow`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ alertConfig }),
-        });
+        await apiPost<{ following: boolean }>(`/api/stocks/${symbol}/follow`, { action: "follow", alertConfig });
         setIsFollowing(true);
         setFollowerCount((c) => (c !== null ? c + 1 : 1));
       }
@@ -69,11 +63,7 @@ export function FollowButton({ symbol }: Props) {
     const newConfig = { ...alertConfig, [key]: val };
     setAlertConfig(newConfig);
     if (isFollowing) {
-      await fetch(`/api/stocks/${symbol}/follow`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alertConfig: newConfig }),
-      });
+      await apiPost<{ following: boolean }>(`/api/stocks/${symbol}/follow`, { action: "follow", alertConfig: newConfig });
     }
   };
 

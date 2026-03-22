@@ -8,6 +8,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { apiGet } from '@/lib/api-client';
+import type { ChartResponse } from '@/lib/api-types';
 import type { OHLCVBar } from '../core/types';
 import type { Timeframe } from '../core/types';
 
@@ -65,16 +67,11 @@ export function useChartData(symbol: string, timeframe: Timeframe): UseChartData
     setError(null);
 
     const range = TF_TO_RANGE[timeframe] ?? '3y';
-    fetch(`/api/stocks/${encodeURIComponent(symbol)}/chart?range=${range}&tf=${timeframe}`)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((data: { prices?: PriceBarRaw[]; error?: string }) => {
+    apiGet<ChartResponse>(`/api/stocks/${encodeURIComponent(symbol)}/chart`, { range, tf: timeframe })
+      .then((data) => {
         if (cancelled) return;
-        if (data.error) throw new Error(data.error);
 
-        const mapped: OHLCVBar[] = (data.prices ?? [])
+        const mapped: OHLCVBar[] = ((data.prices ?? []) as PriceBarRaw[])
           .map(p => ({
             time:   dateStrToUnix(p.date),
             open:   toFiniteNumber(p.open),

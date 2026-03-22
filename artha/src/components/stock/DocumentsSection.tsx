@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { FileText, Mic, Megaphone, Star, Download, ExternalLink, ChevronDown, ChevronUp, TrendingUp, Building2, Award } from "lucide-react";
+import { apiGet } from "@/lib/api-client";
+import type { DocumentsResponse } from "@/lib/api-types";
 import type { CompanyDocument } from "@/lib/data/types";
 import type { DataMeta } from "@/lib/stock/presentation";
 import { buildDataMeta } from "@/lib/stock/presentation";
@@ -125,11 +127,10 @@ export function DocumentsSection({ symbol }: Props) {
   const requestKey = `${symbol}-${activeTab}`;
 
   useEffect(() => {
-    fetch(`/api/stocks/${symbol}/documents?category=${activeTab}`)
-      .then((r) => r.json())
+    apiGet<DocumentsResponse>(`/api/stocks/${symbol}/documents`, { category: activeTab })
       .then((d) => {
-        setDocuments(d.documents ?? []);
-        setMeta(d.meta ?? null);
+        setDocuments((d.documents ?? []) as CompanyDocument[]);
+        setMeta((d.meta as DataMeta | null | undefined) ?? null);
         setLoadedKey(requestKey);
       })
       .catch(() => {

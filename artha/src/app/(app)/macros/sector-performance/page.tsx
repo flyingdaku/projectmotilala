@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { TrendingUp, ChevronRight, BarChart3, Activity } from "lucide-react";
 import { SectorHeatmap } from "@/components/charts/SectorHeatmap";
 import { RRGPlot } from "@/components/charts/RRGPlot";
+import { apiGet } from "@/lib/api-client";
+import type { SectorHierarchy } from "@/lib/api-types";
 import type { RRGDataPoint } from "@/lib/utils/rrg";
 
 const PERIODS = ["1D", "1W", "1M", "3M", "6M", "1Y", "3Y"] as const;
@@ -47,11 +49,10 @@ export default function SectorPerformancePage() {
     const pathParam = selectedPath.join("/");
     const timer = window.setTimeout(() => setLoading(true), 0);
 
-    void fetch(`/api/sectors/hierarchy?level=${levelParam}&path=${pathParam}&period=${period}`)
-      .then(r => r.json())
+    void apiGet<SectorHierarchy>("/api/sectors/hierarchy", { level: levelParam, path: pathParam, period })
       .then(result => {
-        setData(result.nodes || []);
-        setRRGData(result.rrgData || []);
+        setData((result.nodes || []) as unknown as HierarchyNode[]);
+        setRRGData((result.rrgData || []) as unknown as RRGDataPoint[]);
       })
       .catch(err => {
         console.error("Failed to fetch sector data:", err);

@@ -6,6 +6,7 @@ import { DashboardToolbar } from '@/components/dashboard/DashboardToolbar';
 import { WidgetGrid } from '@/components/dashboard/WidgetGrid';
 import { AddWidgetDialog } from '@/components/dashboard/AddWidgetDialog';
 import { WidgetEditor } from '@/components/dashboard/WidgetEditor';
+import { apiDelete, apiPost, apiPut } from '@/lib/api-client';
 import type { UserWidget, PresetWidget, GridLayoutItem, WidgetType, WidgetConfig } from '@/lib/dashboard/types';
 import { PRESET_WIDGETS, DEFAULT_PRESET_IDS } from '@/lib/dashboard/presets';
 
@@ -57,13 +58,12 @@ export default function DashboardPage() {
     for (const presetId of DEFAULT_PRESET_IDS) {
       const preset = PRESET_WIDGETS.find(p => p.id === presetId);
       if (!preset) continue;
-      const res = await fetch(`/api/dashboard/${created.id}/widget`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ widget_type: preset.widget_type, title: preset.name, config_json: preset.config }),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      try {
+        const data = await apiPost<{ widget?: UserWidget }>(`/api/dashboard/${created.id}/widget`, {
+          widget_type: preset.widget_type,
+          title: preset.name,
+          config_json: preset.config,
+        });
         const wid = data.widget?.id;
         if (wid) {
           const w = preset.defaultLayout.w;
@@ -73,15 +73,13 @@ export default function DashboardPage() {
           packX += w;
           packRowH = Math.max(packRowH, h);
         }
+      } catch {
+        // keep seeding best-effort
       }
     }
     // Save the initial layout
     if (seedLayout.length > 0) {
-      await fetch(`/api/dashboard/${created.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ layout_json: seedLayout }),
-      });
+      await apiPut(`/api/dashboard/${created.id}`, { layout_json: seedLayout });
     }
     setActiveDashboardId(created.id);
   }, [createDashboard]);
@@ -145,7 +143,7 @@ export default function DashboardPage() {
     if (!dashboard) return;
     // Delete all existing widgets
     for (const w of dashboard.widgets ?? []) {
-      await fetch(`/api/dashboard/${id}/widget/${w.id}`, { method: 'DELETE' });
+      await apiDelete(`/api/dashboard/${id}/widget/${w.id}`);
     }
     // Re-seed with defaults + layout
     const seedLayout: GridLayoutItem[] = [];
@@ -153,13 +151,12 @@ export default function DashboardPage() {
     for (const presetId of DEFAULT_PRESET_IDS) {
       const preset = PRESET_WIDGETS.find(p => p.id === presetId);
       if (!preset) continue;
-      const res = await fetch(`/api/dashboard/${id}/widget`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ widget_type: preset.widget_type, title: preset.name, config_json: preset.config }),
-      });
-      if (res.ok) {
-        const data = await res.json();
+      try {
+        const data = await apiPost<{ widget?: UserWidget }>(`/api/dashboard/${id}/widget`, {
+          widget_type: preset.widget_type,
+          title: preset.name,
+          config_json: preset.config,
+        });
         const wid = data.widget?.id;
         if (wid) {
           const w = preset.defaultLayout.w;
@@ -168,14 +165,12 @@ export default function DashboardPage() {
           seedLayout.push({ i: wid, x: packX, y: packY, w, h });
           packX += w; packRowH = Math.max(packRowH, h);
         }
+      } catch {
+        // keep seeding best-effort
       }
     }
     if (seedLayout.length > 0) {
-      await fetch(`/api/dashboard/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ layout_json: seedLayout }),
-      });
+      await apiPut(`/api/dashboard/${id}`, { layout_json: seedLayout });
     }
     reloadDashboard();
   }, [dashboard, reloadDashboard]);

@@ -1,0 +1,3 @@
+module.exports=[32533,a=>{"use strict";var b=a.i(87924),c=a.i(68114);function d({value:a,type:d,className:e}){let f=a>=0,g=f?"↑":"↓",h="percent"===d?`${g} ${(0,c.formatPercent)(a)}`:`${g} ${(0,c.formatINR)(a)}`;return(0,b.jsx)("span",{className:(0,c.cn)("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium font-mono whitespace-nowrap",f?"text-[var(--positive)] bg-[var(--positive-subtle)]":"text-[var(--negative)] bg-[var(--negative-subtle)]",e),children:h})}a.s(["PnLBadge",()=>d])}];
+
+//# sourceMappingURL=src_components_ui_pnl-badge_tsx_610988bc._.js.map

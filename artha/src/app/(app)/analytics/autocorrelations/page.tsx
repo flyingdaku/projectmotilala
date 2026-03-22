@@ -5,6 +5,8 @@ import { LineChart as ChartIcon, BarChart2, Plus, X } from "lucide-react";
 import { AssetSearch } from "@/components/ui/asset-search";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { apiGet } from "@/lib/api-client";
+import type { AutocorrelationResponse } from "@/lib/api-types";
 
 const ASSET_COLORS = [
   "var(--chart-1)",
@@ -33,10 +35,12 @@ export default function AssetAutocorrelationsPage() {
       setError(null);
 
       try {
-        const res = await fetch(`/api/analytics/autocorrelations?assets=${selectedAssets.join(',')}&period=${period}&maxLag=${maxLag}`);
-        if (!res.ok) throw new Error('Failed to fetch autocorrelation data');
-        const data = await res.json();
-        setAutoCorrData(data.results);
+        const data = await apiGet<AutocorrelationResponse>("/api/analytics/autocorrelations", {
+          assets: selectedAssets.join(","),
+          period,
+          maxLag,
+        });
+        setAutoCorrData(data.results as Record<string, number[]>);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       } finally {

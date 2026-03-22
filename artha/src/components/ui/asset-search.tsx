@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { apiGet } from "@/lib/api-client";
+import type { StockSummary } from "@/lib/api-types";
 import { cn } from "@/lib/utils";
 
 interface AssetSearchProps {
@@ -49,12 +51,13 @@ export function AssetSearch({ onSelect, placeholder = "Search assets...", classN
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&limit=10`);
-        if (res.ok) {
-          const data = await res.json();
-          setResults(data.results || []);
-          setIsOpen(true);
-        }
+        const data = await apiGet<{ results: StockSummary[] }>("/api/search", { q: query, limit: 10 });
+        setResults((data.results || []).map((item) => ({
+          symbol: item.symbol,
+          name: item.name,
+          exchange: item.exchange,
+        })));
+        setIsOpen(true);
       } catch (error) {
         console.error("Search error:", error);
         setResults([]);

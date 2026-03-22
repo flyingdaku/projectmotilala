@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/utilities/layout,_N_T_/(app)/utilities/loan-calculator/layout,_N_T_/(app)/utilities/loan-calculator/page,_N_T_/utilities/loan-calculator"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/utilities/loan-calculator/__PAGE__",
+    "/!KGFwcCk/utilities/loan-calculator",
+    "/!KGFwcCk/utilities",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

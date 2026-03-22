@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/(app)/layout,_N_T_/(app)/analytics/layout,_N_T_/(app)/analytics/manager-performance/layout,_N_T_/(app)/analytics/manager-performance/page,_N_T_/analytics/manager-performance"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/!KGFwcCk/analytics/manager-performance/__PAGE__",
+    "/!KGFwcCk/analytics/manager-performance",
+    "/!KGFwcCk/analytics",
+    "/!KGFwcCk",
+    "/_index",
+    "/_head"
+  ]
+}

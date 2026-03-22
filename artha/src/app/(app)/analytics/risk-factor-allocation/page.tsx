@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
+import { ApiError, apiPost } from '@/lib/api-client';
 
 interface HoldingInput {
   symbol: string;
@@ -90,21 +91,14 @@ export default function RiskFactorAllocationPage() {
     setHoldingResults([]);
 
     try {
-      const res = await fetch('/api/analytics/factor-attribution', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ holdings: valid }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: string };
-        setError(d.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      const data = await res.json() as { portfolio: PortfolioResult; holdings: HoldingResult[] };
+      const data = await apiPost<{ portfolio: PortfolioResult; holdings: HoldingResult[] }>(
+        '/api/analytics/factor-attribution',
+        { holdings: valid }
+      );
       setPortfolio(data.portfolio);
       setHoldingResults(data.holdings);
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof ApiError ? e.message : String(e));
     } finally {
       setLoading(false);
     }

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import json
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_START = date(2000, 1, 1)
 DEFAULT_WORKERS = 3
 REQUEST_DELAY = 0.5
+SUMMARY_PATH = ROOT / "logs" / "bhavcopy_backfill_summary.json"
 
 
 def _run_single_nse(trade_date: date, skip_existing: bool):
@@ -87,6 +89,14 @@ def backfill_prices(
     trading_dates = get_trading_dates_in_range(start, end)
     logger.info("Backfill: %d trading days, %s → %s, %d workers", len(trading_dates), start, end, workers)
 
+    summary = {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "trading_days": len(trading_dates),
+        "nse": None,
+        "bse": None,
+    }
+
     # NSE
     if not bse_only:
         logger.info("── NSE Backfill ──")
@@ -103,6 +113,7 @@ def backfill_prices(
                     fail += 1
                     logger.warning("NSE %s failed: %s", td, err)
         logger.info("NSE: %d ok / %d fail / %d skipped", ok, fail, skip)
+        summary["nse"] = {"ok": ok, "fail": fail, "skipped": skip}
 
     # BSE
     if not nse_only:
@@ -119,6 +130,11 @@ def backfill_prices(
                 else:
                     fail += 1
         logger.info("BSE: %d ok / %d fail / %d skipped", ok, fail, skip)
+        summary["bse"] = {"ok": ok, "fail": fail, "skipped": skip}
+
+    SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SUMMARY_PATH.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    logger.info("Wrote backfill summary to %s", SUMMARY_PATH)
 
 
 if __name__ == "__main__":

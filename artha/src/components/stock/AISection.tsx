@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { TrendingUp, TrendingDown, AlertTriangle, Zap, Cpu, Clock } from "lucide-react";
+import { apiGet } from "@/lib/api-client";
+import type { StockOverviewResponse } from "@/lib/api-types";
 import type { CompanyEvent } from "@/lib/data/types";
 
 const EVENT_ICONS: Record<string, React.ReactNode> = {
@@ -53,9 +55,8 @@ export function AISection({ symbol, stockName }: Props) {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/stocks/${symbol}/overview`)
-      .then((r) => r.json())
-      .then((d) => setEvents(d.events ?? []))
+    apiGet<StockOverviewResponse>(`/api/stocks/${symbol}/overview`)
+      .then((d) => setEvents((d.events as CompanyEvent[] | undefined) ?? []))
       .finally(() => setLoading(false));
   }, [symbol]);
 

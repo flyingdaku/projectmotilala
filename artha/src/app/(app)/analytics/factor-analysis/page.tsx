@@ -4,6 +4,8 @@ import { useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, Cell,
 } from 'recharts';
+import { ApiError, apiGet } from '@/lib/api-client';
+import type { AnalyticsResponse } from '@/lib/api-types';
 import type { FactorExposure, FactorContext } from '@/lib/data/types';
 
 const FACTOR_ROWS: { key: keyof FactorExposure; label: string; desc: string }[] = [
@@ -30,21 +32,15 @@ export default function FactorAnalysisPage() {
     setFactorExposure(null);
     setFactorContext(null);
     try {
-      const res = await fetch(`/api/stocks/${sym}/analytics`);
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setError((d as { error?: string }).error ?? `HTTP ${res.status}`);
-        return;
-      }
-      const data = await res.json() as { factorExposure?: FactorExposure; factorContext?: FactorContext };
+      const data = await apiGet<AnalyticsResponse>(`/api/stocks/${sym}/analytics`);
       setSymbol(sym);
-      setFactorExposure(data.factorExposure ?? null);
-      setFactorContext(data.factorContext ?? null);
+      setFactorExposure((data.factorExposure as FactorExposure | null | undefined) ?? null);
+      setFactorContext((data.factorContext as FactorContext | null | undefined) ?? null);
       if (!data.factorExposure) {
         setError('No factor regression data available for this symbol (need ≥60 days of price + IIMA factor overlap).');
       }
     } catch (e) {
-      setError(String(e));
+      setError(e instanceof ApiError ? e.message : String(e));
     } finally {
       setLoading(false);
     }

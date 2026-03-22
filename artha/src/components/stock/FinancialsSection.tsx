@@ -6,6 +6,8 @@ import {
   ResponsiveContainer, ReferenceLine, Legend,
 } from "recharts";
 import { AlertTriangle, Download, BarChart2 } from "lucide-react";
+import { apiGet } from "@/lib/api-client";
+import type { FinancialsResponse } from "@/lib/api-types";
 import type { QuarterlyResult, BalanceSheet, CashFlow, AnomalyFlag } from "@/lib/data/types";
 import type { DataMeta } from "@/lib/stock/presentation";
 import { CoverageNotice, DataMetaInline } from "@/components/stock/StockUiPrimitives";
@@ -376,11 +378,9 @@ export function FinancialsSection({ symbol }: Props) {
   const requestKey = `${symbol}-${isConsolidated ? "consolidated" : "standalone"}`;
 
   useEffect(() => {
-    fetch(`/api/stocks/${symbol}/financials?consolidated=${isConsolidated}`)
-      .then(async (response) => {
-        const payload = await response.json();
-        if (!response.ok || payload.error) { setData(null); setLoadedKey(requestKey); return; }
-        setData(payload);
+    apiGet<FinancialsResponse>(`/api/stocks/${symbol}/financials`, { consolidated: isConsolidated })
+      .then((payload) => {
+        setData(payload as unknown as FinancialsPayload);
         setLoadedKey(requestKey);
       })
       .catch(() => { setData(null); setLoadedKey(requestKey); });
